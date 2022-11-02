@@ -101,6 +101,7 @@ class GaussianDiffusion(nn.Module):
 
         to_torch = partial(torch.tensor, dtype=torch.float32)
 
+        self._betas = to_torch(betas)
         self.register_buffer('betas', to_torch(betas))
         self.register_buffer('alphas_cumprod', to_torch(alphas_cumprod))
         self.register_buffer('alphas_cumprod_prev', to_torch(alphas_cumprod_prev))
@@ -272,7 +273,7 @@ class GaussianDiffusion(nn.Module):
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 ## 1. Define the noise schedule.
                 ## We support the 'linear' or 'cosine' VP schedule.
-                noise_schedule = NoiseScheduleVP(schedule='linear')
+                noise_schedule = NoiseScheduleVP(betas=self._betas)
 
                 ## 2. Convert your discrete-time noise prediction model `model`
                 ## to the continuous-time noise prediction model.
@@ -287,8 +288,6 @@ class GaussianDiffusion(nn.Module):
                 model_fn = model_wrapper(
                     my_wrapper(self.denoise_fn),
                     noise_schedule,
-                    is_cond_classifier=False,
-                    total_N=1000,
                     model_kwargs={"cond": cond}
                 )
 
@@ -302,9 +301,9 @@ class GaussianDiffusion(nn.Module):
                 x = dpm_solver.sample(
                     x,
                     steps=steps,
-                    eps=1e-4,
-                    adaptive_step_size=False,
-                    fast_version=True,
+                    order=3,
+                    skip_type="time_uniform",
+                    method="singlestep",
                 )
             else:
                 for i in tqdm(reversed(range(0, t)), desc='sample time step', total=t):
