@@ -23,6 +23,144 @@ all
 
 str, List[str]
 
+### Vocoder Related
+
+#### vocoder:
+
+Model type for reconstruction .wav from mel information.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+#### vocoder_ckpt:
+
+Pat of vocoder model for reconstruction .wav from mel information.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+#### audio_sample_rate
+
+Sample rate of audio files
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+44100
+
+#### audio_num_mel_bins
+
+Mel spectrum resolution for wavfile reconstruction.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+128
+
+#### hop_size
+
+Defines time frame width (in number of sample points) during mel extraction/waveform reconstruction.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+512
+
+#### fft_size
+
+Defines n_fft (as fft parameter) during mel extraction from ground-truth wavefile.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+2048
+
+#### win_size
+
+Defines window size (as fft parameter) during mel extraction from ground-truth wavefile.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+2048
+
+#### fmin
+
+Lowest f0 in mel bins.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+40
+
+#### fmax
+
+Highest f0 in mel bins.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+16000
+
 ### Neural networks
 
 #### hidden_size
@@ -117,6 +255,155 @@ choose from [ _l1_, _l2_ ]
 
 
 ### Dataset information and preprocessing
+
+#### binarization_args shuffle
+
+Whether binarized dataset is shuffled or not.
+
+##### used by
+
+all
+
+##### type
+
+boolean
+
+##### default
+
+true
+
+#### augmentation_args random_pitch_shifting range
+
+Data will be augmented by random pitch shifting, shifted data will be seen as the original speaker.
+
+When range is set to [-M,N], data's f0 will be shifted in th range of f0 - M semitones to f0 + N semitones.
+
+##### used by
+
+all
+
+##### type
+
+list[float]
+
+##### default
+
+[-5,5]
+
+#### augmentation_args random_pitch_shifting scale
+
+Data will be augmented by random pitch shifting, shifted data will be seen as the original speaker.
+
+When scale is set to s, extra s times of orignal dataset total length will be added to the total datase after augmentation. 
+
+##### used by
+
+all
+
+##### type
+
+float
+
+##### default
+
+1.0
+
+#### augmentation_args fixed_pitch_shifting targets
+
+Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
+
+For each target t in the list, data's f0 of certain speaker will be shifted to f0 + t semitones as a  different speaker.
+
+##### used by
+
+all
+
+##### type
+
+list[float]
+
+##### default
+
+[-5,5]
+
+#### augmentation_args fixed_pitch_shifting scale
+
+Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
+
+When scale is set to s, extra s times of orignal dataset total length will be added to the total datase after augmentation. 
+
+##### used by
+
+all
+
+##### type
+
+float
+
+##### default
+
+0.75
+
+#### augmentation_args random_time_stretching range
+
+Data will be augmented by random time stretching, shifted data will be seen as the original speaker.
+
+Random values will be sampled from the range [M, N]. Lower values means speeding up, higher values means slowing down.
+
+##### used by
+
+all
+
+##### type
+
+list[float]
+
+##### default
+
+[0.5,2]
+
+#### augmentation_args random_time_stretching domain
+
+Data will be augmented by random time stretching, shifted data will be seen as the original speaker.
+
+Random values will be sampled from the range. 
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+log
+
+##### constraint
+
+Choose from ['log','linear']
+
+
+#### augmentation_args random_time_stretching scale
+
+Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
+
+When scale is set to s, extra s times of orignal dataset total length will be added to the total datase after augmentation. 
+
+##### used by
+
+all
+
+##### type
+
+float
+
+##### default
+
+0.75
+
+
 
 #### raw_data_dir
 
