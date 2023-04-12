@@ -43,11 +43,37 @@ _256_
 
 #### residual_channels
 
-TBD
+Dimension of residual block Conv1D layers in WaveNet.
+
+##### used by
+
+acoustic model
+
+##### type
+
+int
+
+##### default
+
+_512_
+
+(_384_ is recommended if you GPU has <=6GB memory) 
 
 #### residual_layers
 
-TBD
+Number of residual blocks in WaveNet.
+
+##### used by
+
+acoustic model
+
+##### type
+
+int
+
+##### default
+
+_20_
 
 #### diff_decoder_type
 
@@ -89,6 +115,7 @@ _l2_
 
 choose from [ _l1_, _l2_ ]
 
+
 ### Dataset information and preprocessing
 
 #### raw_data_dir
@@ -125,11 +152,41 @@ float
 
 _0.0004_
 
-#### max_batch_frames
-
-TBD
-
 #### max_batch_size
 
-TBD
+Number of .wav slices in each data batch sent from dataloader to each single GPU.
+
+This number will be kept the same unless max_batch_frames requirement is not met. In this case, per card batch size will be automatically reduced to a feasible size to get rid of OOM.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+_48_
+
+#### max_batch_frames
+
+$\text{1 time frame} =\frac{\text{hop size}}{\text{Wav file sample rate}} \text{ second(s)}$.
+
+Number of time frames in per card batch is not allowed to exceed max_batch_frames to get rid of OOM. max_batch_size will be automatically reduced to meet this requirement.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+_80000_
+
+
 
