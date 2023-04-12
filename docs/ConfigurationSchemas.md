@@ -79,7 +79,7 @@ int
 
 ##### default
 
-128
+_128_
 
 #### hop_size
 
@@ -95,7 +95,7 @@ int
 
 ##### default
 
-512
+_512_
 
 #### fft_size
 
@@ -111,7 +111,7 @@ int
 
 ##### default
 
-2048
+_2048_
 
 #### win_size
 
@@ -127,7 +127,7 @@ int
 
 ##### default
 
-2048
+_2048_
 
 #### fmin
 
@@ -143,7 +143,7 @@ int
 
 ##### default
 
-40
+_40_
 
 #### fmax
 
@@ -159,9 +159,32 @@ int
 
 ##### default
 
-16000
+_16000_
 
-### Neural networks
+### Neural networks: Diffusion
+
+#### K_step
+
+TBD
+
+#### timesteps
+
+TBD
+
+#### max_beta
+
+TBD
+
+#### rel_pos
+
+TBD
+
+#### pndm_speedup
+
+TBD
+
+
+### Neural networks: Backbone
 
 #### hidden_size
 
@@ -181,7 +204,7 @@ _256_
 
 #### residual_channels
 
-Dimension of residual block Conv1D layers in WaveNet.
+Dimension of residual block output of Conv1D layers in WaveNet.
 
 ##### used by
 
@@ -194,8 +217,6 @@ int
 ##### default
 
 _512_
-
-(_384_ is recommended if you GPU has <=6GB memory) 
 
 #### residual_layers
 
@@ -288,13 +309,13 @@ list[float]
 
 ##### default
 
-[-5,5]
+[_-5_,_5_]
 
 #### augmentation_args random_pitch_shifting scale
 
 Data will be augmented by random pitch shifting, shifted data will be seen as the original speaker.
 
-When scale is set to s, extra s times of orignal dataset total length will be added to the total datase after augmentation. 
+When scale is set to s, extra s times of orignal dataset total length will be added to the total dataset after augmentation. 
 
 ##### used by
 
@@ -306,7 +327,7 @@ float
 
 ##### default
 
-1.0
+_1.0_
 
 #### augmentation_args fixed_pitch_shifting targets
 
@@ -324,13 +345,13 @@ list[float]
 
 ##### default
 
-[-5,5]
+[_-5_,_5_]
 
 #### augmentation_args fixed_pitch_shifting scale
 
 Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
 
-When scale is set to s, extra s times of orignal dataset total length will be added to the total datase after augmentation. 
+When scale is set to s, extra s times of orignal dataset total length will be added to the total dataset after augmentation. 
 
 ##### used by
 
@@ -342,7 +363,7 @@ float
 
 ##### default
 
-0.75
+_0.75_
 
 #### augmentation_args random_time_stretching range
 
@@ -360,14 +381,16 @@ list[float]
 
 ##### default
 
-[0.5,2]
+[_0.5_,_2_]
 
 #### augmentation_args random_time_stretching domain
 
 Data will be augmented by random time stretching, shifted data will be seen as the original speaker.
 
-Random values will be sampled from the range. 
+Random values will be sampled from the range:
 
+- If 'linear', stretching ratio will be uniformly drawn from [M,N].
+- If 'log', x will be uniformly drawn from [log(M),log(N)] then stretching ratio will be set as $\text{e}^{\text{x}}$
 ##### used by
 
 all
@@ -382,14 +405,14 @@ log
 
 ##### constraint
 
-Choose from ['log','linear']
+Choose from [_'log'_,_'linear'_]
 
 
 #### augmentation_args random_time_stretching scale
 
 Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
 
-When scale is set to s, extra s times of orignal dataset total length will be added to the total datase after augmentation. 
+When scale is set to s, extra s times of orignal dataset total length will be added to the total dataset after augmentation. 
 
 ##### used by
 
@@ -403,8 +426,6 @@ float
 
 0.75
 
-
-
 #### raw_data_dir
 
 Path(s) to the raw data including wave files, transcriptions, etc.
@@ -416,6 +437,64 @@ all
 ##### type
 
 str, List[str]
+
+#### binary_data_dir
+
+TBD
+
+#### binarizer_cls
+
+TBD
+
+#### dictionary
+
+TBD
+
+#### spec_min
+
+TBD
+
+#### spec_max
+
+TBD
+
+#### keep_bins
+
+TBD
+
+#### mel_vmin
+
+TBD
+
+#### mel_vmax
+
+TBD
+
+#### interp_uv
+
+TBD
+
+#### save_f0
+
+TBD
+
+#### use_spk_id
+
+TBD
+
+#### f0_embed_type
+
+TBD
+
+#### use_key_shift_embed
+
+TBD
+
+#### use_speed_embed
+
+TBD
+
+
 
 ### Training, validation and inference
 
@@ -439,23 +518,13 @@ float
 
 _0.0004_
 
-#### max_batch_size
+#### lr_decay_steps
 
-Number of .wav slices in each data batch sent from dataloader to each single GPU.
+TBD
 
-This number will be kept the same unless max_batch_frames requirement is not met. In this case, per card batch size will be automatically reduced to a feasible size to get rid of OOM.
+#### lr_decay_gamma
 
-##### used by
-
-all
-
-##### type
-
-int
-
-##### default
-
-_48_
+TBD
 
 #### max_batch_frames
 
@@ -475,5 +544,71 @@ int
 
 _80000_
 
+#### max_batch_size
 
+Number of .wav slices in each data batch sent from dataloader to each single GPU.
+
+This number will be kept the same unless max_batch_frames requirement is not met. In this case, per card batch size will be automatically reduced to a feasible size to get rid of OOM.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+_48_
+
+#### val_with_vocoder
+
+TBD
+
+#### val_check_interval
+
+TBD
+
+#### num_valid_plots
+
+TBD
+
+#### max_updates
+
+TBD
+
+#### permanent_ckpt_start
+
+TBD
+
+#### permanent_ckpt_interval
+
+TBD
+
+### Distributed Training Setup
+
+#### pl_trainer_accelerator
+
+TBD
+
+#### pl_trainer_devices
+
+TBD
+
+#### pl_trainer_precision
+
+TBD
+
+#### pl_trainer_num_nodes
+
+TBD
+
+#### pl_trainer_strategy
+
+TBD
+
+#### ddp_backend
+
+TBD
 
