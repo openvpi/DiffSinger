@@ -5,7 +5,13 @@ import librosa
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.ticker import MultipleLocator
-from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich.progress import (
+    Progress,
+    BarColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from utils.binarizer_utils import get_pitch_parselmouth
 
@@ -98,9 +104,7 @@ class NotePlotter:
 
         show_corrected = True
         # 绘制音符块和计算后的音高曲线
-        for pitch, duration, corrected_pitch, deviation in zip(
-            note_seq, note_dur, corrected_pitches, pitch_deviations
-        ):
+        for pitch, duration, deviation in zip(note_seq, note_dur, pitch_deviations):
             if pitch == "rest":
                 start_time += duration
                 continue
