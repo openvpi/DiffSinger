@@ -165,7 +165,19 @@ _16000_
 
 #### K_step
 
-TBD
+Diffusion steps for generating mel spectrogram.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+_1000_
 
 #### timesteps
 
@@ -181,7 +193,23 @@ TBD
 
 #### pndm_speedup
 
-TBD
+Read https://openreview.net/forum?id=PlKWVd2yBkY: Pseudo Numerical Methods for Diffusion Models on Manifolds.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+_10_
+
+##### constraints
+
+choose from [_1 , 10 , 20, 50, 100_]
 
 
 ### Neural networks: Backbone
