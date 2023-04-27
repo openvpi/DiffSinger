@@ -181,17 +181,44 @@ _1000_
 
 #### timesteps
 
-TBD
+Same as K_step.
 
 #### max_beta
 
-TBD
+Max beta for the discrete-time DPM. (See the original DDPM paper for details)
+
+##### used by
+
+all
+
+##### type
+
+float
+
+##### default
+
+_0.02_
+
 
 #### rel_pos
 
-TBD
+Relative positional encoding in FastSpeech2 module.
+
+##### used by
+
+all
+
+##### type
+
+boolean
+
+##### default
+
+_true_
 
 #### pndm_speedup
+
+PNDM speeding up ratio. 1 means no speeding up.
 
 Read https://openreview.net/forum?id=PlKWVd2yBkY: Pseudo Numerical Methods for Diffusion Models on Manifolds.
 
@@ -262,6 +289,22 @@ int
 
 _20_
 
+#### dilation_cycle_length
+
+Number k of different dilation width parameters $2^0, 2^1 ...., 2^k$
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+4
+
 #### diff_decoder_type
 
 Denoiser type of the DDPM.
@@ -301,6 +344,8 @@ _l2_
 ##### Constraints
 
 choose from [ _l1_, _l2_ ]
+
+
 
 
 ### Dataset information and preprocessing
@@ -419,6 +464,7 @@ Random values will be sampled from the range:
 
 - If 'linear', stretching ratio will be uniformly drawn from [M,N].
 - If 'log', x will be uniformly drawn from [log(M),log(N)] then stretching ratio will be set as $\text{e}^{\text{x}}$
+
 ##### used by
 
 all
@@ -468,71 +514,100 @@ str, List[str]
 
 #### binary_data_dir
 
-TBD
+Path(s) to the binarized data in .npy format .
+
+##### used by
+
+all
+
+##### type
+
+str, List[str]
 
 #### binarizer_cls
 
-TBD
+Binarizer class to specify binarized data structure.
+
+##### used by
+
+all
+
+##### type
+
+class
+
+##### default
+
+_preprocessing.acoustic_binarizer.AcousticBinarizer_
 
 #### dictionary
 
-TBD
+Dictionary for training acoustic model. Training data must fully coverage phonemes in the dictionary.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+_dictionaries/opencpop-extension.txt_
 
 #### spec_min
 
-TBD
+Mel Spectrogram value mapped to -1 in Gaussian Diffusion normalization/denormalization step.
+
+##### used by
+
+all
+
+##### type
+
+list[int]
+
+##### default
+
+_[-5]_
+
 
 #### spec_max
 
-TBD
+Mel Spectrogram value mapped to 1 in Gaussian Diffusion normalization/denormalization step.
+
+##### used by
+
+all
+
+##### type
+
+list[int]
+
+##### default
+
+_[0]_
 
 #### keep_bins
 
-TBD
+Number of mel bins.
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+128
 
 #### mel_vmin
 
-TBD
-
-#### mel_vmax
-
-TBD
-
-#### interp_uv
-
-TBD
-
-#### save_f0
-
-TBD
-
-#### use_spk_id
-
-TBD
-
-#### f0_embed_type
-
-TBD
-
-#### use_key_shift_embed
-
-TBD
-
-#### use_speed_embed
-
-TBD
-
-
-
-### Training, validation and inference
-
-#### task_cls
-
-TBD
-
-#### lr
-
-Initial learning rate of the scheduler.
+Minimum mel spectrogram value for visualizing heatmap.
 
 ##### used by
 
@@ -544,15 +619,174 @@ float
 
 ##### default
 
+_-6_
+
+
+#### mel_vmax
+
+Maximum mel spectrogram value for visualizing heatmap.
+
+##### used by
+
+all
+
+##### type
+
+float
+
+##### default
+
+_1.5_
+
+#### interp_uv
+
+Unvoiced F0 interpolation.
+
+##### used by
+
+all
+
+##### type
+
+boolean
+
+##### default
+
+true
+
+#### use_spk_id
+
+True if training a multi-speaker model, or single speaker data augmented as different speakers during training.
+
+##### used by
+
+acoustic 
+
+##### type
+
+boolean
+
+##### default
+
+true
+
+#### f0_embed_type
+
+Map f0 to embedding using :
+
+- torch.nn.Linear if continuous
+- torch.nn.Embedding if discrete
+
+##### used by
+
+acoustic 
+
+##### type
+
+str
+
+##### default
+
+'continuous'
+
+#### use_key_shift_embed
+
+Whether to use embedding information when data is augmented by key shifting.
+
+##### used by
+
+acoustic 
+
+##### type
+
+boolean
+
+##### default
+
+true
+
+#### use_speed_embed
+
+Whether to use embedding information when data is augmented by time stretching.
+
+##### used by
+
+acoustic 
+
+##### type
+
+boolean
+
+##### default
+
+true
+
+
+### Training, validation and inference
+
+#### task_cls
+
+Class of model training.
+
+##### used by
+
+acoustic
+
+##### type
+
+class
+
+##### default
+
+_training.acoustic_task.AcousticTask_
+
+#### lr
+
+Initial learning rate of the scheduler.
+
+##### used by
+
+acoustic
+
+##### type
+
+float
+
+##### default
+
 _0.0004_
 
 #### lr_decay_steps
 
-TBD
+Learning rate will be reduced by certain ratio repeatedly after each lr_decay_steps. 
+
+##### used by
+
+acoustic
+
+##### type
+
+int
+
+##### default
+
+_50000_
 
 #### lr_decay_gamma
 
-TBD
+Learning rate will be reduced by lr_decay_gamma * previous_lr repeatedly after certain steps. 
+
+##### used by
+
+acoustic
+
+##### type
+
+float
+
+##### default
+
+_0.5_
 
 #### max_batch_frames
 
@@ -592,27 +826,100 @@ _48_
 
 #### val_with_vocoder
 
-TBD
+Whether using vocoder to generate .wav during each validation step.
+
+##### used by
+
+acoustic
+
+##### type
+
+boolean
+
+##### default
+
+_true_
+
 
 #### val_check_interval
 
-TBD
+Validating data repeatedly after each val_check_interval steps.
+
+##### used by
+
+acoustic
+
+##### type
+
+int
+
+##### default
+
+_2000_
 
 #### num_valid_plots
 
-TBD
+Number of validation plots in each validation.
+
+##### used by
+
+acoustic
+
+##### type
+
+int
+
+##### default
+
+_10_
 
 #### max_updates
 
-TBD
+Total training steps ( in each step, gradient will be accumulated and updated to weights ). 
+
+##### used by
+
+acoustic
+
+##### type
+
+int
+
+##### default
+
+_320000_
 
 #### permanent_ckpt_start
 
-TBD
+Checkpoints will be saved and kept not deleted from permanent_ckpt_start training steps.
+
+##### used by
+
+acoustic
+
+##### type
+
+int
+
+##### default
+
+_120000_
 
 #### permanent_ckpt_interval
 
-TBD
+After permanent_ckpt_start training steps, checkpoints after each permanent_ckpt_interval steps will be repeatedly saved and kept not deleted.
+
+##### used by
+
+acoustic
+
+##### type
+
+int
+
+##### default
+
+_40000_
 
 ### Distributed Training Setup
 
