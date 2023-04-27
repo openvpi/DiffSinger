@@ -588,27 +588,120 @@ TBD
 
 ### Distributed Training Setup
 
+Pytorch lightning is utilized for distributed training.
+
+Read https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api for possible values
+
 #### pl_trainer_accelerator
 
-TBD
+To determine on which kind of device(s) (CPU, GPU, customized XPU, etc. ) model should be trained.
+
+Read https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator for accelerator customization.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+'auto'
 
 #### pl_trainer_devices
 
-TBD
+To determine on which device(s) model should be trained.
+
+'auto' will utilize all possible devices, while '0,1,...' specifies model training on certain device(s).
+
+( This is exactly the same as specifying CUDA_VISIBLE_DEVICES os variable before model training )
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+'auto'
 
 #### pl_trainer_precision
 
-TBD
+The data precision of model and during model training should be trained.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+_'32-true'_
+
+##### Constraints
+
+choose from [_'32-true','bf16-mixed','16-mixed','bf16','16'_]
 
 #### pl_trainer_num_nodes
 
-TBD
+Number of nodes in the training cluster running pytorch lightning training
+
+##### used by
+
+all
+
+##### type
+
+int
+
+##### default
+
+_1_
 
 #### pl_trainer_strategy
 
-TBD
+Strategies that change the behaviour of the training, validation and test- loop.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+_'auto'_
+
 
 #### ddp_backend
 
-TBD
+The distributed training backend for model weights/gradients communication.
+
+Choose available ddp_backend for certain operating system and computing hardwares.
+
+##### used by
+
+all
+
+##### type
+
+str
+
+##### default
+
+_'nccl'_
+
+##### Constraints
+
+choose from [_'gloo', 'nccl', 'nccl_no_p2p'_]
 
