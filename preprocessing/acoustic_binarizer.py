@@ -47,7 +47,7 @@ class AcousticBinarizer(BaseBinarizer):
             f'but a dataset of category \'acoustic\' is required.'
 
         meta_data_dict = {}
-        if meta_info['format'] == 'csv':
+        if meta_info['format'] == 'csv' or os.path.exists(raw_data_dir / 'transcriptions.csv'):
             for utterance_label in csv.DictReader(
                     open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8')
             ):
