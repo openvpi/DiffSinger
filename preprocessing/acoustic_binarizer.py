@@ -7,7 +7,6 @@
     ph_dur: phoneme durations
 """
 import csv
-import json
 import os
 import pathlib
 import random
@@ -34,20 +33,8 @@ class AcousticBinarizer(BaseBinarizer):
         self.lr = LengthRegulator()
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
-        meta_info = {
-            'category': 'acoustic',
-            'format': 'grid'
-        }
-        meta_file = raw_data_dir / 'meta.json'
-        if meta_file.exists():
-            meta_info.update(json.load(open(meta_file, 'r', encoding='utf8')))
-        category = meta_info['category']
-        assert category == 'acoustic', \
-            f'Dataset in \'{raw_data_dir}\' is of category \'{category}\', ' \
-            f'but a dataset of category \'acoustic\' is required.'
-
         meta_data_dict = {}
-        if meta_info['format'] == 'csv' or os.path.exists(raw_data_dir / 'transcriptions.csv'):
+        if (raw_data_dir / 'transcriptions.csv').exists():
             for utterance_label in csv.DictReader(
                     open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8')
             ):
