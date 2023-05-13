@@ -23,8 +23,7 @@ follows:
 
 ### accumulate_grad_batches
 
-Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no
-gradient accumulation.
+Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no gradient accumulation.
 
 #### used by
 
@@ -487,7 +486,7 @@ nccl
 
 #### constraints
 
-choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp stucks, use 'nccl_no_p2p'.
+Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp stucks, use 'nccl_no_p2p'.
 
 ### dictionary
 
@@ -559,7 +558,7 @@ l2
 
 #### constraints
 
-choose from 'l1', 'l2'
+Choose from 'l1', 'l2'.
 
 ### dilation_cycle_length
 
@@ -710,7 +709,7 @@ continuous
 
 #### constraints
 
-choose from 'continuous', 'discrete'
+Choose from 'continuous', 'discrete'.
 
 ### ffn_act
 
@@ -742,7 +741,7 @@ gelu
 
 #### constraints
 
-choose from 'relu', 'gelu', 'swish'
+Choose from 'relu', 'gelu', 'swish'.
 
 ### ffn_padding
 
@@ -770,7 +769,7 @@ SAME
 
 ### fft_size
 
-Fast Fourier Transforms parameter for feature extraction.
+Fast Fourier Transforms parameter for mel extraction.
 
 #### used by
 
@@ -1526,7 +1525,7 @@ int
 
 ### permanent_ckpt_start
 
-Checkpoints will be marked as permanent every `permanent_ckpt_interval` training steps after this number training steps.
+Checkpoints will be marked as permanent every [permanent_ckpt_interval](###permanent_ckpt_interval) training steps after this number training steps.
 
 #### used by
 
@@ -1570,7 +1569,7 @@ auto
 
 #### constraints
 
-See [Accelerator — PyTorch Lightning 2.0.2 documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator) for available values.
+See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator) for available values.
 
 ### pl_trainer_devices
 
@@ -1624,7 +1623,7 @@ str
 
 #### constraints
 
-choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at [Trainer — PyTorch Lightning 2.0.2 documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
+Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
 
 ### pl_trainer_num_nodes
 
@@ -1786,43 +1785,25 @@ int
 
 20
 
+### sampler_frame_count_grid
 
-
-
-
-
-
-### vocoder
-
-Model type for reconstruction .wav from mel information.
+The batch sampler applies an algorithm called _sorting by similar length_ when collecting batches. Data samples are first grouped by their approximate lengths before they get shuffled within each group. Assume this value is set to $L_{grid}$, the approximate length of a data sample with length $L_{real}$ can be calculated through the following expression:
+$$
+L_{approx} = \lfloor\frac{L_{real}}{L_{grid}}\rfloor\cdot L_{grid}
+$$
+Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length without shuffling) to get the theoretically best performance.
 
 #### used by
 
 all
 
-#### type
+#### scope
 
-str
+training
 
-### vocoder_ckpt
+#### customizability
 
-Pat of vocoder model for reconstruction .wav from mel information.
-
-#### used by
-
-all
-
-#### type
-
-str
-
-### win_size
-
-Defines window size (as fft parameter) during mel extraction from ground-truth wavefile.
-
-#### used by
-
-all
+normal
 
 #### type
 
@@ -1830,51 +1811,264 @@ int
 
 #### default
 
-_2048_
+6
 
-### timesteps
+### save_codes
 
-Same as K_step.
-
-### spec_min
-
-Mel Spectrogram value mapped to -1 in Gaussian Diffusion normalization/denormalization step.
+Files in these folders will be backed up every time a training starts.
 
 #### used by
 
 all
 
-#### type
+#### scope
 
-list[int]
+training
 
-#### default
+#### customizability
 
-_[-5]_
-
-### spec_max
-
-Mel Spectrogram value mapped to 1 in Gaussian Diffusion normalization/denormalization step.
-
-#### used by
-
-all
+normal
 
 #### type
 
-list[int]
+list
 
 #### default
 
-_[0]_
+[configs, modules, training, utils]
 
-### use_spk_id
+### schedule_type
 
-True if training a multi-speaker model, or single speaker data augmented as different speakers during training.
+The diffusion schedule type.
 
 #### used by
 
 acoustic
+
+#### scope
+
+nn
+
+#### customizability
+
+not recommended
+
+#### type
+
+str
+
+#### default
+
+linear
+
+#### constraints
+
+Choose from 'linear', 'cosine'.
+
+### seed
+
+The global random seed used to shuffle data, initializing model weights, etc.
+
+#### used by
+
+all
+
+#### scope
+
+preprocessing, training
+
+#### customizability
+
+normal
+
+#### type
+
+int
+
+#### default
+
+1234
+
+### sort_by_len
+
+Whether to apply the _sorting by similar length_ algorithm described in [sampler_frame_count_grid](###sampler_frame_count_grid). Turning off this option may slow down training because sorting by length can better utilize the computing resources.
+
+#### used by
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+not recommended
+
+#### type
+
+bool
+
+#### default
+
+true
+
+### speakers
+
+The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
+
+#### used by
+
+acoustic
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+required
+
+#### type
+
+list
+
+### spec_min
+
+Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values.
+
+#### used by
+
+all
+
+#### scope
+
+inference
+
+#### customizability
+
+not recommended
+
+#### type
+
+List[float]
+
+#### default
+
+[-5.0]
+
+### spec_max
+
+Maximum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different maximum values.
+
+#### used by
+
+all
+
+#### scope
+
+inference
+
+#### customizability
+
+not recommended
+
+#### type
+
+List[float]
+
+#### default
+
+[0.0]
+
+### task_cls
+
+Task trainer class name.
+
+#### used by
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+preserved
+
+#### type
+
+str
+
+### test_prefixes
+
+List of data item names or name prefixes for the validation set. For each string in the list:
+
+- if it equals to an actual item name, add that item to validation set;
+- if it does not equal to any item names, add all items whose names start with it to validation set.
+
+For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific speaker, where spk_id represents the speaker index.
+
+#### used by
+
+all
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+required
+
+#### type
+
+list
+
+### timesteps
+
+Equivalent to [K_step](###K_step).
+
+### train_set_name
+
+Name of the training set used in binary filenames, TensorBoard keys, etc.
+
+#### used by
+
+all
+
+#### scope
+
+preprocessing, training
+
+#### customizability
+
+preserved
+
+#### type
+
+str
+
+#### default
+
+train
+
+### use_key_shift_embed
+
+Whether to embed key shifting values introduced by random pitch shifting augmentation.
+
+#### used by
+
+acoustic
+
+#### scope
+
+nn, preprocessing, inference
+
+#### customizability
+
+recommended
 
 #### type
 
@@ -1882,15 +2076,27 @@ boolean
 
 #### default
 
-true
+false
 
-### use_key_shift_embed
+#### constraints
 
-Whether to use embedding information when data is augmented by key shifting.
+Must be true if random pitch shifting is enabled.
+
+### use_pos_embed
+
+Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
 
 #### used by
 
 acoustic
+
+#### scope
+
+nn
+
+#### customizability
+
+not recommended
 
 #### type
 
@@ -1902,7 +2108,7 @@ true
 
 ### use_speed_embed
 
-Whether to use embedding information when data is augmented by time stretching.
+Whether to embed speed values introduced by random time stretching augmentation.
 
 #### used by
 
@@ -1914,47 +2120,51 @@ boolean
 
 #### default
 
-true
+false
 
-### task_cls
+#### constraints
 
-Class of model training.
+Must be true if random time stretching is enabled.
 
-#### used by
+### use_spk_id
 
-acoustic
-
-#### type
-
-class
-
-#### default
-
-_training.acoustic_task.AcousticTask_
-
-### val_with_vocoder
-
-Whether using vocoder to generate .wav during each validation step.
+Whether embed the speaker id from a multi-speaker dataset.
 
 #### used by
 
 acoustic
 
+#### scope
+
+nn, preprocessing, inference
+
+#### customizability
+
+recommended
+
 #### type
 
-boolean
+bool
 
 #### default
 
-_true_
+false
 
 ### val_check_interval
 
-Validating data repeatedly after each val_check_interval steps.
+Interval (in number of training steps) between validation checks.
 
 #### used by
 
-acoustic
+all
+
+#### scope
+
+training
+
+#### customizability
+
+recommended
 
 #### type
 
@@ -1962,5 +2172,125 @@ int
 
 #### default
 
-_2000_
+2000
+
+### val_with_vocoder
+
+Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this option is disabled.
+
+#### used by
+
+acoustic
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+true
+
+### valid_set_name
+
+Name of the validation set used in binary filenames, TensorBoard keys, etc.
+
+#### used by
+
+all
+
+#### scope
+
+preprocessing, training
+
+#### customizability
+
+preserved
+
+#### type
+
+str
+
+#### default
+
+valid
+
+### vocoder
+
+The vocoder class name.
+
+#### used by
+
+acoustic
+
+#### scope
+
+preprocessing, training, inference
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+NsfHifiGAN
+
+### vocoder_ckpt
+
+Path of the vocoder model.
+
+#### used by
+
+acoustic
+
+#### scope
+
+preprocessing, training, inference
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+checkpoints/nsf_hifigan/model
+
+### win_size
+
+Window size for mel or feature extraction.
+
+#### used by
+
+all
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+preserved
+
+#### type
+
+int
+
+#### default
+
+2048
 
