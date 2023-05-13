@@ -12,18 +12,19 @@ This document explains the meaning and usages of all editable keys in a configur
 Each configuration key (including nested keys) are described with a brief explanation and several attributes listed as
 follows:
 
-|    Attribute    | Explanation                                                  |
-| :-------------: | :----------------------------------------------------------- |
-|     used by     | Represents what kind(s) of models and tasks this configuration belongs to. |
-|      scope      | The scope of effects of the configuration, indicating what it can influence within the whole pipeline. Possible values are:<br>**nn** - This configuration is related to how the neural networks are formed and initialized. Modifying it will result in failure when loading or resuming from checkpoints.<br>**preprecessing** - This configuration controls how raw data pieces or inference inputs are converted to inputs of neural networks. Binarizers should be re-run if this configuration is modified.<br>**training** - This configuraition describes the training procedures. Most training configurations can affect training performance, memory consumption, device utilization and loss calculation. Modifying training-only configurations will not cause severe inconsistency or errors in most situations.<br>**inference** - This configuration describes the calculation logic through the model graph. Changing it can lead to inconsistent or wrong outputs of inference or validation.<br>**others** - Other configurations not discussed above. Will have different effects according to  the descriptions. |
-| customizability | The level of customizability of the configuration. Possible values are:<br>**required** - This configuration **must** be set or modified according to the actual situation or condition, otherwise errors can be raised.<br>**recommended** - It is recommended to adjust this configuration according to the dataset, requirements, environment and hardwares. Most functionality-related and feature-related configurations are at this level, and all configurations in this level are widely tested with different values. However, leaving it unchanged will not cause problems.<br>**normal** - There is no need to modify it as the default value is carefully tuned and widely validated. However, one can still use another value if there are some special requirements or situations.<br>**not recommended** - No other values except the default one of this configuration are tested. Modifying it will not cause errors, but may cause unpredictable or significant impacts to the pipelines.<br>**preserved** - This configuration **must not** be modified. It appears in the configuration file only for future scalibilities, and currently changing it will result in errors. |
-|      type       | Value type of the configuration. Follows the syntax of Python type hints. |
-|   constraints   | Value constraints of the configuration.                      |
-|     default     | Default value of the configuration. Uses YAML value syntax.  |
+|    Attribute    | Explanation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+|:---------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|     used by     | Represents what kind(s) of models and tasks this configuration belongs to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|      scope      | The scope of effects of the configuration, indicating what it can influence within the whole pipeline. Possible values are:<br>**nn** - This configuration is related to how the neural networks are formed and initialized. Modifying it will result in failure when loading or resuming from checkpoints.<br>**preprocessing** - This configuration controls how raw data pieces or inference inputs are converted to inputs of neural networks. Binarizers should be re-run if this configuration is modified.<br>**training** - This configuration describes the training procedures. Most training configurations can affect training performance, memory consumption, device utilization and loss calculation. Modifying training-only configurations will not cause severe inconsistency or errors in most situations.<br>**inference** - This configuration describes the calculation logic through the model graph. Changing it can lead to inconsistent or wrong outputs of inference or validation.<br>**others** - Other configurations not discussed above. Will have different effects according to  the descriptions.                                                          |
+| customizability | The level of customizability of the configuration. Possible values are:<br>**required** - This configuration **must** be set or modified according to the actual situation or condition, otherwise errors can be raised.<br>**recommended** - It is recommended to adjust this configuration according to the dataset, requirements, environment and hardware. Most functionality-related and feature-related configurations are at this level, and all configurations in this level are widely tested with different values. However, leaving it unchanged will not cause problems.<br>**normal** - There is no need to modify it as the default value is carefully tuned and widely validated. However, one can still use another value if there are some special requirements or situations.<br>**not recommended** - No other values except the default one of this configuration are tested. Modifying it will not cause errors, but may cause unpredictable or significant impacts to the pipelines.<br>**preserved** - This configuration **must not** be modified. It appears in the configuration file only for future scalability, and currently changing it will result in errors. |
+|      type       | Value type of the configuration. Follows the syntax of Python type hints.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|   constraints   | Value constraints of the configuration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|     default     | Default value of the configuration. Uses YAML value syntax.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ### accumulate_grad_batches
 
-Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no gradient accumulation.
+Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no
+gradient accumulation.
 
 #### used by
 
@@ -113,7 +114,7 @@ dict
 
 Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
 
-When scale is set to s, extra s times of orignal dataset total length will be added to the total dataset after
+When scale is set to s, extra s times of original dataset total length will be added to the total dataset after
 augmentation.
 
 #### used by
@@ -237,7 +238,7 @@ preprocessing
 
 #### customizability
 
-not recommneded
+not recommended
 
 #### type
 
@@ -281,7 +282,7 @@ list[float]
 
 Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
 
-When scale is set to s, extra s times of orignal dataset total length will be added to the total dataset after
+When scale is set to s, extra s times of original dataset total length will be added to the total dataset after
 augmentation.
 
 #### used by
@@ -294,7 +295,7 @@ preprocessing
 
 #### customizability
 
-recommneded
+recommended
 
 #### type
 
@@ -326,7 +327,8 @@ dict
 
 ### binarization_args.num_workers
 
-Number of worker subprocesses when running binarizers. More workers can speed-up the preprocessing but will consume more memory.
+Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more
+memory.
 
 #### used by
 
@@ -350,7 +352,7 @@ int
 
 ### binarization_args.shuffle
 
-Whether binarized dataset will shuffled or not.
+Whether binarized dataset will be shuffled or not.
 
 #### used by
 
@@ -486,7 +488,8 @@ nccl
 
 #### constraints
 
-Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp stucks, use 'nccl_no_p2p'.
+Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux
+ddp gets stuck, use 'nccl_no_p2p'.
 
 ### dictionary
 
@@ -913,7 +916,7 @@ true
 
 ### K_step
 
-Total number of fiffusion steps.
+Total number of diffusion steps.
 
 #### used by
 
@@ -947,7 +950,7 @@ all
 
 training
 
-#### customizabilty
+#### customizability
 
 normal
 
@@ -1185,7 +1188,7 @@ int
 
 ### max_val_batch_size
 
-The maximum validationbatch size.
+The maximum validation batch size.
 
 #### used by
 
@@ -1505,7 +1508,8 @@ float
 
 ### permanent_ckpt_interval
 
-The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if they are not the newest ones.
+The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if
+they are not the newest ones.
 
 #### used by
 
@@ -1525,7 +1529,8 @@ int
 
 ### permanent_ckpt_start
 
-Checkpoints will be marked as permanent every [permanent_ckpt_interval](###permanent_ckpt_interval) training steps after this number training steps.
+Checkpoints will be marked as permanent every [permanent_ckpt_interval](#permanent_ckpt_interval) training steps after
+this number training steps.
 
 #### used by
 
@@ -1569,13 +1574,16 @@ auto
 
 #### constraints
 
-See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator) for available values.
+See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator)
+for available values.
 
 ### pl_trainer_devices
 
 To determine on which device(s) model should be trained.
 
-'auto' will utilize all visible devices defined with the `CUDA_VISIBLE_DEVICES` enviroment variable, or utilize all available devices if that variable is not set. Otherwise, it bahaves like `CUDA_VISIBLE_DEVICES` which can filter out visible devices.
+'auto' will utilize all visible devices defined with the `CUDA_VISIBLE_DEVICES` environment variable, or utilize all
+available devices if that variable is not set. Otherwise, it behaves like `CUDA_VISIBLE_DEVICES` which can filter out
+visible devices.
 
 #### used by
 
@@ -1623,7 +1631,8 @@ str
 
 #### constraints
 
-Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
+Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values
+at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
 
 ### pl_trainer_num_nodes
 
@@ -1787,11 +1796,15 @@ int
 
 ### sampler_frame_count_grid
 
-The batch sampler applies an algorithm called _sorting by similar length_ when collecting batches. Data samples are first grouped by their approximate lengths before they get shuffled within each group. Assume this value is set to $L_{grid}$, the approximate length of a data sample with length $L_{real}$ can be calculated through the following expression:
+The batch sampler applies an algorithm called _sorting by similar length_ when collecting batches. Data samples are
+first grouped by their approximate lengths before they get shuffled within each group. Assume this value is set to $L_
+{grid}$, the approximate length of a data sample with length $L_{real}$ can be calculated through the following
+expression:
 $$
 L_{approx} = \lfloor\frac{L_{real}}{L_{grid}}\rfloor\cdot L_{grid}
 $$
-Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length without shuffling) to get the theoretically best performance.
+Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length
+without shuffling) to get the best performance in theory.
 
 #### used by
 
@@ -1891,7 +1904,9 @@ int
 
 ### sort_by_len
 
-Whether to apply the _sorting by similar length_ algorithm described in [sampler_frame_count_grid](###sampler_frame_count_grid). Turning off this option may slow down training because sorting by length can better utilize the computing resources.
+Whether to apply the _sorting by similar length_ algorithm described
+in [sampler_frame_count_grid](#sampler_frame_count_grid). Turning off this option may slow down training because sorting
+by length can better utilize the computing resources.
 
 #### used by
 
@@ -1915,7 +1930,8 @@ true
 
 ### speakers
 
-The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
+The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json
+when preprocessing.
 
 #### used by
 
@@ -2008,7 +2024,8 @@ List of data item names or name prefixes for the validation set. For each string
 - if it equals to an actual item name, add that item to validation set;
 - if it does not equal to any item names, add all items whose names start with it to validation set.
 
-For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific speaker, where spk_id represents the speaker index.
+For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific
+speaker, where spk_id represents the speaker index.
 
 #### used by
 
@@ -2028,7 +2045,7 @@ list
 
 ### timesteps
 
-Equivalent to [K_step](###K_step).
+Equivalent to [K_step](#K_step).
 
 ### train_set_name
 
@@ -2176,7 +2193,8 @@ int
 
 ### val_with_vocoder
 
-Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this option is disabled.
+Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this
+option is disabled.
 
 #### used by
 
