@@ -112,12 +112,53 @@ dict
 
 ### augmentation_args.fixed_pitch_shifting.scale
 
-Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
-
-When scale is set to s, extra s times of original dataset total length will be added to the total dataset after
-augmentation.
+Scale ratio of each target in fixed pitch shifting augmentation.
 
 #### used by
+
+acoustic
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+recommended
+
+#### type
+
+tuple
+
+#### default
+
+0.75
+
+### augmentation_args.fixed_pitch_shifting.targets
+
+Targets (in semitones) of fixed pitch shifting augmentation.
+
+#### used by
+
+acoustic
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+not recommended
+
+#### type
+
+tuple
+
+#### default
+
+[-5.0, 5.0]
+
+### augmentation_args.random_pitch_shifting
 
 all
 
@@ -173,7 +214,7 @@ dict
 
 ### augmentation_args.random_pitch_shifting.range
 
-Range of the random pitch shifting (semitones).
+Range of the random pitch shifting ( in semitones).
 
 #### used by
 
@@ -221,16 +262,14 @@ float
 
 ### augmentation_args.random_time_stretching.domain
 
-Data will be augmented by random time stretching, shifted data will be seen as the original speaker.
+The domain where random time stretching factors are uniformly distributed in.
 
-Random values will be sampled from the range:
-
-- If 'linear', stretching ratio will be uniformly drawn from [M,N].
-- If 'log', x will be uniformly drawn from [log(M),log(N)] then stretching ratio will be set as $\text{e}^{\text{x}}$
+- If 'linear', stretching ratio $x$ will be uniformly distributed in $[V_{min}, V_{max}]$.
+- If 'log', $\ln{x}$ will be uniformly distributed $[\ln{V_{min}}, \ln{V_{max}}]$.
 
 #### used by
 
-all
+acoustic
 
 #### scope
 
@@ -250,17 +289,15 @@ log
 
 #### constraint
 
-Choose from 'log', 'linear'
+Choose from 'log', 'linear'.
 
 ### augmentation_args.random_time_stretching.range
 
-Data will be augmented by random time stretching, shifted data will be seen as the original speaker.
-
-Random values will be sampled from the range [M, N]. Lower values means speeding up, higher values means slowing down.
+Range of random time stretching factors.
 
 #### used by
 
-all
+acoustic
 
 #### scope
 
@@ -272,7 +309,7 @@ not recommended
 
 #### type
 
-list[float]
+tuple
 
 #### default
 
@@ -280,14 +317,11 @@ list[float]
 
 ### augmentation_args.random_time_stretching.scale
 
-Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
-
-When scale is set to s, extra s times of original dataset total length will be added to the total dataset after
-augmentation.
+Scale ratio of random time stretching augmentation.
 
 #### used by
 
-all
+acoustic
 
 #### scope
 
@@ -1700,7 +1734,7 @@ int
 
 #### constraints
 
-Must be a factor of `K_step`.
+Must be a factor of [K_step](#K_step).
 
 ### raw_data_dir
 
@@ -2019,10 +2053,10 @@ str
 
 ### test_prefixes
 
-List of data item names or name prefixes for the validation set. For each string in the list:
+List of data item names or name prefixes for the validation set. For each string `s` in the list:
 
-- if it equals to an actual item name, add that item to validation set;
-- if it does not equal to any item names, add all items whose names start with it to validation set.
+- If `s` equals to an actual item name, add that item to validation set.
+- If `s` does not equal to any item names, add all items whose names start with `s` to validation set.
 
 For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific
 speaker, where spk_id represents the speaker index.
