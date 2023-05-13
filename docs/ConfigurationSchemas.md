@@ -23,8 +23,7 @@ follows:
 
 ### accumulate_grad_batches
 
-Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no
-gradient accumulation.
+Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no gradient accumulation.
 
 #### used by
 
@@ -180,9 +179,7 @@ float
 
 ### augmentation_args.fixed_pitch_shifting.targets
 
-Data will be augmented by fixed pitch shifting, shifted data will NOT be seen as the original speaker.
-
-For each target t in the list, data's f0 of certain speaker will be shifted to f0 + t semitones as a different speaker.
+Targets of fixed pitch shifting augmentation, each in semitones.
 
 #### used by
 
@@ -361,8 +358,7 @@ dict
 
 ### binarization_args.num_workers
 
-Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more
-memory.
+Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more memory.
 
 #### used by
 
@@ -522,8 +518,7 @@ nccl
 
 #### constraints
 
-Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux
-ddp gets stuck, use 'nccl_no_p2p'.
+Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp gets stuck, use 'nccl_no_p2p'.
 
 ### dictionary
 
@@ -1542,8 +1537,7 @@ float
 
 ### permanent_ckpt_interval
 
-The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if
-they are not the newest ones.
+The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if they are not the newest ones.
 
 #### used by
 
@@ -1563,8 +1557,7 @@ int
 
 ### permanent_ckpt_start
 
-Checkpoints will be marked as permanent every [permanent_ckpt_interval](#permanent_ckpt_interval) training steps after
-this number training steps.
+Checkpoints will be marked as permanent every [permanent_ckpt_interval](#permanent_ckpt_interval) training steps after this number of training steps.
 
 #### used by
 
@@ -1608,16 +1601,13 @@ auto
 
 #### constraints
 
-See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator)
-for available values.
+See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator) for available values.
 
 ### pl_trainer_devices
 
 To determine on which device(s) model should be trained.
 
-'auto' will utilize all visible devices defined with the `CUDA_VISIBLE_DEVICES` environment variable, or utilize all
-available devices if that variable is not set. Otherwise, it behaves like `CUDA_VISIBLE_DEVICES` which can filter out
-visible devices.
+'auto' will utilize all visible devices defined with the `CUDA_VISIBLE_DEVICES` environment variable, or utilize all available devices if that variable is not set. Otherwise, it behaves like `CUDA_VISIBLE_DEVICES` which can filter out visible devices.
 
 #### used by
 
@@ -1665,8 +1655,7 @@ str
 
 #### constraints
 
-Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values
-at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
+Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
 
 ### pl_trainer_num_nodes
 
@@ -1830,15 +1819,13 @@ int
 
 ### sampler_frame_count_grid
 
-The batch sampler applies an algorithm called _sorting by similar length_ when collecting batches. Data samples are
-first grouped by their approximate lengths before they get shuffled within each group. Assume this value is set to $L_
-{grid}$, the approximate length of a data sample with length $L_{real}$ can be calculated through the following
-expression:
+The batch sampler applies an algorithm called _sorting by similar length_ when collecting batches. Data samples are first grouped by their approximate lengths before they get shuffled within each group. Assume this value is set to $L_{grid}$, the approximate length of a data sample with length $L_{real}$ can be calculated through the following expression:
+
 $$
 L_{approx} = \lfloor\frac{L_{real}}{L_{grid}}\rfloor\cdot L_{grid}
 $$
-Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length
-without shuffling) to get the best performance in theory.
+
+Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length without shuffling) to get the best performance in theory.
 
 #### used by
 
@@ -1938,9 +1925,7 @@ int
 
 ### sort_by_len
 
-Whether to apply the _sorting by similar length_ algorithm described
-in [sampler_frame_count_grid](#sampler_frame_count_grid). Turning off this option may slow down training because sorting
-by length can better utilize the computing resources.
+Whether to apply the _sorting by similar length_ algorithm described in [sampler_frame_count_grid](#sampler_frame_count_grid). Turning off this option may slow down training because sorting by length can better utilize the computing resources.
 
 #### used by
 
@@ -1964,8 +1949,7 @@ true
 
 ### speakers
 
-The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json
-when preprocessing.
+The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
 
 #### used by
 
@@ -2058,8 +2042,7 @@ List of data item names or name prefixes for the validation set. For each string
 - If `s` equals to an actual item name, add that item to validation set.
 - If `s` does not equal to any item names, add all items whose names start with `s` to validation set.
 
-For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific
-speaker, where spk_id represents the speaker index.
+For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific speaker, where spk_id represents the speaker index.
 
 #### used by
 
@@ -2227,8 +2210,7 @@ int
 
 ### val_with_vocoder
 
-Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this
-option is disabled.
+Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this option is disabled.
 
 #### used by
 
