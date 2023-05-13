@@ -358,7 +358,7 @@ dict
 
 ### binarization_args.num_workers
 
-Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more memory.
+Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more memory. 0 means the main processing doing everything.
 
 #### visibility
 
@@ -1357,7 +1357,7 @@ int
 
 #### default
 
-5
+1
 
 ### num_spk
 
