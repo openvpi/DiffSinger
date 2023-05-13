@@ -14,7 +14,7 @@ follows:
 
 |    Attribute    | Explanation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 |:---------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|     used by     | Represents what kind(s) of models and tasks this configuration belongs to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+|   visibility    | Represents what kind(s) of models and tasks this configuration belongs to.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 |      scope      | The scope of effects of the configuration, indicating what it can influence within the whole pipeline. Possible values are:<br>**nn** - This configuration is related to how the neural networks are formed and initialized. Modifying it will result in failure when loading or resuming from checkpoints.<br>**preprocessing** - This configuration controls how raw data pieces or inference inputs are converted to inputs of neural networks. Binarizers should be re-run if this configuration is modified.<br>**training** - This configuration describes the training procedures. Most training configurations can affect training performance, memory consumption, device utilization and loss calculation. Modifying training-only configurations will not cause severe inconsistency or errors in most situations.<br>**inference** - This configuration describes the calculation logic through the model graph. Changing it can lead to inconsistent or wrong outputs of inference or validation.<br>**others** - Other configurations not discussed above. Will have different effects according to  the descriptions.                                                          |
 | customizability | The level of customizability of the configuration. Possible values are:<br>**required** - This configuration **must** be set or modified according to the actual situation or condition, otherwise errors can be raised.<br>**recommended** - It is recommended to adjust this configuration according to the dataset, requirements, environment and hardware. Most functionality-related and feature-related configurations are at this level, and all configurations in this level are widely tested with different values. However, leaving it unchanged will not cause problems.<br>**normal** - There is no need to modify it as the default value is carefully tuned and widely validated. However, one can still use another value if there are some special requirements or situations.<br>**not recommended** - No other values except the default one of this configuration are tested. Modifying it will not cause errors, but may cause unpredictable or significant impacts to the pipelines.<br>**preserved** - This configuration **must not** be modified. It appears in the configuration file only for future scalability, and currently changing it will result in errors. |
 |      type       | Value type of the configuration. Follows the syntax of Python type hints.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -25,7 +25,7 @@ follows:
 
 Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no gradient accumulation.
 
-#### used by
+#### visibility
 
 all
 
@@ -49,7 +49,7 @@ int
 
 Number of mel channels for feature extraction, diffusion sampling and waveform reconstruction.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -73,7 +73,7 @@ int
 
 Sampling rate of waveforms.
 
-#### used by
+#### visibility
 
 all
 
@@ -113,7 +113,7 @@ dict
 
 Scale ratio of each target in fixed pitch shifting augmentation.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -137,7 +137,7 @@ tuple
 
 Targets (in semitones) of fixed pitch shifting augmentation.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -181,7 +181,7 @@ float
 
 Targets of fixed pitch shifting augmentation, each in semitones.
 
-#### used by
+#### visibility
 
 all
 
@@ -213,7 +213,7 @@ dict
 
 Range of the random pitch shifting ( in semitones).
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -237,7 +237,7 @@ tuple
 
 Scale ratio of the random pitch shifting augmentation.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -264,7 +264,7 @@ The domain where random time stretching factors are uniformly distributed in.
 - If 'linear', stretching ratio $x$ will be uniformly distributed in $[V_{min}, V_{max}]$.
 - If 'log', $\ln{x}$ will be uniformly distributed in $[\ln{V_{min}}, \ln{V_{max}}]$.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -292,7 +292,7 @@ Choose from 'log', 'linear'.
 
 Range of random time stretching factors.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -316,7 +316,7 @@ tuple
 
 Scale ratio of random time stretching augmentation.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -360,7 +360,7 @@ dict
 
 Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more memory.
 
-#### used by
+#### visibility
 
 all
 
@@ -384,7 +384,7 @@ int
 
 Whether binarized dataset will be shuffled or not.
 
-#### used by
+#### visibility
 
 all
 
@@ -408,7 +408,7 @@ true
 
 Binarizer class name.
 
-#### used by
+#### visibility
 
 all
 
@@ -428,7 +428,7 @@ str
 
 Path to the binarized dataset.
 
-#### used by
+#### visibility
 
 all
 
@@ -448,7 +448,7 @@ str
 
 The value at which to clip gradients. Equivalent to `gradient_clip_val` in `lightning.pytorch.Trainer`.
 
-#### used by
+#### visibility
 
 all
 
@@ -472,7 +472,7 @@ float
 
 Number of batches loaded in advance by each `torch.utils.data.DataLoader` worker.
 
-#### used by
+#### visibility
 
 all
 
@@ -496,7 +496,7 @@ true
 
 The distributed training backend.
 
-#### used by
+#### visibility
 
 all
 
@@ -524,7 +524,7 @@ Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Lin
 
 path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -544,7 +544,7 @@ str
 
 Denoiser type of the DDPM.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -568,7 +568,7 @@ wavenet
 
 Loss type of the DDPM.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -596,7 +596,7 @@ Choose from 'l1', 'l2'.
 
 Length k of the cycle $2^0, 2^1 ...., 2^k$ of convolution dilation factors through WaveNet residual blocks.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -620,7 +620,7 @@ int
 
 Dropout rate in some FastSpeech2 modules.
 
-#### used by
+#### visibility
 
 all
 
@@ -644,7 +644,7 @@ float
 
 Number of workers of `torch.utils.data.DataLoader`.
 
-#### used by
+#### visibility
 
 all
 
@@ -668,7 +668,7 @@ int
 
 Size of TransformerFFNLayer convolution kernel size in FastSpeech2 encoder.
 
-#### used by
+#### visibility
 
 all
 
@@ -692,7 +692,7 @@ int
 
 Number of FastSpeech2 encoder layers.
 
-#### used by
+#### visibility
 
 all
 
@@ -719,7 +719,7 @@ Map f0 to embedding using:
 - `torch.nn.Linear` if 'continuous'
 - `torch.nn.Embedding` if 'discrete'
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -751,7 +751,7 @@ Activation function of TransformerFFNLayer in FastSpeech2 encoder:
 - `torch.nn.GELU` if 'gelu'
 - `torch.nn.SiLU` if 'swish'
 
-#### used by
+#### visibility
 
 all
 
@@ -779,7 +779,7 @@ Choose from 'relu', 'gelu', 'swish'.
 
 Padding mode of TransformerFFNLayer convolution in FastSpeech2 encoder.
 
-#### used by
+#### visibility
 
 all
 
@@ -803,7 +803,7 @@ SAME
 
 Fast Fourier Transforms parameter for mel extraction.
 
-#### used by
+#### visibility
 
 all
 
@@ -827,7 +827,7 @@ int
 
 Maximum frequency of mel extraction.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -851,7 +851,7 @@ int
 
 Minimum frequency of mel extraction.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -875,7 +875,7 @@ int
 
 Dimension of hidden layers of FastSpeech2, token and variance embeddings, and diffusion condition.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -899,7 +899,7 @@ int
 
 Hop size or step length (in number of waveform samples) of mel and feature extraction.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -923,7 +923,7 @@ int
 
 Whether to apply linear interpolation to unvoiced parts in f0.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -947,7 +947,7 @@ true
 
 Total number of diffusion steps.
 
-#### used by
+#### visibility
 
 all
 
@@ -971,7 +971,7 @@ int
 
 Controls how often to log within training steps. Equivalent to `log_every_n_steps` in `lightning.pytorch.Trainer`.
 
-#### used by
+#### visibility
 
 all
 
@@ -995,7 +995,7 @@ int
 
 Learning rate decay ratio of `torch.optim.lr_scheduler.StepLR`.
 
-#### used by
+#### visibility
 
 all
 
@@ -1027,7 +1027,7 @@ dict
 
 Learning rate scheduler class name.
 
-#### used by
+#### visibility
 
 all
 
@@ -1051,7 +1051,7 @@ torch.optim.lr_scheduler.StepLR
 
 Learning rate decays every this number of training steps.
 
-#### used by
+#### visibility
 
 all
 
@@ -1075,7 +1075,7 @@ int
 
 Number of warmup steps of the learning rate scheduler.
 
-#### used by
+#### visibility
 
 all
 
@@ -1099,7 +1099,7 @@ int
 
 Maximum number of data frames in each training batch. Used to dynamically control the batch size.
 
-#### used by
+#### visibility
 
 all
 
@@ -1123,7 +1123,7 @@ int
 
 The maximum training batch size.
 
-#### used by
+#### visibility
 
 all
 
@@ -1147,7 +1147,7 @@ int
 
 Max beta of the DDPM noise schedule.
 
-#### used by
+#### visibility
 
 all
 
@@ -1171,7 +1171,7 @@ float
 
 Stop training after this number of steps. Equivalent to `max_steps` in `lightning.pytorch.Trainer`.
 
-#### used by
+#### visibility
 
 all
 
@@ -1195,7 +1195,7 @@ int
 
 Maximum number of data frames in each validation batch.
 
-#### used by
+#### visibility
 
 all
 
@@ -1219,7 +1219,7 @@ int
 
 The maximum validation batch size.
 
-#### used by
+#### visibility
 
 all
 
@@ -1243,7 +1243,7 @@ int
 
 Maximum mel spectrogram heatmap value for TensorBoard plotting.
 
-#### used by
+#### visibility
 
 all
 
@@ -1267,7 +1267,7 @@ float
 
 Minimum mel spectrogram heatmap value for TensorBoard plotting.
 
-#### used by
+#### visibility
 
 all
 
@@ -1291,7 +1291,7 @@ float
 
 Number of newest checkpoints kept during training.
 
-#### used by
+#### visibility
 
 all
 
@@ -1315,7 +1315,7 @@ int
 
 The number of attention heads of `torch.nn.MultiheadAttention` in FastSpeech2 encoder.
 
-#### used by
+#### visibility
 
 all
 
@@ -1339,7 +1339,7 @@ int
 
 Number of sanity validation steps at the beginning.
 
-#### used by
+#### visibility
 
 all
 
@@ -1363,7 +1363,7 @@ int
 
 Maximum number of speakers in multi-speaker models.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -1387,7 +1387,7 @@ int
 
 Number of validation plots in each validation. Plots will be chosen from the start of the validation set.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -1419,7 +1419,7 @@ dict
 
 Parameter of the `torch.optim.AdamW` optimizer.
 
-#### used by
+#### visibility
 
 all
 
@@ -1443,7 +1443,7 @@ float
 
 Parameter of the `torch.optim.AdamW` optimizer.
 
-#### used by
+#### visibility
 
 all
 
@@ -1467,7 +1467,7 @@ float
 
 Initial learning rate of the optimizer.
 
-#### used by
+#### visibility
 
 all
 
@@ -1491,7 +1491,7 @@ float
 
 Optimizer class name
 
-#### used by
+#### visibility
 
 all
 
@@ -1515,7 +1515,7 @@ torch.optim.AdamW
 
 Weight decay ratio of optimizer.
 
-#### used by
+#### visibility
 
 all
 
@@ -1539,7 +1539,7 @@ float
 
 The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if they are not the newest ones.
 
-#### used by
+#### visibility
 
 all
 
@@ -1559,7 +1559,7 @@ int
 
 Checkpoints will be marked as permanent every [permanent_ckpt_interval](#permanent_ckpt_interval) training steps after this number of training steps.
 
-#### used by
+#### visibility
 
 all
 
@@ -1579,7 +1579,7 @@ int
 
 Type of Lightning trainer hardware accelerator.
 
-#### used by
+#### visibility
 
 all
 
@@ -1609,7 +1609,7 @@ To determine on which device(s) model should be trained.
 
 'auto' will utilize all visible devices defined with the `CUDA_VISIBLE_DEVICES` environment variable, or utilize all available devices if that variable is not set. Otherwise, it behaves like `CUDA_VISIBLE_DEVICES` which can filter out visible devices.
 
-#### used by
+#### visibility
 
 all
 
@@ -1633,7 +1633,7 @@ auto
 
 The computation precision of training.
 
-#### used by
+#### visibility
 
 all
 
@@ -1661,7 +1661,7 @@ Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible
 
 Number of nodes in the training cluster of Lightning trainer.
 
-#### used by
+#### visibility
 
 all
 
@@ -1685,7 +1685,7 @@ int
 
 Strategies of the Lightning trainer behavior.
 
-#### used by
+#### visibility
 
 all
 
@@ -1709,7 +1709,7 @@ auto
 
 Diffusion sampling speed-up ratio. 1 means no speeding up.
 
-#### used by
+#### visibility
 
 all
 
@@ -1729,7 +1729,7 @@ Must be a factor of [K_step](#K_step).
 
 Path(s) to the raw dataset including wave files, transcriptions, etc.
 
-#### used by
+#### visibility
 
 all
 
@@ -1749,7 +1749,7 @@ str, List[str]
 
 Whether to use relative positional encoding in FastSpeech2 module.
 
-#### used by
+#### visibility
 
 all
 
@@ -1773,7 +1773,7 @@ true
 
 Number of dilated convolution channels in residual blocks in WaveNet.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -1797,7 +1797,7 @@ int
 
 Number of residual blocks in WaveNet.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -1827,7 +1827,7 @@ $$
 
 Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length without shuffling) to get the best performance in theory.
 
-#### used by
+#### visibility
 
 all
 
@@ -1851,7 +1851,7 @@ int
 
 Files in these folders will be backed up every time a training starts.
 
-#### used by
+#### visibility
 
 all
 
@@ -1875,7 +1875,7 @@ list
 
 The diffusion schedule type.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -1903,7 +1903,7 @@ Choose from 'linear', 'cosine'.
 
 The global random seed used to shuffle data, initializing model weights, etc.
 
-#### used by
+#### visibility
 
 all
 
@@ -1927,7 +1927,7 @@ int
 
 Whether to apply the _sorting by similar length_ algorithm described in [sampler_frame_count_grid](#sampler_frame_count_grid). Turning off this option may slow down training because sorting by length can better utilize the computing resources.
 
-#### used by
+#### visibility
 
 all
 
@@ -1951,7 +1951,7 @@ true
 
 The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -1971,7 +1971,7 @@ list
 
 Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values.
 
-#### used by
+#### visibility
 
 all
 
@@ -1995,7 +1995,7 @@ List[float]
 
 Maximum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different maximum values.
 
-#### used by
+#### visibility
 
 all
 
@@ -2019,7 +2019,7 @@ List[float]
 
 Task trainer class name.
 
-#### used by
+#### visibility
 
 all
 
@@ -2044,7 +2044,7 @@ List of data item names or name prefixes for the validation set. For each string
 
 For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific speaker, where spk_id represents the speaker index.
 
-#### used by
+#### visibility
 
 all
 
@@ -2068,7 +2068,7 @@ Equivalent to [K_step](#K_step).
 
 Name of the training set used in binary filenames, TensorBoard keys, etc.
 
-#### used by
+#### visibility
 
 all
 
@@ -2092,7 +2092,7 @@ train
 
 Whether to embed key shifting values introduced by random pitch shifting augmentation.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2120,7 +2120,7 @@ Must be true if random pitch shifting is enabled.
 
 Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2144,7 +2144,7 @@ true
 
 Whether to embed speed values introduced by random time stretching augmentation.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2164,7 +2164,7 @@ Must be true if random time stretching is enabled.
 
 Whether embed the speaker id from a multi-speaker dataset.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2188,7 +2188,7 @@ false
 
 Interval (in number of training steps) between validation checks.
 
-#### used by
+#### visibility
 
 all
 
@@ -2212,7 +2212,7 @@ int
 
 Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this option is disabled.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2236,7 +2236,7 @@ true
 
 Name of the validation set used in binary filenames, TensorBoard keys, etc.
 
-#### used by
+#### visibility
 
 all
 
@@ -2260,7 +2260,7 @@ valid
 
 The vocoder class name.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2284,7 +2284,7 @@ NsfHifiGAN
 
 Path of the vocoder model.
 
-#### used by
+#### visibility
 
 acoustic
 
@@ -2308,7 +2308,7 @@ checkpoints/nsf_hifigan/model
 
 Window size for mel or feature extraction.
 
-#### used by
+#### visibility
 
 all
 
