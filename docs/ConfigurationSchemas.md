@@ -262,7 +262,7 @@ float
 The domain where random time stretching factors are uniformly distributed in.
 
 - If 'linear', stretching ratio $x$ will be uniformly distributed in $[V_{min}, V_{max}]$.
-- If 'log', $\ln{x}$ will be uniformly distributed $[\ln{V_{min}}, \ln{V_{max}}]$.
+- If 'log', $\ln{x}$ will be uniformly distributed in $[\ln{V_{min}}, \ln{V_{max}}]$.
 
 #### used by
 
