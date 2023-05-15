@@ -54,9 +54,13 @@ class VarianceTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = VarianceDataset
-        if hparams['predict_dur']:
+
+        self.predict_dur = hparams['predict_dur']
+        if self.predict_dur:
             self.lambda_dur_loss = hparams['lambda_dur_loss']
-        if hparams['predict_pitch']:
+
+        self.predict_pitch = hparams['predict_pitch']
+        if self.predict_pitch:
             self.lambda_pitch_loss = hparams['lambda_pitch_loss']
 
         predict_energy = hparams['predict_energy']
@@ -76,7 +80,7 @@ class VarianceTask(BaseTask):
 
     # noinspection PyAttributeOutsideInit
     def build_losses(self):
-        if hparams['predict_dur']:
+        if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
             self.dur_loss = DurationLoss(
                 offset=dur_hparams['log_offset'],
@@ -85,7 +89,7 @@ class VarianceTask(BaseTask):
                 lambda_wdur=dur_hparams['lambda_wdur_loss'],
                 lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
-        if hparams['predict_pitch']:
+        if self.predict_pitch:
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
@@ -105,11 +109,21 @@ class VarianceTask(BaseTask):
         energy = sample.get('energy')  # [B, T_t]
         breathiness = sample.get('breathiness')  # [B, T_t]
 
+        if (self.predict_pitch or self.predict_variances) and not infer:
+            # randomly select continuous retaking regions
+            b = sample['size']
+            t = mel2ph.shape[1]
+            start, end = torch.sort(torch.randint(low=0, high=t, size=(b, 2)), dim=1)[0].unbind(dim=-1)
+            idx = torch.arange(0, t, dtype=torch.long, device=mel2ph.device)[None]
+            retake = (idx >= start[:, None]) & (idx < end[:, None])
+        else:
+            retake = None
+
         output = self.model(
             txt_tokens, midi=midi, ph2word=ph2word, ph_dur=ph_dur, mel2ph=mel2ph,
             base_pitch=base_pitch, delta_pitch=delta_pitch,
             energy=energy, breathiness=breathiness,
-            infer=infer
+            retake=retake, infer=infer
         )
 
         dur_pred, pitch_pred, variances_pred = output
