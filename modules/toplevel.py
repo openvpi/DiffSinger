@@ -193,8 +193,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             condition = condition + self.retake_embed(retake.long())
 
         if self.predict_pitch:
-            base_pitch += delta_pitch * ~retake
-            delta_pitch *= retake
+            base_pitch = base_pitch + delta_pitch * ~retake
+            delta_pitch = delta_pitch * retake
             pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
             pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
         else:
