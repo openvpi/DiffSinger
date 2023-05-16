@@ -164,6 +164,10 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
+            self.variance_embeds = nn.ModuleDict({
+                v_name: Linear(1, hparams['hidden_size'])
+                for v_name in self.variance_prediction_list
+            })
             self.variance_predictor = self.build_adaptor()
 
     def forward(
@@ -210,11 +214,24 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             pitch = base_pitch + pitch_pred_out
         else:
             pitch = base_pitch + delta_pitch
-        pitch_embed = self.pitch_embed(pitch[:, :, None])
-        condition += pitch_embed
+        condition += self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
+
+        if retake is None:
+            variance_embeds = [
+                self.variance_embeds[v_name](torch.zeros_like(pitch))
+                for v_name in self.variance_prediction_list
+            ]
+        else:
+            variance_embeds = [
+                self.variance_embeds[v_name]((v_input * retake)[:, :, None])
+                for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
+            ]
+        condition += torch.stack(variance_embeds, dim=-1).sum(-1)
+
         variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
+
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)
         else:
