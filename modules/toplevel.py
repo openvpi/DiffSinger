@@ -189,12 +189,15 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.predict_pitch or self.predict_variances:
             if retake is None:
-                retake = torch.ones_like(mel2ph, dtype=torch.bool)
-            condition = condition + self.retake_embed(retake.long())
+                retake_embed = self.retake_embed(torch.ones_like(mel2ph))
+            else:
+                retake_embed = self.retake_embed(retake.long())
+            condition += retake_embed
 
         if self.predict_pitch:
-            base_pitch = base_pitch + delta_pitch * ~retake
-            delta_pitch = delta_pitch * retake
+            if retake is not None:
+                base_pitch = base_pitch + delta_pitch * ~retake
+                delta_pitch = delta_pitch * retake
             pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
             pitch_pred_out = self.pitch_predictor(pitch_cond, delta_pitch, infer)
         else:
