@@ -100,6 +100,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         else:
             ph_dur = None
             mel2ph = None
+        batch['ph_dur'] = ph_dur
         batch['mel2ph'] = mel2ph
 
         # Calculate frame-level MIDI pitch, which is a step function curve
@@ -150,12 +151,18 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
     @torch.no_grad()
     def run_model(self, sample):
         txt_tokens = sample['tokens']
-        word_dur = sample['word_dur']
+        midi = sample['midi']
         ph2word = sample['ph2word']
+        word_dur = sample['word_dur']
+        ph_dur = sample['ph_dur']
+        mel2ph = sample['mel2ph']
         base_pitch = sample['base_pitch']
+        delta_pitch = sample.get('delta_pitch')
+
         dur_pred, pitch_pred, variance_pred = self.model(
-            txt_tokens, midi=sample['midi'], ph2word=ph2word, word_dur=word_dur,
-            mel2ph=sample['mel2ph'], base_pitch=base_pitch, delta_pitch=sample.get('delta_pitch')
+            txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
+            mel2ph=mel2ph, base_pitch=base_pitch, delta_pitch=delta_pitch,
+            retake=None, infer=True
         )
         if dur_pred is not None:
             dur_pred = self.rr(dur_pred, ph2word, word_dur)
