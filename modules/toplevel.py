@@ -225,7 +225,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             ]
         else:
             variance_embeds = [
-                self.variance_embeds[v_name]((v_input * retake)[:, :, None])
+                self.variance_embeds[v_name]((v_input * ~retake)[:, :, None])
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
         condition += torch.stack(variance_embeds, dim=-1).sum(-1)
