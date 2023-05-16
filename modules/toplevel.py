@@ -220,7 +220,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if retake is None:
             variance_embeds = [
-                self.variance_embeds[v_name](torch.zeros_like(pitch))
+                self.variance_embeds[v_name](torch.zeros_like(pitch)[:, :, None])
                 for v_name in self.variance_prediction_list
             ]
         else:
