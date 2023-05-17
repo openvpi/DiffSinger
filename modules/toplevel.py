@@ -134,15 +134,6 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         self.predict_pitch = hparams['predict_pitch']
 
-        predict_energy = hparams.get('predict_energy', False)
-        predict_breathiness = hparams.get('predict_breathiness', False)
-        self.variance_prediction_list = []
-        if predict_energy:
-            self.variance_prediction_list.append('energy')
-        if predict_breathiness:
-            self.variance_prediction_list.append('breathiness')
-        self.predict_variances = len(self.variance_prediction_list) > 0
-
         if self.predict_pitch or self.predict_variances:
             self.retake_embed = Embedding(2, hparams['hidden_size'])
 
