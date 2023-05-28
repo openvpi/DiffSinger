@@ -112,3 +112,20 @@ def get_breathiness_pyworld(wav_data, f0, length, hparams):
     )  # synthesize the aperiodic part using the parameters
     breathiness = get_energy_librosa(y, length, hparams)
     return breathiness
+
+
+class SinusoidalSmoothingConv1d(torch.nn.Conv1d):
+    def __init__(self, kernel_size):
+        super().__init__(
+            in_channels=1,
+            out_channels=1,
+            kernel_size=kernel_size,
+            bias=False,
+            padding='same',
+            padding_mode='replicate'
+        )
+        smooth_kernel = torch.sin(torch.from_numpy(
+            np.linspace(0, 1, kernel_size).astype(np.float32) * np.pi
+        ))
+        smooth_kernel /= smooth_kernel.sum()
+        self.weight.data = smooth_kernel[None, None]

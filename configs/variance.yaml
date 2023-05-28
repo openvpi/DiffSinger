@@ -60,10 +60,12 @@ pitch_prediction_args:
   residual_layers: 20
   residual_channels: 256
 
-energy_db_min: -72.0
+energy_db_min: -96.0
 energy_db_max: -12.0
-breathiness_db_min: -72.0
+energy_smooth_width: 0.12
+breathiness_db_min: -96.0
 breathiness_db_max: -20.0
+breathiness_smooth_width: 0.12
 
 variances_prediction_args:
   repeat_bins: 64

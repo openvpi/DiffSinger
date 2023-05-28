@@ -5,13 +5,13 @@ import pathlib
 import librosa
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from scipy import interpolate
 
 from basics.base_binarizer import BaseBinarizer
 from modules.fastspeech.tts_modules import LengthRegulator
 from utils.binarizer_utils import (
+    SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_pitch_parselmouth,
     get_energy_librosa,
@@ -33,27 +33,11 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'breathiness',  # frame-level RMS of aperiodic parts, float32[T_s,]
 ]
 
-
-# This operator is used as global variable due to a PyTorch shared memory bug on Windows.
+# These operators are used as global variable due to a PyTorch shared memory bug on Windows.
 # See https://github.com/pytorch/pytorch/issues/100358
-smooth: nn.Conv1d = None
-
-
-def build_smooth_op(kernel_size, device):
-    global smooth
-    smooth = nn.Conv1d(
-        in_channels=1,
-        out_channels=1,
-        kernel_size=kernel_size,
-        bias=False,
-        padding='same',
-        padding_mode='replicate'
-    ).eval().to(device)
-    smooth_kernel = torch.sin(torch.from_numpy(
-        np.linspace(0, 1, kernel_size).astype(np.float32) * np.pi
-    ).to(device))
-    smooth_kernel /= smooth_kernel.sum()
-    smooth.weight.data = smooth_kernel[None, None]
+midi_smooth: SinusoidalSmoothingConv1d = None
+energy_smooth: SinusoidalSmoothingConv1d = None
+breathiness_smooth: SinusoidalSmoothingConv1d = None
 
 
 class VarianceBinarizer(BaseBinarizer):
@@ -105,9 +89,6 @@ class VarianceBinarizer(BaseBinarizer):
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
-        if smooth is None:
-            build_smooth_op(round(hparams['midi_smooth_width'] / self.timestep), self.device)
-
         seconds = sum(meta_data['ph_dur'])
         length = round(seconds / self.timestep)
         T_ph = len(meta_data['ph_seq'])
@@ -170,7 +151,12 @@ class VarianceBinarizer(BaseBinarizer):
             frame_midi_pitch = torch.from_numpy(frame_midi_pitch).to(self.device)
 
             # Below: smoothen the pitch step curve as the base pitch curve
-            smoothed_midi_pitch = smooth(frame_midi_pitch[None])[0]
+            global midi_smooth
+            if midi_smooth is None:
+                midi_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['midi_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            smoothed_midi_pitch = midi_smooth(frame_midi_pitch[None])[0]
             processed_input['base_pitch'] = smoothed_midi_pitch.cpu().numpy()
 
         if hparams['predict_pitch'] or self.predict_variances:
@@ -178,13 +164,29 @@ class VarianceBinarizer(BaseBinarizer):
 
         # Below: extract energy
         if hparams['predict_energy']:
-            energy = get_energy_librosa(waveform, length, hparams)
-            processed_input['energy'] = energy.astype(np.float32)
+            energy = get_energy_librosa(waveform, length, hparams).astype(np.float32)
+
+            global energy_smooth
+            if energy_smooth is None:
+                energy_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['energy_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0]
+
+            processed_input['energy'] = energy.cpu().numpy()
 
         # Below: extract breathiness
         if hparams['predict_breathiness']:
-            breathiness = get_breathiness_pyworld(waveform, f0 * ~uv, length, hparams)
-            processed_input['breathiness'] = breathiness.astype(np.float32)
+            breathiness = get_breathiness_pyworld(waveform, f0 * ~uv, length, hparams).astype(np.float32)
+
+            global breathiness_smooth
+            if breathiness_smooth is None:
+                breathiness_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['breathiness_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
+
+            processed_input['breathiness'] = breathiness.cpu().numpy()
 
         return processed_input
 
