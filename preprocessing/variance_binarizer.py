@@ -29,8 +29,8 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'mel2ph',  # mel2ph format representing number of frames within each phone, int64[T_s,]
     'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_s,]
     'pitch',  # actual pitch in semitones, float32[T_s,]
-    'energy',  # frame-level RMS, float32[T_s,]
-    'breathiness',  # frame-level RMS of aperiodic parts, float32[T_s,]
+    'energy',  # frame-level RMS (dB), float32[T_s,]
+    'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
 ]
 
 # These operators are used as global variable due to a PyTorch shared memory bug on Windows.
