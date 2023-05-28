@@ -63,7 +63,7 @@ class ResidualBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims, n_feats, n_layers, n_chans):
+    def __init__(self, in_dims, n_feats, *, n_layers=20, n_chans=256, n_dilates=4):
         super().__init__()
         self.in_dims = in_dims
         self.n_feats = n_feats
@@ -78,7 +78,7 @@ class WaveNet(nn.Module):
             ResidualBlock(
                 encoder_hidden=hparams['hidden_size'],
                 residual_channels=n_chans,
-                dilation=2 ** (i % hparams['dilation_cycle_length'])
+                dilation=2 ** (i % n_dilates)
             )
             for i in range(n_layers)
         ])

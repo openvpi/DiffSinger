@@ -12,7 +12,7 @@ from modules.diffusion.wavenet import WaveNet
 from utils.hparams import hparams
 
 DIFF_DENOISERS = {
-    'wavenet': lambda args: WaveNet(*args),
+    'wavenet': WaveNet
 }
 
 
@@ -66,7 +66,7 @@ class GaussianDiffusion(nn.Module):
                  denoiser_type=None, denoiser_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type]((out_dims, num_feats, *denoiser_args))
+        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](out_dims, num_feats, **denoiser_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
 

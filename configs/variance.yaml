@@ -56,9 +56,10 @@ pitch_prediction_args:
   pitd_norm_max: 8.0
   pitd_clip_min: -12.0
   pitd_clip_max: 12.0
-  repeat_bins: 64
-  residual_layers: 20
-  residual_channels: 256
+  repeat_bins: 24
+  residual_layers: 10
+  residual_channels: 192
+  dilation_cycle_length: 4  # *
 
 energy_db_min: -96.0
 energy_db_max: -12.0
@@ -71,12 +72,12 @@ variances_prediction_args:
   repeat_bins: 64
   residual_layers: 20
   residual_channels: 256
+  dilation_cycle_length: 5  # *
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
 lambda_var_loss: 1.0
 
-dilation_cycle_length: 5  # *
 schedule_type: 'linear'
 K_step: 1000
 timesteps: 1000

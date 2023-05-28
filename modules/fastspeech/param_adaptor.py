@@ -44,10 +44,11 @@ class ParameterAdaptorModule(torch.nn.Module):
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
             denoiser_type=hparams['diff_decoder_type'],
-            denoiser_args=(
-                variances_hparams['residual_layers'],
-                variances_hparams['residual_channels']
-            )
+            denoiser_args={
+                'n_layers': variances_hparams['residual_layers'],
+                'n_chans': variances_hparams['residual_channels'],
+                'n_dilates': variances_hparams['dilation_cycle_length'],
+            }
         )
 
     def collect_variance_inputs(self, **kwargs) -> list:
