@@ -77,7 +77,8 @@ def get_energy_librosa(wav_data, length, hparams):
 
     energy = librosa.feature.rms(y=wav_data, frame_length=win_size, hop_length=hop_size)[0]
     energy = pad_frames(energy, hop_size, wav_data.shape[0], length)
-    return energy
+    energy_db = librosa.amplitude_to_db(energy)
+    return energy_db
 
 
 def get_breathiness_pyworld(wav_data, f0, length, hparams):

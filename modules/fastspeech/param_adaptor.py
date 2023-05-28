@@ -24,17 +24,17 @@ class ParameterAdaptorModule(torch.nn.Module):
 
         if self.predict_energy:
             ranges.append((
-                10. ** (hparams['energy_db_min'] / 20.),
-                10. ** (hparams['energy_db_max'] / 20.)
+                hparams['energy_db_min'],
+                hparams['energy_db_max']
             ))
-            clamps.append((0., 1.))
+            clamps.append((hparams['energy_db_min'], 0.))
 
         if self.predict_breathiness:
             ranges.append((
-                10. ** (hparams['breathiness_db_min'] / 20.),
-                10. ** (hparams['breathiness_db_max'] / 20.)
+                hparams['breathiness_db_min'],
+                hparams['breathiness_db_max']
             ))
-            clamps.append((0., 1.))
+            clamps.append((hparams['breathiness_db_min'], 0.))
 
         variances_hparams = hparams['variances_prediction_args']
         return cls(
