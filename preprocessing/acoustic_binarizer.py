@@ -132,6 +132,7 @@ class AcousticBinarizer(BaseBinarizer):
                                     f' (+) {sorted(unrecognizable_phones)}\n'
                                     f' (-) {sorted(missing_phones)}')
 
+    @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
         if hparams['vocoder'] in VOCODERS:
             wav, mel = VOCODERS[hparams['vocoder']].wav2spec(meta_data['wav_fn'])
