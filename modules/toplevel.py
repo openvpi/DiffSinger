@@ -149,7 +149,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         if self.use_spk_id:
             condition += spk_embed
 
-        retake_ = torch.ones(1, 1, dtype=torch.bool, device=txt_tokens.device)  # [B=1, T=1]
+        retake_ = torch.ones(1, 1, dtype=torch.bool, device=txt_tokens.device) \
+            if retake is None else retake  # [B=1, T=1]
 
         if expressiveness is None:
             retake_embed = self.retake_embed(retake_.long())
