@@ -211,6 +211,22 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 summary['pitch'] = 'manual'
             elif self.auto_completion_mode or self.global_predict_pitch:
                 summary['pitch'] = 'auto'
+
+                # Load expressiveness
+                expressiveness = param.get('expressiveness', 1.)
+                if isinstance(expressiveness, (int, float, bool)):
+                    summary['expressiveness'] = f'static({expressiveness:.3f})'
+                    batch['expressiveness'] = torch.FloatTensor([expressiveness]).to(self.device)[:, None]  # [B=1, T=1]
+                else:
+                    summary['expressiveness'] = 'dynamic'
+                    expressiveness = resample_align_curve(
+                        np.array(expressiveness.split(), np.float32),
+                        original_timestep=float(param['expressiveness_timestep']),
+                        target_timestep=self.timestep,
+                        align_length=T_s
+                    )
+                    batch['expressiveness'] = torch.from_numpy(expressiveness.astype(np.float32)).to(self.device)[None]
+
             else:
                 summary['pitch'] = 'ignored'
 
@@ -234,6 +250,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         ph_dur = sample['ph_dur']
         mel2ph = sample['mel2ph']
         base_pitch = sample['base_pitch']
+        expressiveness = sample.get('expressiveness')
         pitch = sample.get('pitch')
 
         if hparams['use_spk_id']:
@@ -256,7 +273,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
             mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch,
             ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
-            retake=None, infer=True
+            retake=None, expressiveness=expressiveness, infer=True
         )
         if dur_pred is not None:
             dur_pred = self.rr(dur_pred, ph2word, word_dur)
@@ -303,10 +320,11 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             else:
                 predict_variances = self.model.predict_variances and self.global_predict_variances
                 predict_pitch = self.model.predict_pitch and (
-                    self.global_predict_pitch or (param.get('f0_seq') is None and predict_variances)
+                        self.global_predict_pitch or (param.get('f0_seq') is None and predict_variances)
                 )
                 predict_dur = self.model.predict_dur and (
-                    self.global_predict_dur or (param.get('ph_dur') is None and (predict_pitch or predict_variances))
+                        self.global_predict_dur or (
+                            param.get('ph_dur') is None and (predict_pitch or predict_variances))
                 )
                 flag = (predict_dur, predict_pitch, predict_variances)
             predictor_flags.append(flag)
