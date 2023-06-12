@@ -114,7 +114,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, pitch=None, retake=None, spk_id=None, infer=True, **kwargs
+            base_pitch=None, pitch=None, retake=None, expressiveness=None,
+            spk_id=None, infer=True, **kwargs
     ):
         if self.use_spk_id:
             ph_spk_mix_embed = kwargs.get('ph_spk_mix_embed')
@@ -147,10 +148,16 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if self.use_spk_id:
             condition += spk_embed
+
         if retake is None:
-            retake_embed = self.retake_embed(torch.ones_like(mel2ph))
-        else:
+            retake = torch.ones_like(mel2ph, dtype=torch.bool)
+        if expressiveness is None:
             retake_embed = self.retake_embed(retake.long())
+        else:
+            retake_true_embed = self.retake_embed(torch.ones_like(mel2ph))  # [B, T, H]
+            retake_false_embed = self.retake_embed(torch.zeros_like(mel2ph))  # [B, T, H]
+            expressiveness = (expressiveness * retake)[:, :, None]  # [B, T, 1]
+            retake_embed = expressiveness * retake_true_embed + (1. - expressiveness) * retake_false_embed
         condition += retake_embed
 
         if self.predict_pitch:
