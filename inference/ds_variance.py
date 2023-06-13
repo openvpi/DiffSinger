@@ -320,11 +320,10 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             else:
                 predict_variances = self.model.predict_variances and self.global_predict_variances
                 predict_pitch = self.model.predict_pitch and (
-                        self.global_predict_pitch or (param.get('f0_seq') is None and predict_variances)
+                    self.global_predict_pitch or (param.get('f0_seq') is None and predict_variances)
                 )
                 predict_dur = self.model.predict_dur and (
-                        self.global_predict_dur or (
-                            param.get('ph_dur') is None and (predict_pitch or predict_variances))
+                    self.global_predict_dur or (param.get('ph_dur') is None and (predict_pitch or predict_variances))
                 )
                 flag = (predict_dur, predict_pitch, predict_variances)
             predictor_flags.append(flag)
