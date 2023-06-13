@@ -153,7 +153,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def forward_pitch_preprocess(
             self, encoder_out, ph_dur, note_midi, note_dur,
-            pitch=None, expressiveness=None, retake=None
+            expressiveness=None, pitch=None, retake=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
         retake_true_embed = self.retake_embed(
@@ -166,8 +166,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         retake_embed = expressiveness * retake_true_embed + (1. - expressiveness) * retake_false_embed
         pitch_cond = condition + retake_embed
         frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
-        base_pitch = self.smooth(frame_midi_pitch)
-        base_pitch += (pitch - base_pitch) * ~retake
+        base_pitch = self.smooth(frame_midi_pitch) * retake + pitch * ~retake
         pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
         return pitch_cond, base_pitch
 

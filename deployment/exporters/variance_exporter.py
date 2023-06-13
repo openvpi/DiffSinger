@@ -230,15 +230,15 @@ class DiffSingerVarianceExporter(BaseExporter):
                     ph_dur,
                     note_midi,
                     note_dur,
-                    pitch,
                     expressiveness,
+                    pitch,
                     retake
                 ),
                 self.pitch_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur',
                     'note_midi', 'note_dur',
-                    'pitch', 'expressiveness', 'retake'
+                    'expressiveness', 'pitch', 'retake'
                 ],
                 output_names=[
                     'pitch_cond', 'base_pitch'
@@ -256,10 +256,10 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'note_dur': {
                         1: 'n_notes'
                     },
-                    'pitch': {
+                    'expressiveness': {
                         1: 'n_frames'
                     },
-                    'expressiveness': {
+                    'pitch': {
                         1: 'n_frames'
                     },
                     'retake': {
