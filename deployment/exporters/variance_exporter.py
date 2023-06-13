@@ -221,6 +221,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
+            expressiveness = torch.ones_like(pitch)
             retake = torch.ones_like(pitch, dtype=torch.bool)
             torch.onnx.export(
                 self.model.view_as_pitch_preprocess(),
@@ -230,13 +231,14 @@ class DiffSingerVarianceExporter(BaseExporter):
                     note_midi,
                     note_dur,
                     pitch,
+                    expressiveness,
                     retake
                 ),
                 self.pitch_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur',
                     'note_midi', 'note_dur',
-                    'pitch', 'retake'
+                    'pitch', 'expressiveness', 'retake'
                 ],
                 output_names=[
                     'pitch_cond', 'base_pitch'
@@ -257,6 +259,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'pitch': {
                         1: 'n_frames'
                     },
+                    'expressiveness': {
+                        1: 'n_frames'
+                    },
                     'retake': {
                         1: 'n_frames'
                     },
@@ -271,7 +276,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             # Prepare inputs for denoiser tracing and PitchDiffusion scripting
-            shape = (1, 1, hparams['pitch_prediction_args']['num_pitch_bins'], 15)
+            shape = (1, 1, hparams['pitch_prediction_args']['repeat_bins'], 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
             step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
