@@ -168,7 +168,7 @@ def variance(
         name += '_variance'
 
     if expressiveness is not None:
-        assert 0 <= expressiveness <= 1, 'Expressiveness must be in [-1, 1].'
+        assert 0 <= expressiveness <= 1, 'Expressiveness must be in [0, 1].'
 
     with open(proj, 'r', encoding='utf-8') as f:
         params = json.load(f)
