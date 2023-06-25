@@ -160,10 +160,6 @@ class VarianceTask(BaseTask):
 
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, infer=False)
-        total_loss = sum(losses.values())
-        outputs = {
-            'total_loss': total_loss
-        }
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
@@ -190,7 +186,7 @@ class VarianceTask(BaseTask):
                     curve_name=name
                 )
 
-        return outputs, sample['size']
+        return losses, sample['size']
 
     ############
     # validation plots

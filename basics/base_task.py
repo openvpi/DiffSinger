@@ -4,6 +4,7 @@ import pathlib
 import shutil
 import sys
 from datetime import datetime
+from typing import Dict
 
 import matplotlib
 
@@ -13,7 +14,7 @@ from utils.text_encoder import TokenTextEncoder
 matplotlib.use('Agg')
 
 import torch.utils.data
-from torchmetrics import MeanMetric
+from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -76,7 +77,7 @@ class BaseTask(pl.LightningModule):
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
 
-        self.valid_metrics = {
+        self.valid_metrics: Dict[str, Metric] = {
             'total_loss': MeanMetric()
         }
 
@@ -171,9 +172,14 @@ class BaseTask(pl.LightningModule):
             return {}
         with torch.autocast(self.device.type, enabled=False):
             outputs, weight = self._validation_step(sample, batch_idx)
+        outputs = {
+            'total_loss': sum(outputs.values()),
+            **outputs
+        }
         for k, v in outputs.items():
-            if isinstance(self.valid_metrics[k], MeanMetric):
-                self.valid_metrics[k].update(v, weight=weight)
+            if k not in self.valid_metrics:
+                self.valid_metrics[k] = MeanMetric().to(self.device)
+            self.valid_metrics[k].update(v, weight=weight)
         return outputs
 
     def on_validation_epoch_end(self):
