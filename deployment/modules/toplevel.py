@@ -179,9 +179,9 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
         condition += self.retake_embed(retake.long())
         variance_cond = condition + self.pitch_embed(pitch[:, :, None])
-        non_retake = (~retake).float()
+        non_retake_masks = (~retake)[:, :, None].float()
         variance_embeds = [
-            self.variance_embeds[v_name]((variances[v_name] * non_retake)[:, :, None])
+            self.variance_embeds[v_name](variances[v_name][:, :, None]) * non_retake_masks
             for v_name in self.variance_prediction_list
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)

@@ -83,7 +83,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         self.predict_pitch = hparams['predict_pitch']
 
         if self.predict_pitch or self.predict_variances:
-            self.retake_embed = Embedding(2, hparams['hidden_size'])
+            self.retake_embed = Embedding(2, hparams['hidden_size'], padding_idx=0)
 
         if self.predict_pitch:
             pitch_hparams = hparams['pitch_prediction_args']
@@ -172,17 +172,13 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         condition += self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
-        if retake is None:
+        if retake is not None:
+            non_retake_masks = (~retake)[:, :, None].float()
             variance_embeds = [
-                self.variance_embeds[v_name](torch.zeros_like(pitch)[:, :, None])
-                for v_name in self.variance_prediction_list
-            ]
-        else:
-            variance_embeds = [
-                self.variance_embeds[v_name]((v_input * ~retake)[:, :, None])
+                self.variance_embeds[v_name](v_input[:, :, None]) * non_retake_masks
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
-        condition += torch.stack(variance_embeds, dim=-1).sum(-1)
+            condition += torch.stack(variance_embeds, dim=-1).sum(-1)
 
         variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
 
