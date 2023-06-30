@@ -53,6 +53,13 @@ class VarianceDataset(BaseDataset):
         return batch
 
 
+def random_retake_masks(b, t, device):
+    B_masks = torch.randint(low=0, high=4, size=(b, 1), dtype=torch.long) == 0  # 1/4 segments are True in average
+    T_masks = utils.random_continuous_masks(shape=(b, t), dim=1, device=device)  # 1/3 frames are True in average
+    masks = B_masks | T_masks  # 1/4 segments and 1/2 frames are True in average (1/4 + 3/4 * 1/3 = 1/2)
+    return masks
+
+
 class VarianceTask(BaseTask):
     def __init__(self):
         super().__init__()
@@ -122,10 +129,10 @@ class VarianceTask(BaseTask):
             t = mel2ph.shape[1]
             device = mel2ph.device
             if self.predict_pitch:
-                pitch_retake = utils.random_continuous_masks(b, t, device)
+                pitch_retake = random_retake_masks(b, t, device)
             if self.predict_variances:
                 variance_retake = {
-                    v_name: utils.random_continuous_masks(b, t, device)
+                    v_name: random_retake_masks(b, t, device)
                     for v_name in self.variance_prediction_list
                 }
 
