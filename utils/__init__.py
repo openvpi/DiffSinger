@@ -36,7 +36,7 @@ def collate_nd(values, pad_value=0, max_len=None):
     return res
 
 
-def random_continuous_masks(shape: tuple, dim: int, device: str | torch.device = 'cpu'):
+def random_continuous_masks(*shape: int, dim: int, device: str | torch.device = 'cpu'):
     start, end = torch.sort(
         torch.randint(
             low=0, high=shape[dim] + 1, size=(*shape[:dim], 2, *((1,) * (len(shape) - dim - 1))), device=device
