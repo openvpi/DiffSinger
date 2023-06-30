@@ -256,7 +256,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
             mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch,
             ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
-            retake=None, infer=True
+            infer=True
         )
         if dur_pred is not None:
             dur_pred = self.rr(dur_pred, ph2word, word_dur)

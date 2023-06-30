@@ -34,6 +34,16 @@ def collate_nd(values, pad_value=0, max_len=None):
     return res
 
 
+def random_continuous_masks(b, t, device):
+    # randomly select continuous retaking regions
+    start, end = torch.sort(
+        torch.randint(low=0, high=t + 1, size=(b, 2), device=device), dim=1
+    )[0].split(1, dim=1)
+    idx = torch.arange(0, t, dtype=torch.long, device=device)[None]
+    masks = (idx >= start) & (idx < end)
+    return masks
+
+
 def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
     if len(batch) == 0:
         return 0

@@ -115,25 +115,27 @@ class VarianceTask(BaseTask):
         energy = sample.get('energy')  # [B, T_s]
         breathiness = sample.get('breathiness')  # [B, T_s]
 
+        pitch_retake = variance_retake = None
         if (self.predict_pitch or self.predict_variances) and not infer:
             # randomly select continuous retaking regions
             b = sample['size']
             t = mel2ph.shape[1]
             device = mel2ph.device
-            start, end = torch.sort(
-                torch.randint(low=0, high=t + 1, size=(b, 2), device=device), dim=1
-            )[0].split(1, dim=1)
-            idx = torch.arange(0, t, dtype=torch.long, device=device)[None]
-            retake = (idx >= start) & (idx < end)
-        else:
-            retake = None
+            if self.predict_pitch:
+                pitch_retake = utils.random_continuous_masks(b, t, device)
+            if self.predict_variances:
+                variance_retake = {
+                    v_name: utils.random_continuous_masks(b, t, device)
+                    for v_name in self.variance_prediction_list
+                }
 
         output = self.model(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, mel2ph=mel2ph,
             base_pitch=base_pitch, pitch=pitch,
             energy=energy, breathiness=breathiness,
-            retake=retake, spk_id=spk_ids, infer=infer
+            pitch_retake=pitch_retake, variance_retake=variance_retake,
+            spk_id=spk_ids, infer=infer
         )
 
         dur_pred, pitch_pred, variances_pred = output
