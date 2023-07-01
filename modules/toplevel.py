@@ -85,7 +85,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         self.lr = LengthRegulator()
 
         if self.predict_pitch:
-            self.pitch_retake_embed = Embedding(2, hparams['hidden_size'], padding_idx=0)
+            self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             self.pitch_predictor = PitchDiffusion(
