@@ -156,10 +156,10 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             pitch=None, retake=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        condition += self.retake_embed(retake.long())
+        condition += self.pitch_retake_embed(retake.long())
         frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
         base_pitch = self.smooth(frame_midi_pitch)
-        base_pitch += (pitch - base_pitch) * ~retake
+        base_pitch = base_pitch * retake + pitch * ~retake
         pitch_cond = condition + self.base_pitch_embed(base_pitch[:, :, None])
         return pitch_cond, base_pitch
 
@@ -177,12 +177,14 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             self, encoder_out, ph_dur, pitch, variances: dict = None, retake=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        condition += self.retake_embed(retake.long())
         variance_cond = condition + self.pitch_embed(pitch[:, :, None])
-        non_retake_masks = (~retake)[:, :, None].float()
+        non_retake_masks = [
+            v_retake.float()  # [B, T, 1]
+            for v_retake in (~retake).split(1, dim=2)
+        ]
         variance_embeds = [
-            self.variance_embeds[v_name](variances[v_name][:, :, None]) * non_retake_masks
-            for v_name in self.variance_prediction_list
+            self.variance_embeds[v_name](variances[v_name][:, :, None]) * v_masks
+            for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
         return variance_cond

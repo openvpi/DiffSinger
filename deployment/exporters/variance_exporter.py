@@ -367,7 +367,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 v_name: torch.FloatTensor([[0.] * 15]).to(self.device)
                 for v_name in self.model.variance_prediction_list
             }
-            retake = torch.ones_like(pitch, dtype=torch.bool)
+            retake = torch.ones_like(pitch, dtype=torch.bool)[..., None].tile(len(self.model.variance_prediction_list))
             torch.onnx.export(
                 self.model.view_as_variance_preprocess(),
                 (
@@ -609,10 +609,14 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
         onnx_helper.model_add_prefixes(
-            var_pre, node_prefix='/pre', ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
+            var_pre, node_prefix='/pre', value_info_prefix='/pre',
+            ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
         )
         onnx_helper.model_add_prefixes(var_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_frames)')
-        onnx_helper.model_add_prefixes(var_post, node_prefix='/post', ignored_pattern=None)
+        onnx_helper.model_add_prefixes(
+            var_post, node_prefix='/post', value_info_prefix='/post',
+            ignored_pattern=None
+        )
         onnx_helper.model_add_prefixes(var_post, dim_prefix='post.', ignored_pattern='n_frames')
 
         print(f'Merging {self.variance_diffusion_class_name} subroutines...')
