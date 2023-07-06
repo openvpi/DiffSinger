@@ -13,9 +13,11 @@ This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesi
 - More controllability: introduced variance models and parameters for prediction and control of pitch, energy, breathiness, etc.
 - Production compatibility: functionalities are designed to match the requirements of production deployment and the SVS communities.
 
+<img src="docs/resources/arch-overview.jpg" alt="arch-overview" style="zoom: 60%;" />
+
 ## General Introduction
 
-<img src="docs/resources/arch-overview.jpg" alt="arch-overview" style="zoom: 80%;" />
+TBD
 
 ## User Guidance
 
