@@ -136,13 +136,13 @@ class BaseTask(pl.LightningModule):
                 # if 'diffusion' in i:
                 # if i in rrrr:
                 #     continue
-                skip = 0
+                skip = False
                 for b in blacklist:
                     if i.startswith(b):
-                        skip = 1
+                        skip = True
                         break
 
-                if skip == 1:
+                if skip:
                     continue
 
                 state_dict[i] = ckpt['state_dict'][i]
