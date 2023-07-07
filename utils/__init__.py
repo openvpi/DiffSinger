@@ -214,8 +214,8 @@ def load_ckpt(
 def load_finetune_ckpt(
        model,state_dict
 ):
-    adapt_shapes=hparams['finetune_adapt_shapes']
-    if adapt_shapes:
+    adapt_shapes=hparams['finetune_strict_shapes']
+    if not adapt_shapes:
         cur_model_state_dict = model.state_dict()
         unmatched_keys = []
         for key, param in state_dict.items():
@@ -230,10 +230,10 @@ def load_finetune_ckpt(
 
 
 
-def load_pre_train_model():
+def load_pre_train_model(model):
 
     pre_train_ckpt_path=hparams.get('finetune_ckpt_path')
-    blacklist=hparams.get('finetune_params_blacklist')
+    blacklist=hparams.get('finetune_ignored_params')
     # whitelist=hparams.get('pre_train_whitelist')
     if blacklist is  None:
         blacklist=[]
@@ -242,8 +242,12 @@ def load_pre_train_model():
 
     if pre_train_ckpt_path is not None:
         ckpt=torch.load(pre_train_ckpt_path)
-        if ckpt.get('category') is None:
-            raise RuntimeError("")
+        # if ckpt.get('category') is None:
+        #     raise RuntimeError("")
+
+        if isinstance(model.model, CategorizedModule):
+            model.model.check_category(ckpt.get('category'))
+
         state_dict={}
         for i in ckpt['state_dict']:
             # if 'diffusion' in i:
@@ -266,14 +270,14 @@ def load_pre_train_model():
         raise RuntimeError("")
 
 
-def load_warp(modle):
+def load_warp(model):
     if not hparams['finetune_enable']:
         return None
     if get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is not None: #check
         pass
         return None
 
-    load_finetune_ckpt(modle,load_pre_train_model())
+    load_finetune_ckpt(model,load_pre_train_model(model))
 
     # return load_pre_train_model()
 

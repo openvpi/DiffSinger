@@ -96,5 +96,5 @@ ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
 
 finetune_enable: false
 finetune_ckpt_path:
-finetune_params_blacklist: ['model.fs2.encoder.embed_tokens.weight','model.fs2.speed_embed','model.fs2.key_shift_embed','model.fs2.txt_embed.weight']
-finetune_adapt_shapes: false
+finetune_ignored_params: ['model.fs2.encoder.embed_tokens.weight','model.fs2.txt_embed.weight']
+finetune_strict_shapes: true

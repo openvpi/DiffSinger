@@ -87,6 +87,7 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
+        utils.load_warp(self)
         self.print_arch()
         self.build_losses()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
@@ -291,7 +292,7 @@ class BaseTask(pl.LightningModule):
     def start(cls):
         pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
-        utils.load_warp(task)
+
         # if pre_train is not None:
         #     task.load_state_dict(pre_train,strict=False)
         #     print("load success-------------------------------------------------------------------")
