@@ -384,16 +384,16 @@ class BaseTask(pl.LightningModule):
         from utils import simulate_lr_scheduler
         if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
             self.skip_immediate_validation = True
-        
+
         optimizer_args = hparams['optimizer_args']
         scheduler_args = hparams['lr_scheduler_args']
-        
+
         if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
 
         if checkpoint.get('optimizer_states', None):
             opt_states = checkpoint['optimizer_states']
-            assert len(opt_states) == 1 # only support one optimizer
+            assert len(opt_states) == 1  # only support one optimizer
             opt_state = opt_states[0]
             for param_group in opt_state['param_groups']:
                 for k, v in optimizer_args.items():
@@ -403,13 +403,14 @@ class BaseTask(pl.LightningModule):
                         rank_zero_info(f'| Overriding optimizer parameter {k} from checkpoint: {param_group[k]} -> {v}')
                         param_group[k] = v
                 if 'initial_lr' in param_group and param_group['initial_lr'] != optimizer_args['lr']:
-                    rank_zero_info(f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
+                    rank_zero_info(
+                        f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
                     param_group['initial_lr'] = optimizer_args['lr']
 
         if checkpoint.get('lr_schedulers', None):
             assert checkpoint.get('optimizer_states', False)
             schedulers = checkpoint['lr_schedulers']
-            assert len(schedulers) == 1 # only support one scheduler
+            assert len(schedulers) == 1  # only support one scheduler
             scheduler = schedulers[0]
             for k, v in scheduler_args.items():
                 if k in scheduler and scheduler[k] != v:
@@ -424,5 +425,6 @@ class BaseTask(pl.LightningModule):
             scheduler['_last_lr'] = new_lrs
             for param_group, new_lr in zip(checkpoint['optimizer_states'][0]['param_groups'], new_lrs):
                 if param_group['lr'] != new_lr:
-                    rank_zero_info(f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
+                    rank_zero_info(
+                        f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
                     param_group['lr'] = new_lr

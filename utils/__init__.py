@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 
 from basics.base_module import CategorizedModule
-from utils.hparams import  hparams
+from utils.hparams import hparams
 from utils.training_utils import get_latest_checkpoint_path
 
 
@@ -151,7 +151,8 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
     sig = inspect.signature(kwarg_obj)
     filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
-    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if filter_key in dict_to_filter}
+    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if
+                     filter_key in dict_to_filter}
     return filtered_dict
 
 
@@ -211,10 +212,11 @@ def load_ckpt(
         shown_model_name = f'\'{key_in_ckpt}\''
     print(f'| load {shown_model_name} from \'{checkpoint_path}\'.')
 
+
 def load_finetune_ckpt(
-       model,state_dict
+        model, state_dict
 ):
-    adapt_shapes=hparams['finetune_strict_shapes']
+    adapt_shapes = hparams['finetune_strict_shapes']
     if not adapt_shapes:
         cur_model_state_dict = model.state_dict()
         unmatched_keys = []
@@ -229,26 +231,24 @@ def load_finetune_ckpt(
     model.load_state_dict(state_dict, strict=False)
 
 
-
 def load_pre_train_model(model):
-
-    pre_train_ckpt_path=hparams.get('finetune_ckpt_path')
-    blacklist=hparams.get('finetune_ignored_params')
+    pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
+    blacklist = hparams.get('finetune_ignored_params')
     # whitelist=hparams.get('pre_train_whitelist')
-    if blacklist is  None:
-        blacklist=[]
+    if blacklist is None:
+        blacklist = []
     # if whitelist is  None:
     #     raise RuntimeError("")
 
     if pre_train_ckpt_path is not None:
-        ckpt=torch.load(pre_train_ckpt_path)
+        ckpt = torch.load(pre_train_ckpt_path)
         # if ckpt.get('category') is None:
         #     raise RuntimeError("")
 
         if isinstance(model.model, CategorizedModule):
             model.model.check_category(ckpt.get('category'))
 
-        state_dict={}
+        state_dict = {}
         for i in ckpt['state_dict']:
             # if 'diffusion' in i:
             # if i in rrrr:
@@ -262,7 +262,6 @@ def load_pre_train_model(model):
             if skip == 1:
                 continue
 
-
             state_dict[i] = ckpt['state_dict'][i]
             print(i)
         return state_dict
@@ -273,14 +272,13 @@ def load_pre_train_model(model):
 def load_warp(model):
     if not hparams['finetune_enable']:
         return None
-    if get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is not None: #check
+    if get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is not None:  # check
         pass
         return None
 
-    load_finetune_ckpt(model,load_pre_train_model(model))
+    load_finetune_ckpt(model, load_pre_train_model(model))
 
     # return load_pre_train_model()
-
 
 
 def remove_padding(x, padding_idx=0):
@@ -340,7 +338,8 @@ def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_par
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args
     )
-    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch, **scheduler_args)
+    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch,
+                                         **scheduler_args)
 
     if hasattr(scheduler, '_get_closed_form_lr'):
         return scheduler._get_closed_form_lr()

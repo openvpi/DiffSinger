@@ -3,8 +3,8 @@ import os
 # import pathlib
 import sys
 from pathlib import Path
-# import torch
 
+# import torch
 
 
 root_dir = Path(__file__).parent.parent.resolve()
@@ -21,16 +21,11 @@ if hparams['ddp_backend'] == 'nccl_no_p2p':
     os.environ['NCCL_P2P_DISABLE'] = '1'
 
 
-
-
-
-
 def run_task():
     assert hparams['task_cls'] != ''
     pkg = ".".join(hparams["task_cls"].split(".")[:-1])
     cls_name = hparams["task_cls"].split(".")[-1]
     task_cls = getattr(importlib.import_module(pkg), cls_name)
-
 
     task_cls.start()
 
