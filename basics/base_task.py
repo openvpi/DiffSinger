@@ -140,7 +140,7 @@ class BaseTask(pl.LightningModule):
                 for b in blacklist:
                     if b in i:
                         skip = 1
-                        continue
+                        break
 
                 if skip == 1:
                     continue
