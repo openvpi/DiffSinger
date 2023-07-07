@@ -87,7 +87,7 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
-        utils.load_warp(self)
+        # utils.load_warp(self)
         if hparams['finetune_enable'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
             self.load_finetune_ckpt( self.load_pre_train_model())
         self.print_arch()
@@ -98,10 +98,10 @@ class BaseTask(pl.LightningModule):
     def load_finetune_ckpt(
             self, state_dict
     ):
-        model=self
+
         adapt_shapes = hparams['finetune_strict_shapes']
         if not adapt_shapes:
-            cur_model_state_dict = model.state_dict()
+            cur_model_state_dict = self.state_dict()
             unmatched_keys = []
             for key, param in state_dict.items():
                 if key in cur_model_state_dict:
@@ -111,10 +111,10 @@ class BaseTask(pl.LightningModule):
                         print('| Unmatched keys: ', key, new_param.shape, param.shape)
             for key in unmatched_keys:
                 del state_dict[key]
-        model.load_state_dict(state_dict, strict=False)
+        self.load_state_dict(state_dict, strict=False)
 
     def load_pre_train_model(self):
-        model=self
+
         pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
         blacklist = hparams.get('finetune_ignored_params')
         # whitelist=hparams.get('pre_train_whitelist')
@@ -128,8 +128,8 @@ class BaseTask(pl.LightningModule):
             # if ckpt.get('category') is None:
             #     raise RuntimeError("")
 
-            if isinstance(model.model, CategorizedModule):
-                model.model.check_category(ckpt.get('category'))
+            if isinstance(self.model, CategorizedModule):
+                self.model.check_category(ckpt.get('category'))
 
             state_dict = {}
             for i in ckpt['state_dict']:
