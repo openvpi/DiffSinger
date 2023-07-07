@@ -25,7 +25,7 @@ TBD
 
 > 中文教程 / Chinese Tutorials: [Text](https://www.yuque.com/sunsa-i3ayc/sivu7h), [Video](https://www.bilibili.com/video/BV1xN411F7yM)
 
-- **Installation & basic usages**: TBD
+- **Installation & basic usages**: See [Getting Started](docs/GettingStarted.md)
 - **Dataset creation pipelines & tools**: See [MakeDiffSinger](https://github.com/openvpi/MakeDiffSinger)
 - **Best practices & tutorials**: TBD
 - **Editing configurations**: See [Configuration Schemas](docs/ConfigurationSchemas.md)
