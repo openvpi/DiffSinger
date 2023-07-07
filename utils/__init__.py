@@ -213,70 +213,10 @@ def load_ckpt(
     print(f'| load {shown_model_name} from \'{checkpoint_path}\'.')
 
 
-def load_finetune_ckpt(
-        model, state_dict
-):
-    adapt_shapes = hparams['finetune_strict_shapes']
-    if not adapt_shapes:
-        cur_model_state_dict = model.state_dict()
-        unmatched_keys = []
-        for key, param in state_dict.items():
-            if key in cur_model_state_dict:
-                new_param = cur_model_state_dict[key]
-                if new_param.shape != param.shape:
-                    unmatched_keys.append(key)
-                    print('| Unmatched keys: ', key, new_param.shape, param.shape)
-        for key in unmatched_keys:
-            del state_dict[key]
-    model.load_state_dict(state_dict, strict=False)
 
 
-def load_pre_train_model(model):
-    pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
-    blacklist = hparams.get('finetune_ignored_params')
-    # whitelist=hparams.get('pre_train_whitelist')
-    if blacklist is None:
-        blacklist = []
-    # if whitelist is  None:
-    #     raise RuntimeError("")
-
-    if pre_train_ckpt_path is not None:
-        ckpt = torch.load(pre_train_ckpt_path)
-        # if ckpt.get('category') is None:
-        #     raise RuntimeError("")
-
-        if isinstance(model.model, CategorizedModule):
-            model.model.check_category(ckpt.get('category'))
-
-        state_dict = {}
-        for i in ckpt['state_dict']:
-            # if 'diffusion' in i:
-            # if i in rrrr:
-            #     continue
-            skip = 0
-            for b in blacklist:
-                if b in i:
-                    skip = 1
-                    continue
-
-            if skip == 1:
-                continue
-
-            state_dict[i] = ckpt['state_dict'][i]
-            print(i)
-        return state_dict
-    else:
-        raise RuntimeError("")
 
 
-def load_warp(model):
-    if not hparams['finetune_enable']:
-        return None
-    if get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is not None:  # check
-        pass
-        return None
-
-    load_finetune_ckpt(model, load_pre_train_model(model))
 
     # return load_pre_train_model()
 
