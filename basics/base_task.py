@@ -145,9 +145,9 @@ class BaseTask(pl.LightningModule):
                 if skip == 1:
                     continue
 
-                del ckpt['state_dict'][i]
+                state_dict[i] = ckpt['state_dict'][i]
                 print(i)
-            return state_dict['state_dict']
+            return state_dict
         else:
             raise RuntimeError("")
 
