@@ -16,21 +16,6 @@ from torch.utils.data.distributed import Sampler
 import utils
 from utils.hparams import hparams
 
-remove_map = {'base': ['model.diffusion.alphas_cumprod', 'model.diffusion.alphas_cumprod_prev',
-                       'model.diffusion.sqrt_alphas_cumprod',
-                       'model.diffusion.sqrt_one_minus_alphas_cumprod', 'model.diffusion.log_one_minus_alphas_cumprod',
-                       'model.diffusion.sqrt_recip_alphas_cumprod', 'model.diffusion.sqrt_recipm1_alphas_cumprod',
-                       'model.diffusion.posterior_variance',
-                       'model.diffusion.posterior_log_variance_clipped', 'model.diffusion.posterior_mean_coef1',
-                       'model.diffusion.posterior_mean_coef2',
-                       'model.diffusion.spec_min', 'model.diffusion.spec_max'],
-              'speed_emb': ['model.fs2.speed_embed.weight', 'model.fs2.speed_embed.bias', ],
-              'key_shift_emb': ['model.fs2.key_shift_embed.bias', 'model.fs2.key_shift_embed.weight', ]
-    , 'pitch_emb': ['model.fs2.pitch_embed.bias', 'model.fs2.pitch_embed.weight', ],
-              'token_emb': ['model.fs2.encoder.embed_tokens.weight', 'model.fs2.txt_embed.weight'],
-              'dur_emb': ['model.fs2.dur_embed.bias', 'model.fs2.dur_embed.weight']}
-
-
 
 # ==========LR schedulers==========
 

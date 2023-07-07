@@ -288,12 +288,13 @@ class BaseTask(pl.LightningModule):
     ###########
 
     @classmethod
-    def start(cls,pre_train=None):
+    def start(cls):
         pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
-        if pre_train is not None:
-            task.load_state_dict(pre_train,strict=False)
-            print("load success-------------------------------------------------------------------")
+        utils.load_warp(task)
+        # if pre_train is not None:
+        #     task.load_state_dict(pre_train,strict=False)
+        #     print("load success-------------------------------------------------------------------")
 
         work_dir = pathlib.Path(hparams['work_dir'])
         trainer = pl.Trainer(
