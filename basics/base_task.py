@@ -288,9 +288,13 @@ class BaseTask(pl.LightningModule):
     ###########
 
     @classmethod
-    def start(cls):
+    def start(cls,pre_train=None):
         pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
+        if pre_train is not None:
+            task.load_state_dict(pre_train,strict=False)
+            print("load success-------------------------------------------------------------------")
+
         work_dir = pathlib.Path(hparams['work_dir'])
         trainer = pl.Trainer(
             accelerator=hparams['pl_trainer_accelerator'],
