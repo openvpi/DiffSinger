@@ -138,7 +138,7 @@ class BaseTask(pl.LightningModule):
                 #     continue
                 skip = 0
                 for b in blacklist:
-                    if b in i:
+                    if i.startswith(b):
                         skip = 1
                         break
 
