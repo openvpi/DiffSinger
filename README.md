@@ -25,18 +25,18 @@ TBD
 
 > 中文教程 / Chinese Tutorials: [Text](https://www.yuque.com/sunsa-i3ayc/sivu7h), [Video](https://www.bilibili.com/video/BV1xN411F7yM)
 
-- **Installation & Basic Usages**: TBD
-- **Dataset Creation Pipelines & Tools**: See [MakeDiffSinger](https://github.com/openvpi/MakeDiffSinger)
-- **Best Practices & Tutorials**: TBD
-- **Editing Configurations**: See [Configuration Schemas](docs/ConfigurationSchemas.md)
-- **Deployment & Production**: [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau), [DiffScope (under development)](https://github.com/SineStriker/qsynthesis-revenge)
-- **Communication Groups**: [QQ Group](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=fibG_dxuPW5maUJwe9_ya5-zFcIwaoOR&authKey=ZgLCG5EqQVUGCID1nfKei8tCnlQHAmD9koxebFXv5WfUchhLwWxb52o1pimNai5A&noverify=0&group_code=907879266) (907879266)
+- **Installation & basic usages**: TBD
+- **Dataset creation pipelines & tools**: See [MakeDiffSinger](https://github.com/openvpi/MakeDiffSinger)
+- **Best practices & tutorials**: TBD
+- **Editing configurations**: See [Configuration Schemas](docs/ConfigurationSchemas.md)
+- **Deployment & production**: [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau), [DiffScope (under development)](https://github.com/SineStriker/qsynthesis-revenge)
+- **Communication groups**: [QQ Group](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=fibG_dxuPW5maUJwe9_ya5-zFcIwaoOR&authKey=ZgLCG5EqQVUGCID1nfKei8tCnlQHAmD9koxebFXv5WfUchhLwWxb52o1pimNai5A&noverify=0&group_code=907879266) (907879266)
 
 ## Progress & Roadmap
 
 - **Progress since we forked into this repository**: TBD
 - **Roadmap for future releases**: See [Project Board](https://github.com/orgs/openvpi/projects/1)
-- **Thoughts, Proposal & Ideas**: See [Discussions](https://github.com/openvpi/DiffSinger/discussions)
+- **Thoughts, proposals & ideas**: See [Discussions](https://github.com/openvpi/DiffSinger/discussions)
 
 ## Architecture & Algorithms
 
