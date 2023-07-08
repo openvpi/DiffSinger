@@ -94,7 +94,7 @@ permanent_ckpt_start: 120000
 permanent_ckpt_interval: 40000
 
 
-finetune_enable: false
+finetune_enabled: false
 finetune_ckpt_path: null
 
 finetune_ignored_params:

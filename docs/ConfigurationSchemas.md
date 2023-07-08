@@ -1304,6 +1304,88 @@ int
 
 2048
 
+### finetune_enable
+
+use pretrain model
+
+#### visibility
+
+all
+
+#### type
+
+boolean
+
+#### default
+
+false
+
+#### constraints
+
+Must be true if use pretrain model
+
+### finetune_ckpt_path
+
+your pretrain path
+
+#### visibility
+
+all
+
+#### type
+
+str
+
+#### default
+
+null
+
+#### constraints
+
+Must be a path
+
+### finetune_ignored_params
+
+the params you want to ignore in finetune
+
+#### visibility
+
+all
+
+#### type
+
+list
+
+#### default
+
+null
+
+#### constraints
+
+Must be a list
+
+### finetune_strict_shapes
+
+when you finetune model have some shapes mismatch the model ignored or error
+default is error
+
+#### visibility
+
+all
+
+#### type
+
+boolean
+
+#### default
+
+  true
+
+#### constraints
+
+Must be a boolean
+
+
 ### fmax
 
 Maximum frequency of mel extraction.
@@ -3323,83 +3405,3 @@ int
 2048
 
 
-### finetune_enable
-
-use pretrain model
-
-#### visibility
-
-all
-
-#### type
-
-boolean
-
-#### default
-
-false
-
-#### constraints
-
-Must be true if use pretrain model
-
-### finetune_ckpt_path
-
-your pretrain path
-
-#### visibility
-
-all
-
-#### type
-
-str
-
-#### default
-
-null
-
-#### constraints
-
-Must be a path
-
-### finetune_ignored_params
-
-the params you want to ignore in finetune
-
-#### visibility
-
-all
-
-#### type
-
-list
-
-#### default
-
-null
-
-#### constraints
-
-Must be a list
-
-### finetune_strict_shapes
-
-when you finetune model have some shapes mismatch the model ignored or error
-default is error
-
-#### visibility
-
-all
-
-#### type
-
-boolean
-
-#### default
-
-  true
-
-#### constraints
-
-Must be a boolean

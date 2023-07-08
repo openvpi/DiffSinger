@@ -88,7 +88,7 @@ class BaseTask(pl.LightningModule):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
         # utils.load_warp(self)
-        if hparams['finetune_enable'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
+        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
             self.load_finetune_ckpt( self.load_pre_train_model())
         self.print_arch()
         self.build_losses()

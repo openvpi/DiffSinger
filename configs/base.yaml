@@ -94,7 +94,7 @@ ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
 # finetune
 ###########
 
-finetune_enable: false
+finetune_enabled: false
 finetune_ckpt_path: null
 finetune_ignored_params: []
 
