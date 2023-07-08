@@ -3377,8 +3377,7 @@ list
 
 #### default
 
-  - model.fs2.encoder.embed_tokens.weight
-  - model.fs2.txt_embed.weight
+null
 
 #### constraints
 
