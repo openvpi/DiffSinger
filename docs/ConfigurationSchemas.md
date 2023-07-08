@@ -3322,3 +3322,85 @@ int
 
 2048
 
+
+### finetune_enable
+
+use pretrain model
+
+#### visibility
+
+acoustic
+
+#### type
+
+boolean
+
+#### default
+
+false
+
+#### constraints
+
+Must be true if use pretrain model
+
+### finetune_ckpt_path
+
+your pretrain path
+
+#### visibility
+
+acoustic
+
+#### type
+
+str
+
+#### default
+
+null
+
+#### constraints
+
+Must be a path
+
+### finetune_ignored_params
+
+the params you want to ignore in finetune
+
+#### visibility
+
+acoustic
+
+#### type
+
+list
+
+#### default
+
+  - model.fs2.encoder.embed_tokens.weight
+  - model.fs2.txt_embed.weight
+
+#### constraints
+
+Must be a list
+
+### finetune_strict_shapes
+
+when you finetune model have some shapes mismatch the model ignored or error
+default is error
+
+#### visibility
+
+acoustic
+
+#### type
+
+boolean
+
+#### default
+
+  true
+
+#### constraints
+
+Must be a boolean
