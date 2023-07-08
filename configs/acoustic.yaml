@@ -96,5 +96,9 @@ permanent_ckpt_interval: 40000
 
 finetune_enable: false
 finetune_ckpt_path: null
-finetune_ignored_params: ['model.fs2.encoder.embed_tokens.weight','model.fs2.txt_embed.weight','model.fs2.spk_embed']
+
+finetune_ignored_params:
+  - model.fs2.encoder.embed_tokens
+  - model.fs2.txt_embed
+  - model.fs2.spk_embed
 finetune_strict_shapes: true
