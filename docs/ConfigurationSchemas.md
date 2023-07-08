@@ -3329,7 +3329,7 @@ use pretrain model
 
 #### visibility
 
-acoustic
+all
 
 #### type
 
@@ -3349,7 +3349,7 @@ your pretrain path
 
 #### visibility
 
-acoustic
+all
 
 #### type
 
@@ -3369,7 +3369,7 @@ the params you want to ignore in finetune
 
 #### visibility
 
-acoustic
+all
 
 #### type
 
@@ -3391,7 +3391,7 @@ default is error
 
 #### visibility
 
-acoustic
+all
 
 #### type
 
