@@ -17,10 +17,6 @@ This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesi
 |:-------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|
 | <img src="docs/resources/arch-overview.jpg" alt="arch-overview" style="zoom: 60%;" /> | <img src="docs/resources/arch-variance.jpg" alt="arch-variance" style="zoom: 50%;" /> | <img src="docs/resources/arch-acoustic.jpg" alt="arch-acoustic" style="zoom: 60%;" /> |
 
-## General Introduction
-
-TBD
-
 ## User Guidance
 
 > 中文教程 / Chinese Tutorials: [Text](https://www.yuque.com/sunsa-i3ayc/sivu7h), [Video](https://www.bilibili.com/video/BV1xN411F7yM)
@@ -62,5 +58,5 @@ Any organization or individual is prohibited from using any functionalities incl
 
 ## License
 
-This forked DiffSinger repository is licensed under [Apache 2.0 License](LICENSE).
+This forked DiffSinger repository is licensed under the [Apache 2.0 License](LICENSE).
 
