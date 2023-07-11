@@ -137,7 +137,7 @@ class VarianceBinarizer(BaseBinarizer):
                 self.lr, note_dur, mel2ph.shape[0], self.timestep, device=self.device
             )
             note_pitch = torch.FloatTensor(
-                [(librosa.note_to_midi(n, round_midi=False) if n != 'rest' else -1) for n in meta_data['note_seq']]
+                [(librosa.note_to_midi(n, round_midi=False) if n != 'rest' else -1) for n in meta_data['note_seq'].split()]
             ).to(self.device)
             frame_midi_pitch = torch.gather(F.pad(note_pitch, [1, 0], value=0), 0, mel2note)
             rest = (frame_midi_pitch < 0).cpu().numpy()
