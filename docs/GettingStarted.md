@@ -29,6 +29,8 @@ Assume that you have a configuration file called `my_config.yaml`. Run:
 python scripts/binarize.py --config my_config.yaml
 ```
 
+Preprocessing can be accelerated through multiprocessing. See [binarization_args.num_workers](ConfigurationSchemas.md#binarization_args.num_workers) for more explanations.
+
 ## Training
 
 Assume that you have a configuration file called `my_config.yaml` and the name of your model is `my_experiment`. Run:
@@ -38,6 +40,8 @@ python scripts/train.py --config my_config.yaml --exp_name my_experiment --reset
 ```
 
 Checkpoints will be saved at the `checkpoints/my_experiment/` directory. When interrupting the program and running the above command again, the training resumes automatically from the latest checkpoint.
+
+For more suggestions related to training performance, see [performance tuning](BestPractices.md#performance-tuning).
 
 ## Inference
 
