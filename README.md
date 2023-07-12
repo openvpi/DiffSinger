@@ -30,7 +30,7 @@ This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesi
 
 ## Progress & Roadmap
 
-- **Progress since we forked into this repository**: TBD
+- **Progress since we forked into this repository**: See [Releases](https://github.com/openvpi/DiffSinger/releases)
 - **Roadmap for future releases**: See [Project Board](https://github.com/orgs/openvpi/projects/1)
 - **Thoughts, proposals & ideas**: See [Discussions](https://github.com/openvpi/DiffSinger/discussions)
 
