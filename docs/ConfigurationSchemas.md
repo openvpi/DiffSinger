@@ -1,16 +1,18 @@
-# DiffSinger: Singing Voice Synthesis via Shallow Diffusion Mechanism
+# Configuration Schemas
 
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2105.02446)
-[![GitHub Stars](https://img.shields.io/github/stars/MoonInTheRiver/DiffSinger?style=social)](https://github.com/MoonInTheRiver/DiffSinger)
-[![downloads](https://img.shields.io/github/downloads/MoonInTheRiver/DiffSinger/total.svg)](https://github.com/MoonInTheRiver/DiffSinger/releases)
-| [Interactive🤗 SVS](https://huggingface.co/spaces/Silentlin/DiffSinger)
+## The configuration system
 
-## Configuration Schemas
+DiffSinger uses a cascading configuration system based on YAML files. All configuration files originally inherit and override [configs/base.yaml](../configs/base.yaml), and each file directly override another file by setting the `base_config` attribute. The overriding rules are:
 
-This document explains the meaning and usages of all editable keys in a configuration file.
+- Configuration keys with the same path and the same name will be replaced. Other paths and names will be merged.
+- All configurations in the inheritance chain will be squashed (via the rule above) as the final configuration.
+- The trainer will save the final configuration in the experiment directory, which is detached from the chain and made independent from other configuration files.
 
-Each configuration key (including nested keys) are described with a brief explanation and several attributes listed as
-follows:
+## Configurable parameters
+
+This following are the meaning and usages of all editable keys in a configuration file.
+
+Each configuration key (including nested keys) are described with a brief explanation and several attributes listed as follows:
 
 |    Attribute    | Explanation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 |:---------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
