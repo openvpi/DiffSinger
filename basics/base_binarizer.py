@@ -14,6 +14,7 @@ from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import build_phoneme_list, locate_dictionary
+from utils.plot import distribution_to_figure
 from utils.text_encoder import TokenTextEncoder
 
 
@@ -167,7 +168,55 @@ class BaseBinarizer:
         )
 
     def check_coverage(self):
-        raise NotImplementedError()
+        # Group by phonemes in the dictionary.
+        ph_required = set(build_phoneme_list())
+        phoneme_map = {}
+        for ph in ph_required:
+            phoneme_map[ph] = 0
+        ph_occurred = []
+
+        # Load and count those phones that appear in the actual data
+        for item_name in self.items:
+            ph_occurred += self.items[item_name]['ph_seq']
+            if len(ph_occurred) == 0:
+                raise BinarizationError(f'Empty tokens in {item_name}.')
+        for ph in ph_occurred:
+            if ph not in ph_required:
+                continue
+            phoneme_map[ph] += 1
+        ph_occurred = set(ph_occurred)
+
+        print('===== Phoneme Distribution Summary =====')
+        for i, key in enumerate(sorted(phoneme_map.keys())):
+            if i == len(ph_required) - 1:
+                end = '\n'
+            elif i % 10 == 9:
+                end = ',\n'
+            else:
+                end = ', '
+            print(f'\'{key}\': {phoneme_map[key]}', end=end)
+
+        # Draw graph.
+        x = sorted(phoneme_map.keys())
+        values = [phoneme_map[k] for k in x]
+        plt = distribution_to_figure(
+            title='Phoneme Distribution Summary',
+            x_label='Phoneme', y_label='Number of occurrences',
+            items=x, values=values
+        )
+        filename = self.binary_data_dir / 'phoneme_distribution.jpg'
+        plt.savefig(fname=filename,
+                    bbox_inches='tight',
+                    pad_inches=0.25)
+        print(f'| save summary to \'{filename}\'')
+
+        # Check unrecognizable or missing phonemes
+        if ph_occurred != ph_required:
+            unrecognizable_phones = ph_occurred.difference(ph_required)
+            missing_phones = ph_required.difference(ph_occurred)
+            raise BinarizationError('transcriptions and dictionary mismatch.\n'
+                                    f' (+) {sorted(unrecognizable_phones)}\n'
+                                    f' (-) {sorted(missing_phones)}')
 
     def process_dataset(self, prefix, num_workers=0, apply_augmentation=False):
         args = []

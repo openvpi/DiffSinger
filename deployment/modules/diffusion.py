@@ -45,6 +45,16 @@ class GaussianDiffusionONNX(GaussianDiffusion):
 
         return x_pred
 
+    def p_sample_ddim(self, x, t, interval, cond):
+        a_t = extract(self.alphas_cumprod, t)
+        a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)))
+
+        noise_pred = self.denoise_fn(x, t, cond=cond)
+        x_prev = a_prev.sqrt() * (
+                x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt() - ((1 - a_t) / a_t).sqrt()) * noise_pred
+        )
+        return x_prev
+
     def p_sample_plms(self, x_prev, t, interval: int, cond, noise_list: List[Tensor], stage: int):
         noise_pred = self.denoise_fn(x_prev, t, cond)
         t_prev = t - interval
@@ -77,22 +87,24 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         x = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
 
         if speedup > 1:
-            plms_noise_stage: int = 0
-            noise_list: List[Tensor] = []
             for t in step_range:
-                noise_pred, x = self.p_sample_plms(
-                    x, t, interval=speedup, cond=condition,
-                    noise_list=noise_list, stage=plms_noise_stage
-                )
-                if plms_noise_stage == 0:
-                    noise_list = [noise_pred]
-                    plms_noise_stage = plms_noise_stage + 1
-                else:
-                    if plms_noise_stage >= 3:
-                        noise_list.pop(0)
-                    else:
-                        plms_noise_stage = plms_noise_stage + 1
-                    noise_list.append(noise_pred)
+                x = self.p_sample_ddim(x, t, interval=speedup, cond=condition)
+            # plms_noise_stage: int = 0
+            # noise_list: List[Tensor] = []
+            # for t in step_range:
+            #     noise_pred, x = self.p_sample_plms(
+            #         x, t, interval=speedup, cond=condition,
+            #         noise_list=noise_list, stage=plms_noise_stage
+            #     )
+            #     if plms_noise_stage == 0:
+            #         noise_list = [noise_pred]
+            #         plms_noise_stage = plms_noise_stage + 1
+            #     else:
+            #         if plms_noise_stage >= 3:
+            #             noise_list.pop(0)
+            #         else:
+            #             plms_noise_stage = plms_noise_stage + 1
+            #         noise_list.append(noise_pred)
         else:
             for t in step_range:
                 x = self.p_sample(x, t, cond=condition)

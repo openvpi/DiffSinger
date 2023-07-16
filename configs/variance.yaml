@@ -93,18 +93,16 @@ num_sanity_val_steps: 1
 optimizer_args:
   lr: 0.0006
 lr_scheduler_args:
-  step_size: 40000
-  gamma: 0.5
+  step_size: 12000
+  gamma: 0.75
 max_batch_frames: 80000
 max_batch_size: 48
-val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
-max_updates: 320000
+max_updates: 288000
 num_ckpt_keep: 5
-permanent_ckpt_start: 120000
-permanent_ckpt_interval: 40000
-
+permanent_ckpt_start: 180000
+permanent_ckpt_interval: 10000
 
 finetune_enabled: false
 finetune_ckpt_path: null

@@ -1,9 +1,9 @@
 import warnings
 
 import librosa
-import torch
 import numpy as np
 import pyworld as pw
+import torch
 
 warnings.filterwarnings("ignore")
 

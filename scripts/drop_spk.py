@@ -1,6 +1,33 @@
+import torch
 import argparse
 import pathlib
 import re
+
+
+def modify_spk_embed(spk_embed):
+    num_spk, hidden_size = spk_embed.shape
+    all_ids = set(range(num_spk))
+    if args.drop is not None:
+        drop_ids = set([int(i) for i in args.drop.split(',') if i != '']).intersection(all_ids)
+    else:
+        drop_ids = all_ids - set([int(i) for i in args.retain.split(',') if i != ''])
+
+    fill_list = None
+    if args.fill == 'zeros':
+        fill_list = [0. for _ in drop_ids]
+    elif args.fill == 'random':
+        fill_list = [torch.randn(1, hidden_size, dtype=torch.float32, device='cpu') for _ in drop_ids]
+    elif args.fill == 'mean':
+        mean = torch.mean(spk_embed, dim=0, keepdim=True)
+        fill_list = [mean for _ in drop_ids]
+    elif args.fill == 'cyclic':
+        retain_ids = sorted(all_ids - drop_ids)
+        num_retain = len(retain_ids)
+        fill_list = [spk_embed[retain_ids[i % num_retain], :] for i, _ in enumerate(drop_ids)]
+
+    for spk_id, fill in zip(sorted(drop_ids), fill_list):
+        spk_embed[spk_id, :] = fill
+
 
 parser = argparse.ArgumentParser(description='Drop or edit spk_embed in a checkpoint.')
 parser.add_argument('input', type=str, help='Path to the input file')
@@ -36,28 +63,10 @@ assert args.overwrite or not output_ckpt.exists(), \
     'If you are sure to OVERWRITE the existing file, please re-run this script with the \'--overwrite\' argument.'
 
 ckpt_loaded = torch.load(input_ckpt, map_location='cpu')
-spk_embed = ckpt_loaded['state_dict']['model.fs2.spk_embed.weight']
-num_spk, hidden_size = spk_embed.shape
-all_ids = set(range(num_spk))
-if args.drop is not None:
-    drop_ids = set([int(i) for i in args.drop.split(',') if i != '']).intersection(all_ids)
-else:
-    drop_ids = all_ids - set([int(i) for i in args.retain.split(',') if i != ''])
-
-fill_list = None
-if args.fill == 'zeros':
-    fill_list = [0. for _ in drop_ids]
-elif args.fill == 'random':
-    fill_list = [torch.randn(1, hidden_size, dtype=torch.float32, device='cpu') for _ in drop_ids]
-elif args.fill == 'mean':
-    mean = torch.mean(spk_embed, dim=0, keepdim=True)
-    fill_list = [mean for _ in drop_ids]
-elif args.fill == 'cyclic':
-    retain_ids = sorted(all_ids - drop_ids)
-    num_retain = len(retain_ids)
-    fill_list = [spk_embed[retain_ids[i % num_retain], :] for i, _ in enumerate(drop_ids)]
-
-for spk_id, fill in zip(sorted(drop_ids), fill_list):
-    spk_embed[spk_id, :] = fill
+state_dict = ckpt_loaded['state_dict']
+if 'model.fs2.spk_embed.weight' in state_dict:
+    modify_spk_embed(state_dict['model.fs2.spk_embed.weight'])
+if 'model.spk_embed.weight' in state_dict:
+    modify_spk_embed(state_dict['model.spk_embed.weight'])
 
 torch.save(ckpt_loaded, output_ckpt)

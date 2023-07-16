@@ -169,16 +169,14 @@ def load_ckpt(
         checkpoint_path = [ckpt_base_dir / f'model_ckpt_steps_{int(ckpt_steps)}.ckpt']
     else:
         base_dir = ckpt_base_dir
-        checkpoint_path = [
-            base_dir / ckpt_file
-            for ckpt_file in sorted(
-                [
-                    ckpt.name
-                    for ckpt in base_dir.glob('model_ckpt_steps_*.ckpt')
-                ],
-                key=lambda x: int(re.findall(fr'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
-            )
-        ]
+        checkpoint_path = sorted(
+            [
+                ckpt_file
+                for ckpt_file in base_dir.iterdir()
+                if ckpt_file.is_file() and re.fullmatch(r'model_ckpt_steps_\d+\.ckpt', ckpt_file.name)
+            ],
+            key=lambda x: int(re.search(r'\d+', x.name).group(0))
+        )
     assert len(checkpoint_path) > 0, f'| ckpt not found in {ckpt_base_dir}.'
     checkpoint_path = checkpoint_path[-1]
     ckpt_loaded = torch.load(checkpoint_path, map_location=device)

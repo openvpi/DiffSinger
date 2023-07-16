@@ -70,7 +70,7 @@ diff_accelerator: ddim
 pndm_speedup: 10
 hidden_size: 256
 residual_layers: 20
-residual_channels: 384
+residual_channels: 512
 dilation_cycle_length: 4  # *
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2
@@ -90,7 +90,7 @@ val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 320000
 num_ckpt_keep: 5
-permanent_ckpt_start: 120000
+permanent_ckpt_start: 200000
 permanent_ckpt_interval: 40000
 
 

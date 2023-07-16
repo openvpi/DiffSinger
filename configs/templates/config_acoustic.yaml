@@ -1,0 +1,63 @@
+base_config: configs/acoustic.yaml
+
+raw_data_dir:
+  - data/xxx1/raw
+  - data/xxx2/raw
+speakers:
+  - speaker1
+  - speaker2
+spk_ids: []
+test_prefixes:
+  - wav1
+  - wav2
+  - wav3
+  - wav4
+  - wav5
+dictionary: dictionaries/opencpop-extension.txt
+binary_data_dir: data/xxx/binary
+binarization_args:
+  num_workers: 0
+
+use_spk_id: false
+num_spk: 1
+use_energy_embed: false
+use_breathiness_embed: false
+use_key_shift_embed: false
+use_speed_embed: false
+
+augmentation_args:
+  random_pitch_shifting:
+    enabled: false
+    range: [-5., 5.]
+    scale: 1.0
+  fixed_pitch_shifting:
+    enabled: false
+    targets: [-5., 5.]
+    scale: 0.75
+  random_time_stretching:
+    enabled: false
+    range: [0.5, 2.]
+    domain: log  # or linear
+    scale: 1.0
+
+residual_channels: 512
+residual_layers: 20
+
+optimizer_args:
+  lr: 0.0004
+lr_scheduler_args:
+  scheduler_cls: torch.optim.lr_scheduler.StepLR
+  step_size: 50000
+  gamma: 0.5
+max_batch_frames: 80000
+max_batch_size: 48
+max_updates: 320000
+
+num_valid_plots: 10
+val_with_vocoder: true
+val_check_interval: 2000
+num_ckpt_keep: 5
+permanent_ckpt_start: 200000
+permanent_ckpt_interval: 40000
+pl_trainer_devices: 'auto'
+pl_trainer_precision: '32-true'

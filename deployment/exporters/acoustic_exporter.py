@@ -37,6 +37,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.diffusion_cache_path = self.cache_dir / 'diffusion.onnx'
 
         # Attributes for logging
+        self.model_class_name = remove_suffix(self.model.__class__.__name__, 'ONNX')
         self.fs2_class_name = remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')
         self.denoiser_class_name = remove_suffix(self.model.diffusion.denoise_fn.__class__.__name__, 'ONNX')
         self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
@@ -44,8 +45,10 @@ class DiffSingerAcousticExporter(BaseExporter):
         # Attributes for exporting
         self.expose_gender = expose_gender
         self.expose_velocity = expose_velocity
-        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk
-        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk if export_spk is not None else []
+        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
+            if hparams['use_spk_id'] else None
+        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
+            if hparams['use_spk_id'] and export_spk is not None else []
         if hparams.get('use_key_shift_embed', False) and not self.expose_gender:
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             key_shift = freeze_gender * shift_max if freeze_gender >= 0. else freeze_gender * abs(shift_min)
@@ -283,7 +286,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.model_add_prefixes(fs2, dim_prefix='fs2.', ignored_pattern=r'(n_tokens)|(n_frames)')
         onnx_helper.model_add_prefixes(diffusion, dim_prefix='diffusion.', ignored_pattern='n_frames')
         print(f'Merging {self.fs2_class_name} and {self.diffusion_class_name} '
-              f'back into {self.model.__class__.__name__}...')
+              f'back into {self.model_class_name}...')
         merged = onnx.compose.merge_models(
             fs2, diffusion, io_map=[('condition', 'condition')],
             prefix1='', prefix2='', doc_string='',

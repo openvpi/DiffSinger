@@ -18,6 +18,7 @@ from utils.binarizer_utils import (
     get_breathiness_pyworld
 )
 from utils.hparams import hparams
+from utils.plot import distribution_to_figure
 
 os.environ["OMP_NUM_THREADS"] = "1"
 VARIANCE_ITEM_ATTRIBUTES = [
@@ -83,8 +84,45 @@ class VarianceBinarizer(BaseBinarizer):
         self.items.update(meta_data_dict)
 
     def check_coverage(self):
-        print('Coverage checks are temporarily skipped.')
-        pass
+        super().check_coverage()
+        if not hparams['predict_pitch']:
+            return
+
+        # MIDI pitch distribution summary
+        midi_map = {}
+        for item_name in self.items:
+            for midi in self.items[item_name]['note_seq']:
+                if midi == 'rest':
+                    continue
+                midi = librosa.note_to_midi(midi, round_midi=True)
+                if midi in midi_map:
+                    midi_map[midi] += 1
+                else:
+                    midi_map[midi] = 1
+
+        print('===== MIDI Pitch Distribution Summary =====')
+        for i, key in enumerate(sorted(midi_map.keys())):
+            if i == len(midi_map) - 1:
+                end = '\n'
+            elif i % 10 == 9:
+                end = ',\n'
+            else:
+                end = ', '
+            print(f'\'{librosa.midi_to_note(key, unicode=False)}\': {midi_map[key]}', end=end)
+
+        # Draw graph.
+        midis = sorted(midi_map.keys())
+        notes = [librosa.midi_to_note(m, unicode=False) for m in range(midis[0], midis[-1] + 1)]
+        plt = distribution_to_figure(
+            title='MIDI Pitch Distribution Summary',
+            x_label='MIDI Key', y_label='Number of occurrences',
+            items=notes, values=[midi_map.get(m, 0) for m in range(midis[0], midis[-1] + 1)]
+        )
+        filename = self.binary_data_dir / 'midi_distribution.jpg'
+        plt.savefig(fname=filename,
+                    bbox_inches='tight',
+                    pad_inches=0.25)
+        print(f'| save summary to \'{filename}\'')
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):

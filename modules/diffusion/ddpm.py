@@ -158,11 +158,13 @@ class GaussianDiffusion(nn.Module):
     def p_sample_ddim(self, x, t, interval, cond):
         a_t = extract(self.alphas_cumprod, t, x.shape)
         a_prev = extract(self.alphas_cumprod, torch.max(t - interval, torch.zeros_like(t)), x.shape)
-        
+
         noise_pred = self.denoise_fn(x, t, cond=cond)
-        x_prev = a_prev.sqrt() * (x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt()-((1 - a_t) / a_t).sqrt()) * noise_pred)
+        x_prev = a_prev.sqrt() * (
+                x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt() - ((1 - a_t) / a_t).sqrt()) * noise_pred
+        )
         return x_prev
-        
+
     @torch.no_grad()
     def p_sample_plms(self, x, t, interval, cond, clip_denoised=True, repeat_noise=False):
         """
@@ -219,7 +221,7 @@ class GaussianDiffusion(nn.Module):
         shape = (b, self.num_feats, self.out_dims, cond.shape[2])
         x = torch.randn(shape, device=device)
         if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1:
-            algorithm = hparams.get('diff_accelerator', 'dpm-solver')
+            algorithm = hparams.get('diff_accelerator', 'ddim')
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.
