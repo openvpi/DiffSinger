@@ -1306,33 +1306,45 @@ int
 
 2048
 
-### finetune_enable
+### finetune_enabled
 
-use pretrain model
+Whether to finetune from a pretrained model.
 
 #### visibility
 
 all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
 
 #### type
 
-boolean
+bool
 
 #### default
 
-false
-
-#### constraints
-
-Must be true if use pretrain model
+False
 
 ### finetune_ckpt_path
 
-your pretrain path
+Path to the pretrained model for finetuning.
 
 #### visibility
 
 all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
 
 #### type
 
@@ -1342,51 +1354,49 @@ str
 
 null
 
-#### constraints
-
-Must be a path
-
 ### finetune_ignored_params
 
-the params you want to ignore in finetune
+Prefixes of parameter key names in the state dict of the pretrained model that need to be dropped before finetuning.
 
 #### visibility
 
 all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
 
 #### type
 
 list
 
-#### default
-
-null
-
-#### constraints
-
-Must be a list
-
 ### finetune_strict_shapes
 
-when you finetune model have some shapes mismatch the model ignored or error
-default is error
+Whether to raise error if the tensor shapes of any parameter of the pretrained model and the target model mismatch. If set to `False`, parameters with mismatching shapes will be skipped.
 
 #### visibility
 
 all
 
+#### scope
+
+training
+
+#### customizability
+
+normal
+
 #### type
 
-boolean
+bool
 
 #### default
 
-  true
-
-#### constraints
-
-Must be a boolean
-
+True
 
 ### fmax
 
