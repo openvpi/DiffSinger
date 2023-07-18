@@ -123,10 +123,13 @@ def acoustic(
     infer_ins = DiffSingerAcousticInfer(load_model=not mel, ckpt_steps=ckpt)
     print(f'| Model: {type(infer_ins.model)}')
 
-    infer_ins.run_inference(
-        params, out_dir=out, title=name, num_runs=num,
-        spk_mix=spk_mix, seed=seed, save_mel=mel
-    )
+    try:
+        infer_ins.run_inference(
+            params, out_dir=out, title=name, num_runs=num,
+            spk_mix=spk_mix, seed=seed, save_mel=mel
+        )
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 @main.command(help='Run DiffSinger variance model inference')
@@ -208,10 +211,13 @@ def variance(
     infer_ins = DiffSingerVarianceInfer(ckpt_steps=ckpt, predictions=set(predict))
     print(f'| Model: {type(infer_ins.model)}')
 
-    infer_ins.run_inference(
-        params, out_dir=out, title=name,
-        num_runs=num, seed=seed
-    )
+    try:
+        infer_ins.run_inference(
+            params, out_dir=out, title=name,
+            num_runs=num, seed=seed
+        )
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 if __name__ == '__main__':

@@ -245,18 +245,22 @@ class BaseBinarizer:
                 lengths.append(aug_item['length'])
                 total_sec += aug_item['seconds']
 
-        if num_workers > 0:
-            # code for parallel processing
-            for item in tqdm(
-                    chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
-                    total=len(list(self.meta_data_iterator(prefix)))
-            ):
-                postprocess(item)
-        else:
-            # code for single cpu processing
-            for a in tqdm(args):
-                item = self.process_item(*a)
-                postprocess(item)
+        try:
+            if num_workers > 0:
+                # code for parallel processing
+                for item in tqdm(
+                        chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
+                        total=len(list(self.meta_data_iterator(prefix)))
+                ):
+                    postprocess(item)
+            else:
+                # code for single cpu processing
+                for a in tqdm(args):
+                    item = self.process_item(*a)
+                    postprocess(item)
+        except KeyboardInterrupt:
+            builder.finalize()
+            exit(-1)
 
         builder.finalize()
         with open(self.binary_data_dir / f'{prefix}.lengths', 'wb') as f:

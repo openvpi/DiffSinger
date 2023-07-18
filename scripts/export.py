@@ -130,7 +130,10 @@ def acoustic(
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
-    exporter.export(out)
+    try:
+        exporter.export(out)
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 @main.command(help='Export DiffSinger variance model to ONNX format.')
@@ -177,7 +180,10 @@ def variance(
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
-    exporter.export(out)
+    try:
+        exporter.export(out)
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
@@ -211,7 +217,10 @@ def nsf_hifigan(
         model_path=Path(hparams['vocoder_ckpt']).resolve(),
         model_name=name
     )
-    exporter.export(out)
+    try:
+        exporter.export(out)
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 if __name__ == '__main__':

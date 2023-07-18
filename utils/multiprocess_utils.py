@@ -18,7 +18,9 @@ def chunked_worker_run(map_func, args, results_queue=None):
         try:
             res = map_func(*a)
             results_queue.put(res)
-        except:
+        except KeyboardInterrupt:
+            break
+        except Exception:
             traceback.print_exc()
             results_queue.put(None)
 
