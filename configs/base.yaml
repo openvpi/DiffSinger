@@ -75,6 +75,8 @@ max_val_batch_frames: 60000
 max_val_batch_size: 1
 train_set_name: 'train'
 valid_set_name: 'valid'
+pe: 'parselmouth'
+pe_ckpt: ''
 vocoder: ''
 vocoder_ckpt: ''
 num_valid_plots: 10

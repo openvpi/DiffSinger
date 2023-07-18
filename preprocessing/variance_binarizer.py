@@ -9,11 +9,12 @@ import torch.nn.functional as F
 from scipy import interpolate
 
 from basics.base_binarizer import BaseBinarizer
+from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
+from modules.pe import initialize_pe
 from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
-    get_pitch_parselmouth,
     get_energy_librosa,
     get_breathiness_pyworld
 )
@@ -36,6 +37,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
 
 # These operators are used as global variables due to a PyTorch shared memory bug on Windows platforms.
 # See https://github.com/pytorch/pytorch/issues/100358
+pitch_extractor: BasePE = None
 midi_smooth: SinusoidalSmoothingConv1d = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
@@ -152,7 +154,10 @@ class VarianceBinarizer(BaseBinarizer):
 
         # Below: extract actual f0, convert to pitch and calculate delta pitch
         waveform, _ = librosa.load(meta_data['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
-        f0, uv = get_pitch_parselmouth(waveform, length, hparams, interp_uv=True)
+        global pitch_extractor
+        if pitch_extractor is not None:
+            pitch_extractor = initialize_pe()
+        f0, uv = pitch_extractor.get_pitch(waveform, length, hparams, interp_uv=True)
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
             return None

@@ -16,12 +16,13 @@ import numpy as np
 import torch
 
 from basics.base_binarizer import BaseBinarizer
+from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
+from modules.pe import initialize_pe
 from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
-    get_pitch_parselmouth,
     get_energy_librosa,
     get_breathiness_pyworld
 )
@@ -40,6 +41,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'speed'
 ]
 
+pitch_extractor: BasePE = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
 
@@ -101,7 +103,10 @@ class AcousticBinarizer(BaseBinarizer):
         ).cpu().numpy()
 
         # get ground truth f0
-        gt_f0, uv = get_pitch_parselmouth(
+        global pitch_extractor
+        if pitch_extractor is None:
+            pitch_extractor = initialize_pe()
+        gt_f0, uv = pitch_extractor.get_pitch(
             wav, length, hparams, interp_uv=hparams['interp_uv']
         )
         if uv.all():  # All unvoiced
@@ -157,7 +162,7 @@ class AcousticBinarizer(BaseBinarizer):
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=initialize_pe())
             scale = aug_args['scale']
             aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
 
