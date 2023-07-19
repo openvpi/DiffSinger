@@ -689,7 +689,7 @@ dpm-solver
 
 #### constraints
 
-Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'
+Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'.
 
 ### diff_decoder_type
 
@@ -2232,6 +2232,54 @@ float
 
 0
 
+### pe
+
+Pitch extractor type.
+
+#### visibility
+
+all
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+parselmouth
+
+#### constraints
+
+Choose from 'parselmouth'.
+
+### pe_ckpt
+
+Checkpoint or model path of NN-based pitch extractor.
+
+#### visibility
+
+all
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
 ### permanent_ckpt_interval
 
 The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if they are not the newest ones.
@@ -3415,5 +3463,4 @@ int
 #### default
 
 2048
-
 
