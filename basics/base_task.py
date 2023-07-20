@@ -276,7 +276,7 @@ class BaseTask(pl.LightningModule):
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
         optimizer = build_object_from_config(
             optimizer_args['optimizer_cls'],
-            filter(lambda p: p.requires_grad, model.parameters()),
+           model.parameters(),
             **optimizer_args
         )
         return optimizer
