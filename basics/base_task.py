@@ -109,21 +109,11 @@ class BaseTask(pl.LightningModule):
     def freeze_params(self) -> None:
         model_state_dict = self.state_dict().keys()
         freeze_key = self.get_need_freeze_state_dict_key(model_state_dict=model_state_dict)
+
         for i in freeze_key:
-            i: str
-            key_s = i.split('.')
-            key_str = ''
-            for j in key_s:
-                try:
-                    int(j)
-                    key_str = key_str + '[' + j + ']'
-                except:
-                    key_str = key_str + '.' + j
+            params=self.get_parameter(i)
 
-            key_str = key_str.strip('.')
-
-            objects = eval(f'self.{key_str} ')
-            objects.requires_grad = False
+            params.requires_grad = False
 
     def unfreeze_all_params(self) -> None:
         for i in self.model.parameters():
