@@ -103,5 +103,5 @@ finetune_ignored_params:
   - model.fs2.spk_embed
 finetune_strict_shapes: true
 
-freezed_params_on_train_enabled: false
-freezed_params: []
+frozen_params_on_train_enabled: false
+frozen_params: []

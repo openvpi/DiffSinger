@@ -89,7 +89,7 @@ class BaseTask(pl.LightningModule):
         self.model = self.build_model()
         # utils.load_warp(self)
         self.unfreeze_all_params()
-        if hparams['freezed_params_on_train_enabled']:
+        if hparams['frozen_params_on_train_enabled']:
             self.freeze_params()
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
             self.load_finetune_ckpt(self.load_pre_train_model())
@@ -100,7 +100,7 @@ class BaseTask(pl.LightningModule):
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
         key_list = []
-        for i in hparams['freezed_params']:
+        for i in hparams['frozen_params']:
             for j in model_state_dict:
                 if j.startswith(i):
                     key_list.append(j)

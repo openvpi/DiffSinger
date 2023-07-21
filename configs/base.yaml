@@ -101,5 +101,5 @@ finetune_ignored_params: []
 
 finetune_strict_shapes: true
 
-freezed_params_on_train_enabled: false
-freezed_params: []
+frozen_params_on_train_enabled: false
+frozen_params: []
