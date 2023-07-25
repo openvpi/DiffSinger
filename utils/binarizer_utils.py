@@ -110,7 +110,7 @@ def get_breathiness_pyworld(wav_data, f0, length, hparams):
     y = pw.synthesize(
         f0, sp * ap * ap, np.ones_like(ap), sample_rate,
         frame_period=time_step * 1000
-    )  # synthesize the aperiodic part using the parameters
+    ).astype(np.float32)  # synthesize the aperiodic part using the parameters
     breathiness = get_energy_librosa(y, length, hparams)
     return breathiness
 

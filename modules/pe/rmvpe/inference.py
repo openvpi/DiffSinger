@@ -62,7 +62,7 @@ class RMVPE:
         hop_size = int(np.round(hparams['hop_size'] * speed))
         time_step = hop_size / hparams['audio_sample_rate']
         f0_res = resample_align_curve(f0, 0.01, time_step, length)
-        uv_res = resample_align_curve(uv.astype(float), 0.01, time_step, length) > 0.5
+        uv_res = resample_align_curve(uv.astype(np.float32), 0.01, time_step, length) > 0.5
         if not interp_uv:
             f0_res[uv_res] = 0
         return f0_res, uv_res
