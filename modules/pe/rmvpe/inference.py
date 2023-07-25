@@ -2,10 +2,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchaudio.transforms import Resample
+
+from utils.infer_utils import resample_align_curve
+from utils.pitch_utils import interp_f0
 from .constants import *
-from .model import E2E0, E2E
-from .spec import MelSpectrogram 
+from .model import E2E0
+from .spec import MelSpectrogram
 from .utils import to_local_average_f0, to_viterbi_f0
+
 
 class RMVPE:
     def __init__(self, model_path, hop_length=160):
@@ -16,7 +20,6 @@ class RMVPE:
         model.eval()
         self.model = model
         self.mel_extractor = MelSpectrogram(N_MELS, SAMPLE_RATE, WINDOW_LENGTH, hop_length, None, MEL_FMIN, MEL_FMAX)
-        self.resample_kernel = {}
 
     def mel2hidden(self, mel):
         with torch.no_grad():
@@ -29,7 +32,7 @@ class RMVPE:
         if use_viterbi:
             f0 = to_viterbi_f0(hidden, thred=thred)
         else:
-            f0 = to_local_average_f0(hidden, thred=thred)  
+            f0 = to_local_average_f0(hidden, thred=thred)
         return f0
 
     def infer_from_audio(self, audio, sample_rate=16000, device=None, thred=0.03, use_viterbi=False):
@@ -50,3 +53,16 @@ class RMVPE:
         hidden = self.mel2hidden(mel)
         f0 = self.decode(hidden, thred=thred, use_viterbi=use_viterbi)
         return f0
+
+    def get_pitch(self, waveform, length, hparams, interp_uv=False, speed=1):
+        f0 = self.infer_from_audio(waveform, sample_rate=hparams['audio_sample_rate'])
+        uv = f0 == 0
+        f0, uv = interp_f0(f0, uv)
+
+        hop_size = int(np.round(hparams['hop_size'] * speed))
+        time_step = hop_size / hparams['audio_sample_rate']
+        f0_res = resample_align_curve(f0, 0.01, time_step, length)
+        uv_res = resample_align_curve(uv.astype(float), 0.01, time_step, length) > 0.5
+        if not interp_uv:
+            f0_res[uv_res] = 0
+        return f0_res, uv_res

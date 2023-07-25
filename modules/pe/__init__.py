@@ -3,9 +3,10 @@ from utils import hparams
 from .pm import ParselmouthPE
 from .rmvpe import RMVPE
 
+
 def initialize_pe():
     pe = hparams.get('pe', 'parselmouth')
-    pe_ckpt = hparams.get('pe_ckpt', '')
+    pe_ckpt = hparams['pe_ckpt']
     if pe == 'parselmouth':
         return ParselmouthPE()
     elif pe == 'rmvpe':
