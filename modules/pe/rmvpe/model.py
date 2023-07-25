@@ -1,7 +1,7 @@
 from torch import nn
 
 from .constants import *
-from .deepunet import DeepUnet, DeepUnet0
+from .deepunet import DeepUnet0
 from .seq import BiGRU
 
 
