@@ -1,10 +1,8 @@
-import sys
-import numpy as np
 import librosa
+import numpy as np
 import torch
-from functools import reduce
+
 from .constants import *
-from torch.nn.modules.module import _addindent
 
 
 def to_local_average_f0(hidden, center=None, thred=0.03):
