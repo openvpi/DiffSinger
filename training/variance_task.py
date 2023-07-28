@@ -10,6 +10,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.losses.dur_loss import DurationLoss
+from modules.metrics.rca import RawCurveAccuracy
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -106,6 +107,7 @@ class VarianceTask(BaseTask):
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
+            self.register_metric('pitch_acc', RawCurveAccuracy(delta=0.5))
         if self.predict_variances:
             self.var_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
@@ -178,10 +180,13 @@ class VarianceTask(BaseTask):
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
                 base_pitch = sample['base_pitch']
+                pred_pitch = base_pitch + pitch_pred
+                gt_pitch = sample['pitch']
+                self.pitch_acc.update(pred=pred_pitch, target=gt_pitch)
                 self.plot_curve(
                     batch_idx,
-                    gt_curve=sample['pitch'],
-                    pred_curve=base_pitch + pitch_pred,
+                    gt_curve=gt_pitch,
+                    pred_curve=pred_pitch,
                     base_curve=base_pitch,
                     curve_name='pitch',
                     grid=1
