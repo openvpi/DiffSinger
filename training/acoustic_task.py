@@ -77,7 +77,7 @@ class AcousticTask(BaseTask):
         )
 
     # noinspection PyAttributeOutsideInit
-    def build_losses(self):
+    def build_losses_and_metrics(self):
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
 
     def run_model(self, sample, infer=False):

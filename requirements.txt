@@ -18,4 +18,5 @@ resampy
 scipy
 tensorboard
 tensorboardX
+torchmetrics
 tqdm

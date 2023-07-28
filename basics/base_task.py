@@ -77,9 +77,10 @@ class BaseTask(pl.LightningModule):
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
 
-        self.valid_metrics: Dict[str, Metric] = {
+        self.valid_losses: Dict[str, Metric] = {
             'total_loss': MeanMetric()
         }
+        self.valid_metric_names = set()
 
     ###########
     # Training, validation and testing
@@ -91,7 +92,7 @@ class BaseTask(pl.LightningModule):
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
             self.load_finetune_ckpt( self.load_pre_train_model())
         self.print_arch()
-        self.build_losses()
+        self.build_losses_and_metrics()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
 
@@ -163,8 +164,13 @@ class BaseTask(pl.LightningModule):
     def print_arch(self):
         utils.print_arch(self.model)
 
-    def build_losses(self):
+    def build_losses_and_metrics(self):
         raise NotImplementedError()
+
+    def register_metric(self, name: str, metric: Metric):
+        assert isinstance(metric, Metric)
+        setattr(self, name, metric)
+        self.valid_metric_names.add(name)
 
     def run_model(self, sample, infer=False):
         """
@@ -194,8 +200,8 @@ class BaseTask(pl.LightningModule):
         self.log('lr', self.lr_schedulers().get_last_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
         # logs to tensorboard
         if self.global_step % hparams['log_interval'] == 0:
-            tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-            tb_log['tr/lr'] = self.lr_schedulers().get_last_lr()[0]
+            tb_log = {f'training/{k}': v for k, v in log_outputs.items()}
+            tb_log['training/lr'] = self.lr_schedulers().get_last_lr()[0]
             self.logger.log_metrics(tb_log, step=self.global_step)
 
         return total_loss
@@ -208,7 +214,7 @@ class BaseTask(pl.LightningModule):
 
     def on_validation_start(self):
         self._on_validation_start()
-        for metric in self.valid_metrics.values():
+        for metric in self.valid_losses.values():
             metric.to(self.device)
             metric.reset()
 
@@ -231,27 +237,31 @@ class BaseTask(pl.LightningModule):
             rank_zero_debug(f"Skip validation {batch_idx}")
             return {}
         with torch.autocast(self.device.type, enabled=False):
-            outputs, weight = self._validation_step(sample, batch_idx)
-        outputs = {
-            'total_loss': sum(outputs.values()),
-            **outputs
+            losses, weight = self._validation_step(sample, batch_idx)
+        losses = {
+            'total_loss': sum(losses.values()),
+            **losses
         }
-        for k, v in outputs.items():
-            if k not in self.valid_metrics:
-                self.valid_metrics[k] = MeanMetric().to(self.device)
-            self.valid_metrics[k].update(v, weight=weight)
-        return outputs
+        for k, v in losses.items():
+            if k not in self.valid_losses:
+                self.valid_losses[k] = MeanMetric().to(self.device)
+            self.valid_losses[k].update(v, weight=weight)
+        return losses
 
     def on_validation_epoch_end(self):
         if self.skip_immediate_validation:
             self.skip_immediate_validation = False
             self.skip_immediate_ckpt_save = True
             return
-        metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
-        self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
-        self.logger.log_metrics({f'val/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
-        for metric in self.valid_metrics.values():
+        loss_vals = {k: v.compute() for k, v in self.valid_losses.items()}
+        self.log('val_loss', loss_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
+        self.logger.log_metrics({f'validation/{k}': v for k, v in loss_vals.items()}, step=self.global_step)
+        for metric in self.valid_losses.values():
             metric.reset()
+        metric_vals = {k: getattr(self, k).compute() for k in self.valid_metric_names}
+        self.logger.log_metrics({f'metrics/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
+        for metric_name in self.valid_metric_names:
+            getattr(self, metric_name).reset()
 
     # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
