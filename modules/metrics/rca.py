@@ -11,6 +11,12 @@ class RawCurveAccuracy(torchmetrics.Metric):
         self.add_state('total', default=torch.tensor(0.0, dtype=torch.float32), dist_reduce_fx='sum')
 
     def update(self, pred: Tensor, target: Tensor, mask=None) -> None:
+        """
+
+        :param pred: predicted curve
+        :param target: reference curve
+        :param mask: valid or non-padding mask
+        """
         if mask is None:
             assert pred.shape == target.shape, f'shapes of pred and target mismatch: {pred.shape}, {target.shape}'
         else:

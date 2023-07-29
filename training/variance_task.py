@@ -45,6 +45,7 @@ class VarianceDataset(BaseDataset):
         if hparams['predict_pitch'] or self.predict_variances:
             batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)
             batch['pitch'] = utils.collate_nd([s['pitch'] for s in samples], 0)
+            batch['uv'] = utils.collate_nd([s['uv'] for s in samples], True)
         if hparams['predict_energy']:
             batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
         if hparams['predict_breathiness']:
@@ -182,7 +183,8 @@ class VarianceTask(BaseTask):
                 base_pitch = sample['base_pitch']
                 pred_pitch = base_pitch + pitch_pred
                 gt_pitch = sample['pitch']
-                self.pitch_acc.update(pred=pred_pitch, target=gt_pitch)
+                mask = (sample['mel2ph'] > 0) & ~sample['uv']
+                self.pitch_acc.update(pred=pred_pitch, target=gt_pitch, mask=mask)
                 self.plot_curve(
                     batch_idx,
                     gt_curve=gt_pitch,

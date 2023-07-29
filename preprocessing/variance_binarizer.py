@@ -31,6 +31,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'mel2ph',  # mel2ph format representing number of frames within each phone, int64[T_s,]
     'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_s,]
     'pitch',  # actual pitch in semitones, float32[T_s,]
+    'uv',  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
     'energy',  # frame-level RMS (dB), float32[T_s,]
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
 ]
@@ -203,6 +204,7 @@ class VarianceBinarizer(BaseBinarizer):
 
         if hparams['predict_pitch'] or self.predict_variances:
             processed_input['pitch'] = pitch.cpu().numpy()
+            processed_input['uv'] = uv
 
         # Below: extract energy
         if hparams['predict_energy']:
