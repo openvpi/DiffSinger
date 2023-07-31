@@ -6,6 +6,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import click
+from typing import Tuple
 
 root_dir = Path(__file__).parent.parent.resolve()
 os.environ['PYTHONPATH'] = str(root_dir)
@@ -44,7 +45,7 @@ def main():
 @click.option('--title', type=str, required=False, help='Title of output file')
 @click.option('--num', type=int, required=False, default=1, help='Number of runs')
 @click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
-@click.option('--gender', type=float, required=False, default=0, help='Formant shifting (gender control)')
+@click.option('--gender', type=float, required=False, help='Formant shifting (gender control)')
 @click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
 @click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
 @click.option('--mel', is_flag=True, help='Save intermediate mel format instead of waveform')
@@ -83,7 +84,7 @@ def acoustic(
         print('The input file is empty.')
         exit()
 
-    from utils.infer_utils import trans_key, parse_commandline_spk_mix, merge_slurs
+    from utils.infer_utils import trans_key, parse_commandline_spk_mix
 
     if key != 0:
         params = trans_key(params, key)
@@ -118,19 +119,20 @@ def acoustic(
         if spk_mix is not None:
             param['spk_mix'] = spk_mix
 
-        merge_slurs(param)
-
     from inference.ds_acoustic import DiffSingerAcousticInfer
     infer_ins = DiffSingerAcousticInfer(load_model=not mel, ckpt_steps=ckpt)
     print(f'| Model: {type(infer_ins.model)}')
 
-    infer_ins.run_inference(
-        params, out_dir=out, title=name, num_runs=num,
-        spk_mix=spk_mix, seed=seed, save_mel=mel
-    )
+    try:
+        infer_ins.run_inference(
+            params, out_dir=out, title=name, num_runs=num,
+            spk_mix=spk_mix, seed=seed, save_mel=mel
+        )
+    except KeyboardInterrupt:
+        exit(-1)
 
 
-@main.command(help='Run DiffSinger acoustic model inference')
+@main.command(help='Run DiffSinger variance model inference')
 @click.argument('proj', type=str, metavar='DS_FILE')
 @click.option('--exp', type=str, required=True, metavar='EXP', help='Selection of model')
 @click.option('--ckpt', type=int, required=False, metavar='STEPS', help='Selection of checkpoint training steps')
@@ -148,7 +150,7 @@ def variance(
         exp: str,
         ckpt: int,
         spk: str,
-        predict: tuple[str],
+        predict: Tuple[str],
         out: str,
         title: str,
         num: int,
@@ -181,7 +183,7 @@ def variance(
         print('The input file is empty.')
         exit()
 
-    from utils.infer_utils import trans_key, parse_commandline_spk_mix, merge_slurs
+    from utils.infer_utils import trans_key, parse_commandline_spk_mix
 
     if key != 0:
         params = trans_key(params, key)
@@ -213,16 +215,17 @@ def variance(
             param['spk_mix_backup'] = param.get('spk_mix')
             param['ph_spk_mix'] = param['spk_mix'] = spk_mix
 
-        merge_slurs(param)
-
     from inference.ds_variance import DiffSingerVarianceInfer
     infer_ins = DiffSingerVarianceInfer(ckpt_steps=ckpt, predictions=set(predict))
     print(f'| Model: {type(infer_ins.model)}')
 
-    infer_ins.run_inference(
-        params, out_dir=out, title=name,
-        num_runs=num, seed=seed
-    )
+    try:
+        infer_ins.run_inference(
+            params, out_dir=out, title=name,
+            num_runs=num, seed=seed
+        )
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.losses.dur_loss import DurationLoss
+from modules.metrics.rca import RawCurveAccuracy
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
 from utils.plot import dur_to_figure, curve_to_figure
@@ -18,36 +19,48 @@ matplotlib.use('Agg')
 
 
 class VarianceDataset(BaseDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        need_energy = hparams['predict_energy']
+        need_breathiness = hparams['predict_breathiness']
+        self.predict_variances = need_energy or need_breathiness
+
     def collater(self, samples):
         batch = super().collater(samples)
 
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         ph_dur = utils.collate_nd([s['ph_dur'] for s in samples], 0)
-        midi = utils.collate_nd([s['midi'] for s in samples], 0)
-        ph2word = utils.collate_nd([s['ph2word'] for s in samples], 0)
-        mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
-        base_pitch = utils.collate_nd([s['base_pitch'] for s in samples], 0)
-        pitch = utils.collate_nd([s['pitch'] for s in samples], 0)
         batch.update({
             'tokens': tokens,
-            'ph_dur': ph_dur,
-            'midi': midi,
-            'ph2word': ph2word,
-            'mel2ph': mel2ph,
-            'base_pitch': base_pitch,
-            'pitch': pitch,
+            'ph_dur': ph_dur
         })
-        if hparams['predict_energy']:
-            energy = utils.collate_nd([s['energy'] for s in samples], 0)
-            batch['energy'] = energy
-        if hparams['predict_breathiness']:
-            breathiness = utils.collate_nd([s['breathiness'] for s in samples], 0)
-            batch['breathiness'] = breathiness
+
         if hparams['use_spk_id']:
-            spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
-            batch['spk_ids'] = spk_ids
+            batch['spk_ids'] = torch.LongTensor([s['spk_id'] for s in samples])
+        if hparams['predict_dur']:
+            batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
+            batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
+        if hparams['predict_pitch']:
+            batch['base_pitch'] = utils.collate_nd([s['base_pitch'] for s in samples], 0)
+        if hparams['predict_pitch'] or self.predict_variances:
+            batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)
+            batch['pitch'] = utils.collate_nd([s['pitch'] for s in samples], 0)
+            batch['uv'] = utils.collate_nd([s['uv'] for s in samples], True)
+        if hparams['predict_energy']:
+            batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
+        if hparams['predict_breathiness']:
+            batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0)
 
         return batch
+
+
+def random_retake_masks(b, t, device):
+    # 1/4 segments are True in average
+    B_masks = torch.randint(low=0, high=4, size=(b, 1), dtype=torch.long, device=device) == 0
+    # 1/3 frames are True in average
+    T_masks = utils.random_continuous_masks(b, t, dim=1, device=device)
+    # 1/4 segments and 1/2 frames are True in average (1/4 + 3/4 * 1/3 = 1/2)
+    return B_masks | T_masks
 
 
 class VarianceTask(BaseTask):
@@ -81,7 +94,7 @@ class VarianceTask(BaseTask):
         )
 
     # noinspection PyAttributeOutsideInit
-    def build_losses(self):
+    def build_losses_and_metrics(self):
         if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
             self.dur_loss = DurationLoss(
@@ -95,6 +108,7 @@ class VarianceTask(BaseTask):
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
+            self.register_metric('pitch_acc', RawCurveAccuracy(delta=0.5))
         if self.predict_variances:
             self.var_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
@@ -112,25 +126,27 @@ class VarianceTask(BaseTask):
         energy = sample.get('energy')  # [B, T_s]
         breathiness = sample.get('breathiness')  # [B, T_s]
 
+        pitch_retake = variance_retake = None
         if (self.predict_pitch or self.predict_variances) and not infer:
             # randomly select continuous retaking regions
             b = sample['size']
             t = mel2ph.shape[1]
             device = mel2ph.device
-            start, end = torch.sort(
-                torch.randint(low=0, high=t + 1, size=(b, 2), device=device), dim=1
-            )[0].split(1, dim=1)
-            idx = torch.arange(0, t, dtype=torch.long, device=device)[None]
-            retake = (idx >= start) & (idx < end)
-        else:
-            retake = None
+            if self.predict_pitch:
+                pitch_retake = random_retake_masks(b, t, device)
+            if self.predict_variances:
+                variance_retake = {
+                    v_name: random_retake_masks(b, t, device)
+                    for v_name in self.variance_prediction_list
+                }
 
         output = self.model(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, mel2ph=mel2ph,
             base_pitch=base_pitch, pitch=pitch,
             energy=energy, breathiness=breathiness,
-            retake=retake, spk_id=spk_ids, infer=infer
+            pitch_retake=pitch_retake, variance_retake=variance_retake,
+            spk_id=spk_ids, infer=infer
         )
 
         dur_pred, pitch_pred, variances_pred = output
@@ -142,7 +158,7 @@ class VarianceTask(BaseTask):
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
-            nonpadding = (mel2ph > 0).unsqueeze(-1).float()
+            nonpadding = (mel2ph > 0).unsqueeze(-1).float() if mel2ph is not None else None
             if pitch_pred is not None:
                 (pitch_x_recon, pitch_noise) = pitch_pred
                 losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
@@ -157,10 +173,6 @@ class VarianceTask(BaseTask):
 
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, infer=False)
-        total_loss = sum(losses.values())
-        outputs = {
-            'total_loss': total_loss
-        }
 
         if batch_idx < hparams['num_valid_plots'] \
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
@@ -169,10 +181,14 @@ class VarianceTask(BaseTask):
                 self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
             if pitch_pred is not None:
                 base_pitch = sample['base_pitch']
+                pred_pitch = base_pitch + pitch_pred
+                gt_pitch = sample['pitch']
+                mask = (sample['mel2ph'] > 0) & ~sample['uv']
+                self.pitch_acc.update(pred=pred_pitch, target=gt_pitch, mask=mask)
                 self.plot_curve(
                     batch_idx,
-                    gt_curve=sample['pitch'],
-                    pred_curve=base_pitch + pitch_pred,
+                    gt_curve=gt_pitch,
+                    pred_curve=pred_pitch,
                     base_curve=base_pitch,
                     curve_name='pitch',
                     grid=1
@@ -187,7 +203,7 @@ class VarianceTask(BaseTask):
                     curve_name=name
                 )
 
-        return outputs, sample['size']
+        return losses, sample['size']
 
     ############
     # validation plots

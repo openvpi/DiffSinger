@@ -1,13 +1,9 @@
-import warnings
-
 import librosa
-import torch
 import numpy as np
-import pyworld as pw
-
-warnings.filterwarnings("ignore")
-
 import parselmouth
+import pyworld as pw
+import torch
+
 from utils.pitch_utils import interp_f0
 
 
@@ -56,7 +52,7 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
     f0 = parselmouth.Sound(wav_data, sampling_frequency=hparams['audio_sample_rate']).to_pitch_ac(
         time_step=time_step, voicing_threshold=0.6,
         pitch_floor=f0_min, pitch_ceiling=f0_max
-    ).selected_array['frequency']
+    ).selected_array['frequency'].astype(np.float32)
     f0 = pad_frames(f0, hop_size, wav_data.shape[0], length)
     uv = f0 == 0
     if interp_uv:
@@ -95,6 +91,7 @@ def get_breathiness_pyworld(wav_data, f0, length, hparams):
     fft_size = hparams['fft_size']
 
     x = wav_data.astype(np.double)
+    f0 = f0.astype(np.double)
     wav_frames = (x.shape[0] + hop_size - 1) // hop_size
     f0_frames = f0.shape[0]
     if f0_frames < wav_frames:
@@ -109,7 +106,7 @@ def get_breathiness_pyworld(wav_data, f0, length, hparams):
     y = pw.synthesize(
         f0, sp * ap * ap, np.ones_like(ap), sample_rate,
         frame_period=time_step * 1000
-    )  # synthesize the aperiodic part using the parameters
+    ).astype(np.float32)  # synthesize the aperiodic part using the parameters
     breathiness = get_energy_librosa(y, length, hparams)
     return breathiness
 

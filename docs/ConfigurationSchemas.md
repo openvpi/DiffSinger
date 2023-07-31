@@ -1,16 +1,18 @@
-# DiffSinger: Singing Voice Synthesis via Shallow Diffusion Mechanism
+# Configuration Schemas
 
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2105.02446)
-[![GitHub Stars](https://img.shields.io/github/stars/MoonInTheRiver/DiffSinger?style=social)](https://github.com/MoonInTheRiver/DiffSinger)
-[![downloads](https://img.shields.io/github/downloads/MoonInTheRiver/DiffSinger/total.svg)](https://github.com/MoonInTheRiver/DiffSinger/releases)
-| [Interactive🤗 SVS](https://huggingface.co/spaces/Silentlin/DiffSinger)
+## The configuration system
 
-## Configuration Schemas
+DiffSinger uses a cascading configuration system based on YAML files. All configuration files originally inherit and override [configs/base.yaml](../configs/base.yaml), and each file directly override another file by setting the `base_config` attribute. The overriding rules are:
 
-This document explains the meaning and usages of all editable keys in a configuration file.
+- Configuration keys with the same path and the same name will be replaced. Other paths and names will be merged.
+- All configurations in the inheritance chain will be squashed (via the rule above) as the final configuration.
+- The trainer will save the final configuration in the experiment directory, which is detached from the chain and made independent from other configuration files.
 
-Each configuration key (including nested keys) are described with a brief explanation and several attributes listed as
-follows:
+## Configurable parameters
+
+This following are the meaning and usages of all editable keys in a configuration file.
+
+Each configuration key (including nested keys) are described with a brief explanation and several attributes listed as follows:
 
 |    Attribute    | Explanation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 |:---------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -660,8 +662,10 @@ str
 
 Diffusion sampling acceleration method. The following method are currently available:
 
+- DDIM: the DDIM method from [DENOISING DIFFUSION IMPLICIT MODELS](https://arxiv.org/abs/2010.02502)
 - PNDM: the PLMS method from [Pseudo Numerical Methods for Diffusion Models on Manifolds](https://arxiv.org/abs/2202.09778)
-- DPM-Solver 2.0 adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
+- DPM-Solver++ adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
+- UniPC adapted from [UniPC: A Unified Predictor-Corrector Framework for Fast Sampling of Diffusion Models](https://github.com/wl-zhao/UniPC)
 
 #### visibility
 
@@ -685,7 +689,7 @@ dpm-solver
 
 #### constraints
 
-Choose from 'pndm', 'dpm-solver'.
+Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'.
 
 ### diff_decoder_type
 
@@ -1301,6 +1305,98 @@ int
 #### default
 
 2048
+
+### finetune_enabled
+
+Whether to finetune from a pretrained model.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+False
+
+### finetune_ckpt_path
+
+Path to the pretrained model for finetuning.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+null
+
+### finetune_ignored_params
+
+Prefixes of parameter key names in the state dict of the pretrained model that need to be dropped before finetuning.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+list
+
+### finetune_strict_shapes
+
+Whether to raise error if the tensor shapes of any parameter of the pretrained model and the target model mismatch. If set to `False`, parameters with mismatching shapes will be skipped.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+True
 
 ### fmax
 
@@ -2136,6 +2232,54 @@ float
 
 0
 
+### pe
+
+Pitch extractor type.
+
+#### visibility
+
+all
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
+#### default
+
+parselmouth
+
+#### constraints
+
+Choose from 'parselmouth'.
+
+### pe_ckpt
+
+Checkpoint or model path of NN-based pitch extractor.
+
+#### visibility
+
+all
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+normal
+
+#### type
+
+str
+
 ### permanent_ckpt_interval
 
 The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if they are not the newest ones.
@@ -2820,6 +2964,30 @@ required
 
 list
 
+### spk_ids
+
+The IDs of speakers in a multi-speaker model. If an empty list is given, speaker IDs will be automatically generated as $0,1,2,...,N_{spk}-1$. IDs can be duplicate or discontinuous.
+
+#### visibility
+
+acoustic, variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+required
+
+#### type
+
+List[int]
+
+#### default
+
+[]
+
 ### spec_min
 
 Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values.
@@ -2895,7 +3063,7 @@ List of data item names or name prefixes for the validation set. For each string
 - If `s` equals to an actual item name, add that item to validation set.
 - If `s` does not equal to any item names, add all items whose names start with `s` to validation set.
 
-For multi-speaker datasets, "spk_id:name_prefix" can be used to apply the rules above within data from a specific speaker, where spk_id represents the speaker index.
+For multi-speaker combined datasets, "ds_id:name_prefix" can be used to apply the rules above within data from a specific sub-dataset, where ds_id represents the dataset index.
 
 #### visibility
 
@@ -3177,14 +3345,9 @@ variance
 
 4
 
-### variances_prediction_args.repeat_bins
+### variances_prediction_args.total_repeat_bins
 
-Number of repeating bins of each parameter in MultiVarianceDiffusion. Total repeating bins in MultiVarianceDiffusion are calculated as follows:
-$$
-B=N\times B'
-$$
-where $B'$ is the number of bins of each parameter, $N$ is the number of parameters.
-
+Total number of repeating bins in MultiVarianceDiffusion. Repeating bins are distributed evenly to each variance parameter.
 #### visibility
 
 variance
@@ -3203,7 +3366,7 @@ int
 
 #### default
 
-24
+48
 
 ### variances_prediction_args.residual_channels
 

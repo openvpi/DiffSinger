@@ -1,4 +1,11 @@
 import importlib
+import os
+import sys
+from pathlib import Path
+
+root_dir = Path(__file__).parent.parent.resolve()
+os.environ['PYTHONPATH'] = str(root_dir)
+sys.path.insert(0, str(root_dir))
 
 from utils.hparams import set_hparams, hparams
 

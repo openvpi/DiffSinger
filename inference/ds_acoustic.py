@@ -6,6 +6,7 @@ import pathlib
 
 import numpy as np
 import torch
+from typing import Dict
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
@@ -108,7 +109,9 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
 
         if hparams.get('use_key_shift_embed', False):
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
-            gender = param.get('gender', 0.)
+            gender = param.get('gender')
+            if gender is None:
+                gender = 0.
             if isinstance(gender, (int, float, bool)):  # static gender value
                 summary['gender'] = f'static({gender:.3f})'
                 key_shift_value = gender * shift_max if gender >= 0 else gender * abs(shift_min)
@@ -184,7 +187,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             out_dir: pathlib.Path = None,
             title: str = None,
             num_runs: int = 1,
-            spk_mix: dict[str, float] = None,
+            spk_mix: Dict[str, float] = None,
             seed: int = -1,
             save_mel: bool = False
     ):

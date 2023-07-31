@@ -141,13 +141,11 @@ def model_add_prefixes(
                     if io_value in initializers and initializer_prefix is not None:
                         new_value = initializer_prefix + io_value
                         _verbose('| add prefix:', io_value, '->', new_value)
-                        io_list.pop(i)
-                        io_list.insert(i, new_value)
+                        io_list[i] = new_value
                     if io_value in value_infos and value_info_prefix is not None:
                         new_value = value_info_prefix + io_value
                         _verbose('| add prefix:', io_value, '->', new_value)
-                        io_list.pop(i)
-                        io_list.insert(i, new_value)
+                        io_list[i] = new_value
 
     _record_initializers_and_value_infos_recursive(model.graph)
     _add_prefixes_recursive(model.graph)

@@ -316,8 +316,15 @@ class DsTQDMProgressBar(TQDMProgressBar):
             items['steps'] = str(trainer.global_step)
         for k, v in items.items():
             if isinstance(v, float):
-                if 0.00001 <= v < 10:
-                    items[k] = f"{v:.5f}"
+                if 0.001 <= v < 10:
+                    items[k] = np.format_float_positional(v, unique=True, precision=5, trim='-')
+                elif 0.00001 <= v < 0.001:
+                    if len(np.format_float_positional(v, unique=True, precision=8, trim='-')) > 8:
+                        items[k] = np.format_float_scientific(v, precision=3, unique=True, min_digits=2, trim='-')
+                    else:
+                        items[k] = np.format_float_positional(v, unique=True, precision=5, trim='-')
+                elif v < 0.00001:
+                    items[k] = np.format_float_scientific(v, precision=3, unique=True, min_digits=2, trim='-')
         items.pop("v_num", None)
         return items
 

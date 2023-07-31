@@ -9,7 +9,7 @@ from torch import nn
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.nsf_hifigan import NSFHiFiGANONNX
-from utils import load_ckpt
+from utils import load_ckpt, remove_suffix
 from utils.hparams import hparams
 
 
@@ -25,7 +25,7 @@ class NSFHiFiGANExporter(BaseExporter):
         self.model_path = model_path
         self.model_name = model_name
         self.model = self.build_model()
-        self.model_class_name = self.model.__class__.__name__.removesuffix('ONNX')
+        self.model_class_name = remove_suffix(self.model.__class__.__name__, 'ONNX')
         self.model_cache_path = (self.cache_dir / self.model_name).with_suffix('.onnx')
 
     def build_model(self) -> nn.Module:

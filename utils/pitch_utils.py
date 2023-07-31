@@ -20,18 +20,19 @@ def f0_to_coarse(f0):
     return f0_coarse
 
 
-def norm_f0(f0):
-    f0 = np.log2(f0)
+def norm_f0(f0, uv=None):
+    if uv is None:
+        uv = f0 == 0
+    f0 = np.log2(f0 + uv)  # avoid arithmetic error
+    f0[uv] = -np.inf
     return f0
 
 
 def interp_f0(f0, uv=None):
     if uv is None:
         uv = f0 == 0
-    f0 = norm_f0(f0)
-    if sum(uv) == len(f0):
-        f0[uv] = -np.inf
-    elif sum(uv) > 0:
+    f0 = norm_f0(f0, uv)
+    if uv.any() and not uv.all():
         f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
     return denorm_f0(f0, uv=None), uv
 

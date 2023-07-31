@@ -8,7 +8,7 @@ import torch
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerAcousticONNX
-from utils import load_ckpt, onnx_helper
+from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
@@ -37,15 +37,18 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.diffusion_cache_path = self.cache_dir / 'diffusion.onnx'
 
         # Attributes for logging
-        self.fs2_class_name = self.model.fs2.__class__.__name__.removesuffix('ONNX')
-        self.denoiser_class_name = self.model.diffusion.denoise_fn.__class__.__name__.removesuffix('ONNX')
-        self.diffusion_class_name = self.model.diffusion.__class__.__name__.removesuffix('ONNX')
+        self.model_class_name = remove_suffix(self.model.__class__.__name__, 'ONNX')
+        self.fs2_class_name = remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')
+        self.denoiser_class_name = remove_suffix(self.model.diffusion.denoise_fn.__class__.__name__, 'ONNX')
+        self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
 
         # Attributes for exporting
         self.expose_gender = expose_gender
         self.expose_velocity = expose_velocity
-        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk
-        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk if export_spk is not None else []
+        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
+            if hparams['use_spk_id'] else None
+        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
+            if hparams['use_spk_id'] and export_spk is not None else []
         if hparams.get('use_key_shift_embed', False) and not self.expose_gender:
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             key_shift = freeze_gender * shift_max if freeze_gender >= 0. else freeze_gender * abs(shift_min)
@@ -56,7 +59,7 @@ class DiffSingerAcousticExporter(BaseExporter):
                 # In case the user did not specify any speaker settings:
                 if len(self.spk_map) == 1:
                     # If there is only one speaker, freeze him/her.
-                    first_spk = next(self.spk_map.keys())
+                    first_spk = next(iter(self.spk_map.keys()))
                     self.freeze_spk = (first_spk, {first_spk: 1.0})
                 else:
                     # If there are multiple speakers, export them all.
@@ -78,7 +81,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         model_name = self.model_name
         if self.freeze_spk is not None:
             model_name += '.' + self.freeze_spk[0]
-        self.export_model((path / 'dummy').with_suffix('.onnx').with_stem(model_name))
+        self.export_model(path / f'{model_name}.onnx')
         self.export_attachments(path)
 
     def export_model(self, path: Path):
@@ -94,11 +97,11 @@ class DiffSingerAcousticExporter(BaseExporter):
     def export_attachments(self, path: Path):
         for spk in self.export_spk:
             self._export_spk_embed(
-                (path / 'dummy').with_suffix(f'.{spk[0]}.emb').with_stem(self.model_name),
+                path / f'{self.model_name}.{spk[0]}.emb',
                 self._perform_spk_mix(spk[1])
             )
         self._export_dictionary(path / 'dictionary.txt')
-        self._export_phonemes((path / 'dummy').with_suffix('.phonemes.txt').with_stem(self.model_name))
+        self._export_phonemes(path / f'{self.model_name}.phonemes.txt')
 
     @torch.no_grad()
     def _torch_export_model(self):
@@ -111,7 +114,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             v_name: torch.zeros(1, n_frames, dtype=torch.float32, device=self.device)
             for v_name in self.model.fs2.variance_embed_list
         }
-        kwargs: dict[str, torch.Tensor] = {}
+        kwargs: Dict[str, torch.Tensor] = {}
         arguments = (tokens, durations, f0, variances, kwargs)
         input_names = ['tokens', 'durations', 'f0'] + self.model.fs2.variance_embed_list
         dynamix_axes = {
@@ -283,7 +286,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.model_add_prefixes(fs2, dim_prefix='fs2.', ignored_pattern=r'(n_tokens)|(n_frames)')
         onnx_helper.model_add_prefixes(diffusion, dim_prefix='diffusion.', ignored_pattern='n_frames')
         print(f'Merging {self.fs2_class_name} and {self.diffusion_class_name} '
-              f'back into {self.model.__class__.__name__}...')
+              f'back into {self.model_class_name}...')
         merged = onnx.compose.merge_models(
             fs2, diffusion, io_map=[('condition', 'condition')],
             prefix1='', prefix2='', doc_string='',

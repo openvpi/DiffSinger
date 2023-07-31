@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pathlib
 import re
 import time
@@ -9,6 +11,8 @@ import torch
 import torch.nn.functional as F
 
 from basics.base_module import CategorizedModule
+from utils.hparams import hparams
+from utils.training_utils import get_latest_checkpoint_path
 
 
 def tensors_to_scalars(metrics):
@@ -32,6 +36,19 @@ def collate_nd(values, pad_value=0, max_len=None):
     for i, v in enumerate(values):
         res[i, :len(v), ...] = v
     return res
+
+
+def random_continuous_masks(*shape: int, dim: int, device: str | torch.device = 'cpu'):
+    start, end = torch.sort(
+        torch.randint(
+            low=0, high=shape[dim] + 1, size=(*shape[:dim], 2, *((1,) * (len(shape) - dim - 1))), device=device
+        ).expand(*((-1,) * (dim + 1)), *shape[dim + 1:]), dim=dim
+    )[0].split(1, dim=dim)
+    idx = torch.arange(
+        0, shape[dim], dtype=torch.long, device=device
+    ).reshape(*((1,) * dim), shape[dim], *((1,) * (len(shape) - dim - 1)))
+    masks = (idx >= start) & (idx < end)
+    return masks
 
 
 def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
@@ -134,7 +151,8 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
     sig = inspect.signature(kwarg_obj)
     filter_keys = [param.name for param in sig.parameters.values() if param.kind == param.POSITIONAL_OR_KEYWORD]
-    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if filter_key in dict_to_filter}
+    filtered_dict = {filter_key: dict_to_filter[filter_key] for filter_key in filter_keys if
+                     filter_key in dict_to_filter}
     return filtered_dict
 
 
@@ -151,16 +169,14 @@ def load_ckpt(
         checkpoint_path = [ckpt_base_dir / f'model_ckpt_steps_{int(ckpt_steps)}.ckpt']
     else:
         base_dir = ckpt_base_dir
-        checkpoint_path = [
-            base_dir / ckpt_file
-            for ckpt_file in sorted(
-                [
-                    ckpt.name
-                    for ckpt in base_dir.glob('model_ckpt_steps_*.ckpt')
-                ],
-                key=lambda x: int(re.findall(fr'model_ckpt_steps_(\d+).ckpt', x.replace('\\', '/'))[0])
-            )
-        ]
+        checkpoint_path = sorted(
+            [
+                ckpt_file
+                for ckpt_file in base_dir.iterdir()
+                if ckpt_file.is_file() and re.fullmatch(r'model_ckpt_steps_\d+\.ckpt', ckpt_file.name)
+            ],
+            key=lambda x: int(re.search(r'\d+', x.name).group(0))
+        )
     assert len(checkpoint_path) > 0, f'| ckpt not found in {ckpt_base_dir}.'
     checkpoint_path = checkpoint_path[-1]
     ckpt_loaded = torch.load(checkpoint_path, map_location=device)
@@ -193,6 +209,14 @@ def load_ckpt(
     elif key_in_ckpt is not None:
         shown_model_name = f'\'{key_in_ckpt}\''
     print(f'| load {shown_model_name} from \'{checkpoint_path}\'.')
+
+
+
+
+
+
+
+    # return load_pre_train_model()
 
 
 def remove_padding(x, padding_idx=0):
@@ -252,9 +276,17 @@ def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_par
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args
     )
-    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch, **scheduler_args)
+    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch,
+                                         **scheduler_args)
 
     if hasattr(scheduler, '_get_closed_form_lr'):
         return scheduler._get_closed_form_lr()
     else:
         return scheduler.get_lr()
+
+
+def remove_suffix(string: str, suffix: str):
+    #  Just for Python 3.8 compatibility, since `str.removesuffix()` API of is available since Python 3.9
+    if string.endswith(suffix):
+        string = string[:-len(suffix)]
+    return string

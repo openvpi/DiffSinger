@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy import interpolate
+from typing import List, Tuple
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.tts_modules import (
@@ -213,19 +214,19 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                 summary['pitch'] = 'auto'
 
                 # Load expressiveness
-                expressiveness = param.get('expressiveness', 1.)
-                if isinstance(expressiveness, (int, float, bool)):
-                    summary['expressiveness'] = f'static({expressiveness:.3f})'
-                    batch['expressiveness'] = torch.FloatTensor([expressiveness]).to(self.device)[:, None]  # [B=1, T=1]
+                expr = param.get('expr', 1.)
+                if isinstance(expr, (int, float, bool)):
+                    summary['expr'] = f'static({expr:.3f})'
+                    batch['expr'] = torch.FloatTensor([expr]).to(self.device)[:, None]  # [B=1, T=1]
                 else:
-                    summary['expressiveness'] = 'dynamic'
-                    expressiveness = resample_align_curve(
-                        np.array(expressiveness.split(), np.float32),
-                        original_timestep=float(param['expressiveness_timestep']),
+                    summary['expr'] = 'dynamic'
+                    expr = resample_align_curve(
+                        np.array(expr.split(), np.float32),
+                        original_timestep=float(param['expr_timestep']),
                         target_timestep=self.timestep,
                         align_length=T_s
                     )
-                    batch['expressiveness'] = torch.from_numpy(expressiveness.astype(np.float32)).to(self.device)[None]
+                    batch['expr'] = torch.from_numpy(expr.astype(np.float32)).to(self.device)[None]
 
             else:
                 summary['pitch'] = 'ignored'
@@ -250,7 +251,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         ph_dur = sample['ph_dur']
         mel2ph = sample['mel2ph']
         base_pitch = sample['base_pitch']
-        expressiveness = sample.get('expressiveness')
+        expr = sample.get('expr')
         pitch = sample.get('pitch')
 
         if hparams['use_spk_id']:
@@ -273,7 +274,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
             mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch,
             ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
-            retake=None, expressiveness=expressiveness, infer=True
+            retake=None, expr=expr, infer=True
         )
         if dur_pred is not None:
             dur_pred = self.rr(dur_pred, ph2word, word_dur)
@@ -305,7 +306,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             seed: int = -1
     ):
         batches = []
-        predictor_flags: list[tuple[bool, bool, bool]] = []
+        predictor_flags: List[Tuple[bool, bool, bool]] = []
 
         for i, param in enumerate(params):
             param: dict

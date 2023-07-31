@@ -5,7 +5,6 @@ __pycache__/
 local_tools/
 *.ckpt
 *.pth
-(!/preparation/assets)/*.wav
 infer_out/
 *.onnx
 /data/*

@@ -4,6 +4,7 @@ import pathlib
 import shutil
 import sys
 from datetime import datetime
+from typing import Dict
 
 import matplotlib
 
@@ -13,7 +14,7 @@ from utils.text_encoder import TokenTextEncoder
 matplotlib.use('Agg')
 
 import torch.utils.data
-from torchmetrics import MeanMetric
+from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -76,9 +77,10 @@ class BaseTask(pl.LightningModule):
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
 
-        self.valid_metrics = {
+        self.valid_losses: Dict[str, Metric] = {
             'total_loss': MeanMetric()
         }
+        self.valid_metric_names = set()
 
     ###########
     # Training, validation and testing
@@ -86,10 +88,69 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
+        # utils.load_warp(self)
+        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
+            self.load_finetune_ckpt( self.load_pre_train_model())
         self.print_arch()
-        self.build_losses()
+        self.build_losses_and_metrics()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+
+    def load_finetune_ckpt(
+            self, state_dict
+    ):
+
+        adapt_shapes = hparams['finetune_strict_shapes']
+        if not adapt_shapes:
+            cur_model_state_dict = self.state_dict()
+            unmatched_keys = []
+            for key, param in state_dict.items():
+                if key in cur_model_state_dict:
+                    new_param = cur_model_state_dict[key]
+                    if new_param.shape != param.shape:
+                        unmatched_keys.append(key)
+                        print('| Unmatched keys: ', key, new_param.shape, param.shape)
+            for key in unmatched_keys:
+                del state_dict[key]
+        self.load_state_dict(state_dict, strict=False)
+
+    def load_pre_train_model(self):
+
+        pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
+        blacklist = hparams.get('finetune_ignored_params')
+        # whitelist=hparams.get('pre_train_whitelist')
+        if blacklist is None:
+            blacklist = []
+        # if whitelist is  None:
+        #     raise RuntimeError("")
+
+        if pre_train_ckpt_path is not None:
+            ckpt = torch.load(pre_train_ckpt_path)
+            # if ckpt.get('category') is None:
+            #     raise RuntimeError("")
+
+            if isinstance(self.model, CategorizedModule):
+                self.model.check_category(ckpt.get('category'))
+
+            state_dict = {}
+            for i in ckpt['state_dict']:
+                # if 'diffusion' in i:
+                # if i in rrrr:
+                #     continue
+                skip = False
+                for b in blacklist:
+                    if i.startswith(b):
+                        skip = True
+                        break
+
+                if skip:
+                    continue
+
+                state_dict[i] = ckpt['state_dict'][i]
+                print(i)
+            return state_dict
+        else:
+            raise RuntimeError("")
 
     @staticmethod
     def build_phone_encoder():
@@ -103,8 +164,13 @@ class BaseTask(pl.LightningModule):
     def print_arch(self):
         utils.print_arch(self.model)
 
-    def build_losses(self):
+    def build_losses_and_metrics(self):
         raise NotImplementedError()
+
+    def register_metric(self, name: str, metric: Metric):
+        assert isinstance(metric, Metric)
+        setattr(self, name, metric)
+        self.valid_metric_names.add(name)
 
     def run_model(self, sample, infer=False):
         """
@@ -124,17 +190,18 @@ class BaseTask(pl.LightningModule):
         """
         losses = self.run_model(sample)
         total_loss = sum(losses.values())
-        return total_loss, {**losses, 'batch_size': sample['size']}
+        return total_loss, {**losses, 'batch_size': float(sample['size'])}
 
     def training_step(self, sample, batch_idx, optimizer_idx=-1):
         total_loss, log_outputs = self._training_step(sample)
 
         # logs to progress bar
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
-        self.log('lr', self.lr_schedulers().get_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
+        self.log('lr', self.lr_schedulers().get_last_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
         # logs to tensorboard
-        tb_log = {f'tr/{k}': v for k, v in log_outputs.items()}
-        if self.global_step % self.trainer.log_every_n_steps == 0:
+        if self.global_step % hparams['log_interval'] == 0:
+            tb_log = {f'training/{k}': v for k, v in log_outputs.items()}
+            tb_log['training/lr'] = self.lr_schedulers().get_last_lr()[0]
             self.logger.log_metrics(tb_log, step=self.global_step)
 
         return total_loss
@@ -147,7 +214,7 @@ class BaseTask(pl.LightningModule):
 
     def on_validation_start(self):
         self._on_validation_start()
-        for metric in self.valid_metrics.values():
+        for metric in self.valid_losses.values():
             metric.to(self.device)
             metric.reset()
 
@@ -170,22 +237,31 @@ class BaseTask(pl.LightningModule):
             rank_zero_debug(f"Skip validation {batch_idx}")
             return {}
         with torch.autocast(self.device.type, enabled=False):
-            outputs, weight = self._validation_step(sample, batch_idx)
-        for k, v in outputs.items():
-            if isinstance(self.valid_metrics[k], MeanMetric):
-                self.valid_metrics[k].update(v, weight=weight)
-        return outputs
+            losses, weight = self._validation_step(sample, batch_idx)
+        losses = {
+            'total_loss': sum(losses.values()),
+            **losses
+        }
+        for k, v in losses.items():
+            if k not in self.valid_losses:
+                self.valid_losses[k] = MeanMetric().to(self.device)
+            self.valid_losses[k].update(v, weight=weight)
+        return losses
 
     def on_validation_epoch_end(self):
         if self.skip_immediate_validation:
             self.skip_immediate_validation = False
             self.skip_immediate_ckpt_save = True
             return
-        metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
-        self.log('val_loss', metric_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False)
-        self.logger.log_metrics({f'val/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
-        for metric in self.valid_metrics.values():
+        loss_vals = {k: v.compute() for k, v in self.valid_losses.items()}
+        self.log('val_loss', loss_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
+        self.logger.log_metrics({f'validation/{k}': v for k, v in loss_vals.items()}, step=self.global_step)
+        for metric in self.valid_losses.values():
             metric.reset()
+        metric_vals = {k: getattr(self, k).compute() for k in self.valid_metric_names}
+        self.logger.log_metrics({f'metrics/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
+        for metric_name in self.valid_metric_names:
+            getattr(self, metric_name).reset()
 
     # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
@@ -285,6 +361,11 @@ class BaseTask(pl.LightningModule):
     def start(cls):
         pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
+
+        # if pre_train is not None:
+        #     task.load_state_dict(pre_train,strict=False)
+        #     print("load success-------------------------------------------------------------------")
+
         work_dir = pathlib.Path(hparams['work_dir'])
         trainer = pl.Trainer(
             accelerator=hparams['pl_trainer_accelerator'],
@@ -312,7 +393,7 @@ class BaseTask(pl.LightningModule):
                     permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
                     verbose=True
                 ),
-                LearningRateMonitor(logging_interval='step'),
+                # LearningRateMonitor(logging_interval='step'),
                 DsTQDMProgressBar(),
             ],
             logger=TensorBoardLogger(
@@ -324,7 +405,7 @@ class BaseTask(pl.LightningModule):
             val_check_interval=hparams['val_check_interval'] * hparams['accumulate_grad_batches'],
             # so this is global_steps
             check_val_every_n_epoch=None,
-            log_every_n_steps=hparams['log_interval'],
+            log_every_n_steps=1,
             max_steps=hparams['max_updates'],
             use_distributed_sampler=False,
             num_sanity_val_steps=hparams['num_sanity_val_steps'],
@@ -339,7 +420,7 @@ class BaseTask(pl.LightningModule):
                     code_dir = work_dir / 'codes' / datetime.now().strftime('%Y%m%d%H%M%S')
                     code_dir.mkdir(exist_ok=True, parents=True)
                     for c in hparams['save_codes']:
-                        shutil.copytree(c, code_dir, dirs_exist_ok=True)
+                        shutil.copytree(c, code_dir / c, dirs_exist_ok=True)
                     print(f'| Copied codes to {code_dir}.')
                 # Copy spk_map.json and dictionary.txt to work dir
                 binary_dir = pathlib.Path(hparams['binary_data_dir'])
@@ -372,16 +453,16 @@ class BaseTask(pl.LightningModule):
         from utils import simulate_lr_scheduler
         if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
             self.skip_immediate_validation = True
-        
+
         optimizer_args = hparams['optimizer_args']
         scheduler_args = hparams['lr_scheduler_args']
-        
+
         if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
 
         if checkpoint.get('optimizer_states', None):
             opt_states = checkpoint['optimizer_states']
-            assert len(opt_states) == 1 # only support one optimizer
+            assert len(opt_states) == 1  # only support one optimizer
             opt_state = opt_states[0]
             for param_group in opt_state['param_groups']:
                 for k, v in optimizer_args.items():
@@ -391,13 +472,14 @@ class BaseTask(pl.LightningModule):
                         rank_zero_info(f'| Overriding optimizer parameter {k} from checkpoint: {param_group[k]} -> {v}')
                         param_group[k] = v
                 if 'initial_lr' in param_group and param_group['initial_lr'] != optimizer_args['lr']:
-                    rank_zero_info(f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
+                    rank_zero_info(
+                        f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
                     param_group['initial_lr'] = optimizer_args['lr']
 
         if checkpoint.get('lr_schedulers', None):
             assert checkpoint.get('optimizer_states', False)
             schedulers = checkpoint['lr_schedulers']
-            assert len(schedulers) == 1 # only support one scheduler
+            assert len(schedulers) == 1  # only support one scheduler
             scheduler = schedulers[0]
             for k, v in scheduler_args.items():
                 if k in scheduler and scheduler[k] != v:
@@ -412,5 +494,6 @@ class BaseTask(pl.LightningModule):
             scheduler['_last_lr'] = new_lrs
             for param_group, new_lr in zip(checkpoint['optimizer_states'][0]['param_groups'], new_lrs):
                 if param_group['lr'] != new_lr:
-                    rank_zero_info(f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
+                    rank_zero_info(
+                        f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
                     param_group['lr'] = new_lr

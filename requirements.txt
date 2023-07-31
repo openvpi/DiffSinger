@@ -8,15 +8,15 @@ librosa<0.10.0
 lightning>=2.0.0
 matplotlib
 MonkeyType==23.3.0
-numpy==1.23.5
-onnx==1.13.1
-onnxsim==0.4.27
+numpy  # ==1.23.5
+onnx==1.14.0
+onnxsim==0.4.31
 praat-parselmouth==0.4.3
-protobuf==3.20.3
-pyworld==0.3.3
+pyworld==0.3.4
 PyYAML
 resampy
 scipy
 tensorboard
 tensorboardX
+torchmetrics
 tqdm

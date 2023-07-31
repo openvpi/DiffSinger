@@ -1,0 +1,42 @@
+## 00_我多想说再见啊
+
+MIDI: 班超BanC
+Pitch reference: Synthesizer V AI Mai
+Tuning: 飞弦p https://space.bilibili.com/5347090; YQ之神 https://space.bilibili.com/102844209
+
+
+## 01_逍遥仙
+
+Tuning: 赤松_Akamatsu https://space.bilibili.com/29902857; YQ之神 https://space.bilibili.com/102844209
+
+
+## 02_一半一半
+
+Tuning: 笛鹿FlutyDeer https://space.bilibili.com/386270936
+
+
+## 03_撒娇八连
+
+Pitch reference: 瑶摆桃桃烤地瓜 https://space.bilibili.com/23346333
+
+
+## 04_仙瑶
+
+Tuning: 笛鹿FlutyDeer https://space.bilibili.com/386270936
+
+
+## 05_恋人心
+
+Tuning: 笛鹿FlutyDeer https://space.bilibili.com/386270936
+
+
+## 06_不谓侠
+
+MIDI: 帝国妖月
+Tuning: ZhiBinShyu with PitchDiffusion https://www.bilibili.com/video/BV12T411t7Qg
+
+
+## 07_春江花月夜
+
+Source: https://www.vsqx.top/project/vn8437
+MIDI: 何念生 https://www.vsqx.top/space/2960

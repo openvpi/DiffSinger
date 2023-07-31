@@ -2,6 +2,7 @@
 import numpy as np
 import torch
 from torch import Tensor
+from typing import Tuple, Dict
 
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
@@ -34,7 +35,7 @@ class BaseSVSInfer:
         raise NotImplementedError()
 
     def load_speaker_mix(self, param_src: dict, summary_dst: dict,
-                         mix_mode: str = 'frame', mix_length: int = None) -> tuple[Tensor, Tensor]:
+                         mix_mode: str = 'frame', mix_length: int = None) -> Tuple[Tensor, Tensor]:
         """
 
         :param param_src: param dict
@@ -120,10 +121,10 @@ class BaseSVSInfer:
             spk_mix_value /= spk_mix_value_sum  # normalize
         return spk_mix_id, spk_mix_value
 
-    def preprocess_input(self, param: dict, idx=0) -> dict[str, torch.Tensor]:
+    def preprocess_input(self, param: dict, idx=0) -> Dict[str, torch.Tensor]:
         raise NotImplementedError()
 
-    def forward_model(self, sample: dict[str, torch.Tensor]):
+    def forward_model(self, sample: Dict[str, torch.Tensor]):
         raise NotImplementedError()
 
     def run_inference(self, params, **kwargs):

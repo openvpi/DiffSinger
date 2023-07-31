@@ -84,4 +84,7 @@ def run_vocoder(path: pathlib.Path):
 
 
 os.makedirs(out, exist_ok=True)
-run_vocoder(out / (name + '.wav'))
+try:
+    run_vocoder(out / (name + '.wav'))
+except KeyboardInterrupt:
+    exit(-1)

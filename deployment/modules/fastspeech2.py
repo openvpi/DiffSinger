@@ -113,9 +113,11 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
         return self.encoder(tokens, ph_dur_embed), tokens == PAD_INDEX
 
-    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi):
+    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)
         dur_cond = encoder_out + midi_embed
+        if hparams['use_spk_id'] and spk_embed is not None:
+            dur_cond += spk_embed
         ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
         return ph_dur
 

@@ -15,20 +15,6 @@ def spec_to_figure(spec, vmin=None, vmax=None):
     return fig
 
 
-def spec_f0_to_figure(spec, f0s, figsize=None):
-    max_y = spec.shape[1]
-    if isinstance(spec, torch.Tensor):
-        spec = spec.detach().cpu().numpy()
-        f0s = {k: f0.detach().cpu().numpy() for k, f0 in f0s.items()}
-    f0s = {k: f0 / 10 for k, f0 in f0s.items()}
-    fig = plt.figure(figsize=(12, 6) if figsize is None else figsize)
-    plt.pcolor(spec.T)
-    for i, (k, f0) in enumerate(f0s.items()):
-        plt.plot(f0.clip(0, max_y), label=k, c=LINE_COLORS[i], linewidth=1, alpha=0.8)
-    plt.legend()
-    return fig
-
-
 def dur_to_figure(dur_gt, dur_pred, txt):
     if isinstance(dur_gt, torch.Tensor):
         dur_gt = dur_gt.cpu().numpy()
@@ -74,4 +60,18 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
     plt.grid(axis='y')
     plt.legend()
     plt.tight_layout()
+    return fig
+
+
+def distribution_to_figure(title, x_label, y_label, items: list, values: list, zoom=0.8):
+    fig = plt.figure(figsize=(int(len(items) * zoom), 10))
+    plt.bar(x=items, height=values)
+    plt.tick_params(labelsize=15)
+    plt.xlim(-1, len(items))
+    for a, b in zip(items, values):
+        plt.text(a, b, b, ha='center', va='bottom', fontsize=15)
+    plt.grid()
+    plt.title(title, fontsize=30)
+    plt.xlabel(x_label, fontsize=20)
+    plt.ylabel(y_label, fontsize=20)
     return fig

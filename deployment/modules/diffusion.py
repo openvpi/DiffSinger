@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List, Tuple
 
 import torch
@@ -32,6 +34,17 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         nonzero_mask = ((t > 0).float()).reshape(1, 1, 1, 1)
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
+    def p_sample_ddim(self, x, t, interval: int, cond):
+        a_t = extract(self.alphas_cumprod, t)
+        t_prev = t - interval
+        a_prev = extract(self.alphas_cumprod, t_prev * (t_prev > 0))
+
+        noise_pred = self.denoise_fn(x, t, cond=cond)
+        x_prev = a_prev.sqrt() * (
+                x / a_t.sqrt() + (((1 - a_prev) / a_prev).sqrt() - ((1 - a_t) / a_t).sqrt()) * noise_pred
+        )
+        return x_prev
+
     def plms_get_x_pred(self, x, noise_t, t, t_prev):
         a_t = extract(self.alphas_cumprod, t)
         a_prev = extract(self.alphas_cumprod, t_prev)
@@ -43,7 +56,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
 
         return x_pred
 
-    def p_sample_plms(self, x_prev, t, interval, cond, noise_list: List[Tensor], stage: int):
+    def p_sample_plms(self, x_prev, t, interval: int, cond, noise_list: List[Tensor], stage: int):
         noise_pred = self.denoise_fn(x_prev, t, cond)
         t_prev = t - interval
         t_prev = t_prev * (t_prev > 0)
@@ -66,7 +79,7 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         m = (self.spec_max + self.spec_min) / 2.
         return x * d + m
 
-    def forward(self, condition, speedup):
+    def forward(self, condition, speedup: int):
         condition = condition.transpose(1, 2)  # [1, T, H] => [1, H, T]
         device = condition.device
         n_frames = condition.shape[2]
@@ -75,22 +88,24 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         x = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
 
         if speedup > 1:
-            plms_noise_stage: int = 0
-            noise_list: List[Tensor] = []
             for t in step_range:
-                noise_pred, x = self.p_sample_plms(
-                    x, t, interval=speedup, cond=condition,
-                    noise_list=noise_list, stage=plms_noise_stage
-                )
-                if plms_noise_stage == 0:
-                    noise_list = [noise_pred]
-                    plms_noise_stage = plms_noise_stage + 1
-                else:
-                    if plms_noise_stage >= 3:
-                        noise_list.pop(0)
-                    else:
-                        plms_noise_stage = plms_noise_stage + 1
-                    noise_list.append(noise_pred)
+                x = self.p_sample_ddim(x, t, interval=speedup, cond=condition)
+            # plms_noise_stage: int = 0
+            # noise_list: List[Tensor] = []
+            # for t in step_range:
+            #     noise_pred, x = self.p_sample_plms(
+            #         x, t, interval=speedup, cond=condition,
+            #         noise_list=noise_list, stage=plms_noise_stage
+            #     )
+            #     if plms_noise_stage == 0:
+            #         noise_list = [noise_pred]
+            #         plms_noise_stage = plms_noise_stage + 1
+            #     else:
+            #         if plms_noise_stage >= 3:
+            #             noise_list.pop(0)
+            #         else:
+            #             plms_noise_stage = plms_noise_stage + 1
+            #         noise_list.append(noise_pred)
         else:
             for t in step_range:
                 x = self.p_sample(x, t, cond=condition)

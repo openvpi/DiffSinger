@@ -1,6 +1,9 @@
+from typing import Dict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 
 from basics.base_module import CategorizedModule
 from modules.commons.common_layers import (
@@ -69,6 +72,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
     def __init__(self, vocab_size):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
+        self.predict_pitch = hparams['predict_pitch']
 
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
@@ -80,12 +84,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
 
-        self.predict_pitch = hparams['predict_pitch']
-
-        if self.predict_pitch or self.predict_variances:
-            self.retake_embed = Embedding(2, hparams['hidden_size'])
-
         if self.predict_pitch:
+            self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
             self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             self.pitch_predictor = PitchDiffusion(
@@ -114,7 +114,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
-            base_pitch=None, pitch=None, retake=None, expressiveness=None,
+            base_pitch=None, pitch=None, pitch_expr=None, pitch_retake=None,
+            variance_retake: Dict[str, Tensor] = None,
             spk_id=None, infer=True, **kwargs
     ):
         if self.use_spk_id:
@@ -149,35 +150,24 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         if self.use_spk_id:
             condition += spk_embed
 
-        retake_ = torch.ones(1, 1, dtype=torch.bool, device=txt_tokens.device) \
-            if retake is None else retake  # [B=1, T=1]
+        if self.predict_pitch:
+            if pitch_retake is None:
+                pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
 
-        if expressiveness is None:
-            retake_embed = self.retake_embed(retake_.long())
-            pitch_cond = var_cond = condition + retake_embed
-        else:
-            if self.predict_pitch:
+            if pitch_expr is None:
+                pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
+            else:
                 retake_true_embed = self.retake_embed(
                     torch.ones(1, 1, dtype=torch.long, device=txt_tokens.device)
                 )  # [B=1, T=1] => [B=1, T=1, H]
                 retake_false_embed = self.retake_embed(
                     torch.zeros(1, 1, dtype=torch.long, device=txt_tokens.device)
                 )  # [B=1, T=1] => [B=1, T=1, H]
-                expressiveness = (expressiveness * retake_)[:, :, None]  # [B, T, 1]
-                pitch_retake_embed = expressiveness * retake_true_embed + (1. - expressiveness) * retake_false_embed
-                pitch_cond = condition + pitch_retake_embed
-            else:
-                pitch_cond = None
+                pitch_expr = (pitch_expr * pitch_retake)[:, :, None]  # [B, T, 1]
+                pitch_retake_embed = pitch_expr * retake_true_embed + (1. - pitch_expr) * retake_false_embed
 
-            if self.predict_variances:
-                var_retake_embed = self.retake_embed(retake_.long())
-                var_cond = condition + var_retake_embed
-            else:
-                var_cond = None
-
-        if self.predict_pitch:
-            if retake is not None:
-                base_pitch = base_pitch * retake + pitch * ~retake
+            pitch_cond = condition + pitch_retake_embed
+            base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
             pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
             if infer:
                 pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
@@ -191,22 +181,17 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
         if pitch is None:
             pitch = base_pitch + pitch_pred_out
-        var_cond += self.pitch_embed(pitch[:, :, None])
+        condition += self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
-        if retake is None:
+        if variance_retake is not None:
             variance_embeds = [
-                self.variance_embeds[v_name](torch.zeros_like(pitch)[:, :, None])
-                for v_name in self.variance_prediction_list
-            ]
-        else:
-            variance_embeds = [
-                self.variance_embeds[v_name]((v_input * ~retake)[:, :, None])
+                self.variance_embeds[v_name](v_input[:, :, None]) * ~variance_retake[v_name][:, :, None]
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
-        var_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
+            condition += torch.stack(variance_embeds, dim=-1).sum(-1)
 
-        variance_outputs = self.variance_predictor(var_cond, variance_inputs, infer)
+        variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
 
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)

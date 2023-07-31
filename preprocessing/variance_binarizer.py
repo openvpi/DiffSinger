@@ -9,15 +9,17 @@ import torch.nn.functional as F
 from scipy import interpolate
 
 from basics.base_binarizer import BaseBinarizer
+from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
+from modules.pe import initialize_pe
 from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
-    get_pitch_parselmouth,
     get_energy_librosa,
     get_breathiness_pyworld
 )
 from utils.hparams import hparams
+from utils.plot import distribution_to_figure
 
 os.environ["OMP_NUM_THREADS"] = "1"
 VARIANCE_ITEM_ATTRIBUTES = [
@@ -29,12 +31,14 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'mel2ph',  # mel2ph format representing number of frames within each phone, int64[T_s,]
     'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_s,]
     'pitch',  # actual pitch in semitones, float32[T_s,]
+    'uv',  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
     'energy',  # frame-level RMS (dB), float32[T_s,]
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
 ]
 
-# These operators are used as global variable due to a PyTorch shared memory bug on Windows.
+# These operators are used as global variables due to a PyTorch shared memory bug on Windows platforms.
 # See https://github.com/pytorch/pytorch/issues/100358
+pitch_extractor: BasePE = None
 midi_smooth: SinusoidalSmoothingConv1d = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
@@ -48,16 +52,15 @@ class VarianceBinarizer(BaseBinarizer):
         predict_breathiness = hparams['predict_breathiness']
         self.predict_variances = predict_energy or predict_breathiness
         self.lr = LengthRegulator().to(self.device)
-        # self.smooth: nn.Conv1d = None
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
         for utterance_label in csv.DictReader(
                 open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8')
         ):
             item_name = utterance_label['name']
             temp_dict = {
-                'spk_id': ds_id,
+                'spk_id': spk_id,
                 'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
                 'ph_seq': utterance_label['ph_seq'].split(),
                 'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()]
@@ -84,8 +87,45 @@ class VarianceBinarizer(BaseBinarizer):
         self.items.update(meta_data_dict)
 
     def check_coverage(self):
-        print('Coverage checks are temporarily skipped.')
-        pass
+        super().check_coverage()
+        if not hparams['predict_pitch']:
+            return
+
+        # MIDI pitch distribution summary
+        midi_map = {}
+        for item_name in self.items:
+            for midi in self.items[item_name]['note_seq']:
+                if midi == 'rest':
+                    continue
+                midi = librosa.note_to_midi(midi, round_midi=True)
+                if midi in midi_map:
+                    midi_map[midi] += 1
+                else:
+                    midi_map[midi] = 1
+
+        print('===== MIDI Pitch Distribution Summary =====')
+        for i, key in enumerate(sorted(midi_map.keys())):
+            if i == len(midi_map) - 1:
+                end = '\n'
+            elif i % 10 == 9:
+                end = ',\n'
+            else:
+                end = ', '
+            print(f'\'{librosa.midi_to_note(key, unicode=False)}\': {midi_map[key]}', end=end)
+
+        # Draw graph.
+        midis = sorted(midi_map.keys())
+        notes = [librosa.midi_to_note(m, unicode=False) for m in range(midis[0], midis[-1] + 1)]
+        plt = distribution_to_figure(
+            title='MIDI Pitch Distribution Summary',
+            x_label='MIDI Key', y_label='Number of occurrences',
+            items=notes, values=[midi_map.get(m, 0) for m in range(midis[0], midis[-1] + 1)]
+        )
+        filename = self.binary_data_dir / 'midi_distribution.jpg'
+        plt.savefig(fname=filename,
+                    bbox_inches='tight',
+                    pad_inches=0.25)
+        print(f'| save summary to \'{filename}\'')
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
@@ -110,12 +150,15 @@ class VarianceBinarizer(BaseBinarizer):
             self.lr, ph_dur_sec, length, self.timestep, device=self.device
         )
 
-        if hparams['predict_dur'] and (hparams['predict_pitch'] or self.predict_variances):
+        if hparams['predict_pitch'] or self.predict_variances:
             processed_input['mel2ph'] = mel2ph.cpu().numpy()
 
         # Below: extract actual f0, convert to pitch and calculate delta pitch
         waveform, _ = librosa.load(meta_data['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
-        f0, uv = get_pitch_parselmouth(waveform, length, hparams, interp_uv=True)
+        global pitch_extractor
+        if pitch_extractor is None:
+            pitch_extractor = initialize_pe()
+        f0, uv = pitch_extractor.get_pitch(waveform, length, hparams, interp_uv=True)
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
             return None
@@ -161,6 +204,7 @@ class VarianceBinarizer(BaseBinarizer):
 
         if hparams['predict_pitch'] or self.predict_variances:
             processed_input['pitch'] = pitch.cpu().numpy()
+            processed_input['uv'] = uv
 
         # Below: extract energy
         if hparams['predict_energy']:

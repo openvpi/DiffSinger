@@ -4,10 +4,11 @@ import numpy as np
 import torch
 
 from basics.base_augmentation import BaseAugmentation, require_same_keys
+from basics.base_pe import BasePE
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.vocoders.registry import VOCODERS
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel2ph_torch
+from utils.binarizer_utils import get_mel2ph_torch
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 
@@ -17,10 +18,11 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
     This class contains methods for frequency-domain and time-domain stretching augmentation.
     """
 
-    def __init__(self, data_dirs: list, augmentation_args: dict):
+    def __init__(self, data_dirs: list, augmentation_args: dict, pe: BasePE = None):
         super().__init__(data_dirs, augmentation_args)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.lr = LengthRegulator().to(self.device)
+        self.pe = pe
 
     @require_same_keys
     def process_item(self, item: dict, key_shift=0., speed=1., replace_spk_id=None) -> dict:
@@ -45,7 +47,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
                 self.lr, torch.from_numpy(aug_item['ph_dur']), aug_item['length'], self.timestep, device=self.device
             ).cpu().numpy()
 
-            f0, _ = get_pitch_parselmouth(
+            f0, _ = self.pe.get_pitch(
                 wav, aug_item['length'], hparams, speed=speed, interp_uv=hparams['interp_uv']
             )
             aug_item['f0'] = f0.astype(np.float32)

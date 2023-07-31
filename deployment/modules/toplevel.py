@@ -132,14 +132,23 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         smooth.weight.data = smooth_kernel[None, None]
         self.smooth = smooth.to(device)
 
+    def embed_frozen_spk(self, encoder_out):
+        if hparams['use_spk_id'] and hasattr(self, 'frozen_spk_embed'):
+            encoder_out += self.frozen_spk_embed
+        return encoder_out
+
     def forward_linguistic_encoder_word(self, tokens, word_div, word_dur):
-        return self.fs2.forward_encoder_word(tokens, word_div, word_dur)
+        encoder_out, x_masks = self.fs2.forward_encoder_word(tokens, word_div, word_dur)
+        encoder_out = self.embed_frozen_spk(encoder_out)
+        return encoder_out, x_masks
 
     def forward_linguistic_encoder_phoneme(self, tokens, ph_dur):
-        return self.fs2.forward_encoder_phoneme(tokens, ph_dur)
+        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(tokens, ph_dur)
+        encoder_out = self.embed_frozen_spk(encoder_out)
+        return encoder_out, x_masks
 
-    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi):
-        return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi)
+    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
+        return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi, spk_embed=spk_embed)
 
     def forward_mel2x_gather(self, x_src, x_dur, x_dim=None):
         mel2x = self.lr(x_dur)
@@ -153,21 +162,27 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def forward_pitch_preprocess(
             self, encoder_out, ph_dur, note_midi, note_dur,
-            expressiveness=None, pitch=None, retake=None
+            pitch=None, expr=None, retake=None, spk_embed=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        retake_true_embed = self.retake_embed(
-            torch.ones(1, 1, dtype=torch.long, device=encoder_out.device)
-        )  # [B=1, T=1] => [B=1, T=1, H]
-        retake_false_embed = self.retake_embed(
-            torch.zeros(1, 1, dtype=torch.long, device=encoder_out.device)
-        )  # [B=1, T=1] => [B=1, T=1, H]
-        expressiveness = (expressiveness * retake)[:, :, None]  # [B, T, 1]
-        retake_embed = expressiveness * retake_true_embed + (1. - expressiveness) * retake_false_embed
+        if expr is None:
+            retake_embed = self.pitch_retake_embed(retake.long())
+        else:
+            retake_true_embed = self.pitch_retake_embed(
+                torch.ones(1, 1, dtype=torch.long, device=encoder_out.device)
+            )  # [B=1, T=1] => [B=1, T=1, H]
+            retake_false_embed = self.pitch_retake_embed(
+                torch.zeros(1, 1, dtype=torch.long, device=encoder_out.device)
+            )  # [B=1, T=1] => [B=1, T=1, H]
+            expr = (expr * retake)[:, :, None]  # [B, T, 1]
+            retake_embed = expr * retake_true_embed + (1. - expr) * retake_false_embed
         pitch_cond = condition + retake_embed
         frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
-        base_pitch = self.smooth(frame_midi_pitch) * retake + pitch * ~retake
+        base_pitch = self.smooth(frame_midi_pitch)
+        base_pitch = base_pitch * retake + pitch * ~retake
         pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+        if hparams['use_spk_id'] and spk_embed is not None:
+            pitch_cond += spk_embed
         return pitch_cond, base_pitch
 
     def forward_pitch_diffusion(
@@ -181,17 +196,22 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return pitch_pred
 
     def forward_variance_preprocess(
-            self, encoder_out, ph_dur, pitch, variances: dict = None, retake=None
+            self, encoder_out, ph_dur, pitch,
+            variances: dict = None, retake=None, spk_embed=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        condition += self.retake_embed(retake.long())
         variance_cond = condition + self.pitch_embed(pitch[:, :, None])
-        non_retake = (~retake).float()
+        non_retake_masks = [
+            v_retake.float()  # [B, T, 1]
+            for v_retake in (~retake).split(1, dim=2)
+        ]
         variance_embeds = [
-            self.variance_embeds[v_name]((variances[v_name] * non_retake)[:, :, None])
-            for v_name in self.variance_prediction_list
+            self.variance_embeds[v_name](variances[v_name][:, :, None]) * v_masks
+            for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
+        if hparams['use_spk_id'] and spk_embed is not None:
+            variance_cond += spk_embed
         return variance_cond
 
     def forward_variance_diffusion(self, variance_cond, speedup: int = 1):

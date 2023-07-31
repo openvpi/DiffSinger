@@ -21,10 +21,10 @@ def locate_dictionary():
     """
     Search and locate the dictionary file.
     Order:
-        1. hparams['dictionary']
-        1. hparams['g2p_dictionary']
-        2. 'dictionary.txt' in hparams['work_dir']
-        3. file with same name as hparams['g2p_dictionary'] in hparams['work_dir']
+    1. hparams['dictionary']
+    2. hparams['g2p_dictionary']
+    3. 'dictionary.txt' in hparams['work_dir']
+    4. file with same name as hparams['g2p_dictionary'] in hparams['work_dir']
     :return: pathlib.Path of the dictionary file
     """
     assert 'dictionary' in hparams or 'g2p_dictionary' in hparams, \

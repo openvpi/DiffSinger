@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 
 from modules.diffusion.ddpm import MultiVarianceDiffusion
@@ -37,10 +39,15 @@ class ParameterAdaptorModule(torch.nn.Module):
             clamps.append((hparams['breathiness_db_min'], 0.))
 
         variances_hparams = hparams['variances_prediction_args']
+        total_repeat_bins = variances_hparams['total_repeat_bins']
+        assert total_repeat_bins % len(self.variance_prediction_list) == 0, \
+            f'Total number of repeat bins must be divisible by number of ' \
+            f'variance parameters ({len(self.variance_prediction_list)}).'
+        repeat_bins = total_repeat_bins // len(self.variance_prediction_list)
         return cls(
             ranges=ranges,
             clamps=clamps,
-            repeat_bins=variances_hparams['repeat_bins'],
+            repeat_bins=repeat_bins,
             timesteps=hparams['timesteps'],
             k_step=hparams['K_step'],
             denoiser_type=hparams['diff_decoder_type'],

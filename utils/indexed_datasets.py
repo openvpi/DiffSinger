@@ -43,6 +43,7 @@ class IndexedDataset:
             self.dset = h5py.File(self.path, 'r')
         return len(self.dset)
 
+
 class IndexedDatasetBuilder:
     def __init__(self, path, prefix, allowed_attr=None):
         self.path = pathlib.Path(path) / f'{prefix}.data'
@@ -79,6 +80,7 @@ class IndexedDatasetBuilder:
 if __name__ == "__main__":
     import random
     from tqdm import tqdm
+
     ds_path = './checkpoints/indexed_ds_example'
     size = 100
     items = [{"a": np.random.normal(size=[10000, 10]),

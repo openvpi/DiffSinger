@@ -5,6 +5,7 @@ task_cls: training.variance_task.VarianceTask
 num_spk: 1
 speakers:
   - opencpop
+spk_ids: []
 test_prefixes: [
     '2044',
     '2086',
@@ -69,7 +70,7 @@ breathiness_db_max: -20.0
 breathiness_smooth_width: 0.12
 
 variances_prediction_args:
-  repeat_bins: 48
+  total_repeat_bins: 48
   residual_layers: 10
   residual_channels: 192
   dilation_cycle_length: 4  # *
@@ -84,22 +85,29 @@ timesteps: 1000
 max_beta: 0.02
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2
-diff_accelerator: dpm-solver
+diff_accelerator: ddim
 pndm_speedup: 10
 
 # train and eval
 num_sanity_val_steps: 1
 optimizer_args:
-  lr: 0.0004
+  lr: 0.0006
 lr_scheduler_args:
-  step_size: 50000
-  gamma: 0.5
+  step_size: 12000
+  gamma: 0.75
 max_batch_frames: 80000
 max_batch_size: 48
-val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
-max_updates: 320000
+max_updates: 288000
 num_ckpt_keep: 5
-permanent_ckpt_start: 120000
-permanent_ckpt_interval: 40000
+permanent_ckpt_start: 180000
+permanent_ckpt_interval: 10000
+
+finetune_enabled: false
+finetune_ckpt_path: null
+finetune_ignored_params:
+  - model.spk_embed
+  - model.fs2.txt_embed
+  - model.fs2.encoder.embed_tokens
+finetune_strict_shapes: true

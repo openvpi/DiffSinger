@@ -25,7 +25,6 @@ win_size: 2048  # For 22050Hz, 1100 ~= 50 ms (If None, win_size: fft_size) (0.05
 fmin: 40  # Set this to 55 if your speaker is male! if female, 95 should help taking off noise. (To test depending on dataset. Pitch info: male~[65, 260], female~[100, 525])
 fmax: 16000  # To be increased/reduced depending on data.
 fft_size: 2048  # Extra window size is filled with 0 paddings to match this parameter
-num_spk: 1
 mel_vmin: -6
 mel_vmax: 1.5
 sampler_frame_count_grid: 6
@@ -76,6 +75,8 @@ max_val_batch_frames: 60000
 max_val_batch_size: 1
 train_set_name: 'train'
 valid_set_name: 'valid'
+pe: 'parselmouth'
+pe_ckpt: ''
 vocoder: ''
 vocoder_ckpt: ''
 num_valid_plots: 10
@@ -90,3 +91,14 @@ pl_trainer_precision: '32-true'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 'auto'
 ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
+
+###########
+# finetune
+###########
+
+finetune_enabled: false
+finetune_ckpt_path: null
+finetune_ignored_params: []
+
+
+finetune_strict_shapes: true

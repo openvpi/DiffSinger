@@ -5,6 +5,7 @@ task_cls: training.acoustic_task.AcousticTask
 num_spk: 1
 speakers:
   - opencpop
+spk_ids: []
 test_prefixes: [
     '2044',
     '2086',
@@ -65,11 +66,11 @@ K_step: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
-diff_accelerator: dpm-solver
+diff_accelerator: ddim
 pndm_speedup: 10
 hidden_size: 256
 residual_layers: 20
-residual_channels: 384
+residual_channels: 512
 dilation_cycle_length: 4  # *
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2
@@ -89,5 +90,15 @@ val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 320000
 num_ckpt_keep: 5
-permanent_ckpt_start: 120000
+permanent_ckpt_start: 200000
 permanent_ckpt_interval: 40000
+
+
+finetune_enabled: false
+finetune_ckpt_path: null
+
+finetune_ignored_params:
+  - model.fs2.encoder.embed_tokens
+  - model.fs2.txt_embed
+  - model.fs2.spk_embed
+finetune_strict_shapes: true

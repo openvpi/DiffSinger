@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from typing import Union
+from typing import Union, List, Tuple, Dict
 
 import onnx
 import onnxsim
@@ -8,7 +8,7 @@ import torch
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerVarianceONNX
-from utils import load_ckpt, onnx_helper
+from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
 from utils.text_encoder import TokenTextEncoder
@@ -20,11 +20,15 @@ class DiffSingerVarianceExporter(BaseExporter):
             device: Union[str, torch.device] = 'cpu',
             cache_dir: Path = None,
             ckpt_steps: int = None,
+            expose_expr: bool = False,
+            export_spk: List[Tuple[str, Dict[str, float]]] = None,
+            freeze_spk: Tuple[str, Dict[str, float]] = None
     ):
         super().__init__(device=device, cache_dir=cache_dir)
         # Basic attributes
         self.model_name: str = hparams['exp_name']
         self.ckpt_steps: int = ckpt_steps
+        self.spk_map: dict = self.build_spk_map()
         self.vocab = TokenTextEncoder(vocab_list=build_phoneme_list())
         self.model = self.build_model()
         self.linguistic_encoder_cache_path = self.cache_dir / 'linguistic.onnx'
@@ -37,24 +41,41 @@ class DiffSingerVarianceExporter(BaseExporter):
         self.variance_postprocess_cache_path = self.cache_dir / 'variance_post.onnx'
 
         # Attributes for logging
-        self.fs2_class_name = self.model.fs2.__class__.__name__.removesuffix('ONNX')
+        self.fs2_class_name = remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')
         self.dur_predictor_class_name = \
-            self.model.fs2.dur_predictor.__class__.__name__ if self.model.predict_dur else None
+            remove_suffix(self.model.fs2.dur_predictor.__class__.__name__, 'ONNX') \
+            if self.model.predict_dur else None
         self.pitch_denoiser_class_name = \
-            self.model.pitch_predictor.denoise_fn.__class__.__name__.removesuffix('ONNX') \
+            remove_suffix(self.model.pitch_predictor.denoise_fn.__class__.__name__, 'ONNX') \
             if self.model.predict_pitch else None
         self.pitch_diffusion_class_name = \
-            self.model.pitch_predictor.__class__.__name__.removesuffix('ONNX') \
+            remove_suffix(self.model.pitch_predictor.__class__.__name__, 'ONNX') \
             if self.model.predict_pitch else None
         self.variance_denoiser_class_name = \
-            self.model.variance_predictor.denoise_fn.__class__.__name__.removesuffix('ONNX') \
+            remove_suffix(self.model.variance_predictor.denoise_fn.__class__.__name__, 'ONNX') \
             if self.model.predict_variances else None
         self.variance_diffusion_class_name = \
-            self.model.variance_predictor.__class__.__name__.removesuffix('ONNX') \
+            remove_suffix(self.model.variance_predictor.__class__.__name__, 'ONNX') \
             if self.model.predict_variances else None
 
         # Attributes for exporting
-        ...
+        self.expose_expr = expose_expr
+        self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
+            if hparams['use_spk_id'] else None
+        self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
+            if hparams['use_spk_id'] and export_spk is not None else []
+        if hparams['use_spk_id']:
+            if not self.export_spk and self.freeze_spk is None:
+                # In case the user did not specify any speaker settings:
+                if len(self.spk_map) == 1:
+                    # If there is only one speaker, freeze him/her.
+                    first_spk = next(iter(self.spk_map.keys()))
+                    self.freeze_spk = (first_spk, {first_spk: 1.0})
+                else:
+                    # If there are multiple speakers, export them all.
+                    self.export_spk = [(name, {name: 1.0}) for name in self.spk_map.keys()]
+            if self.freeze_spk is not None:
+                self.model.register_buffer('frozen_spk_embed', self._perform_spk_mix(self.freeze_spk[1]))
 
     def build_model(self) -> DiffSingerVarianceONNX:
         model = DiffSingerVarianceONNX(
@@ -67,19 +88,22 @@ class DiffSingerVarianceExporter(BaseExporter):
 
     def export(self, path: Path):
         path.mkdir(parents=True, exist_ok=True)
-        self.export_model(path)
+        model_name = self.model_name
+        if self.freeze_spk is not None:
+            model_name += '.' + self.freeze_spk[0]
+        self.export_model(path, model_name)
         self.export_attachments(path)
 
-    def export_model(self, path: Path):
+    def export_model(self, path: Path, model_name: str = None):
         self._torch_export_model()
         linguistic_onnx = self._optimize_linguistic_graph(onnx.load(self.linguistic_encoder_cache_path))
-        linguistic_path = path / f'{self.model_name}.linguistic.onnx'
+        linguistic_path = path / f'{model_name}.linguistic.onnx'
         onnx.save(linguistic_onnx, linguistic_path)
         print(f'| export linguistic encoder => {linguistic_path}')
         self.linguistic_encoder_cache_path.unlink()
         if self.model.predict_dur:
             dur_predictor_onnx = self._optimize_dur_predictor_graph(onnx.load(self.dur_predictor_cache_path))
-            dur_predictor_path = path / f'{self.model_name}.dur.onnx'
+            dur_predictor_path = path / f'{model_name}.dur.onnx'
             onnx.save(dur_predictor_onnx, dur_predictor_path)
             self.dur_predictor_cache_path.unlink()
             print(f'| export dur predictor => {dur_predictor_path}')
@@ -89,7 +113,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 onnx.load(self.pitch_diffusion_cache_path),
                 onnx.load(self.pitch_postprocess_cache_path)
             )
-            pitch_predictor_path = path / f'{self.model_name}.pitch.onnx'
+            pitch_predictor_path = path / f'{model_name}.pitch.onnx'
             onnx.save(pitch_predictor_onnx, pitch_predictor_path)
             self.pitch_preprocess_cache_path.unlink()
             self.pitch_diffusion_cache_path.unlink()
@@ -101,7 +125,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 onnx.load(self.variance_diffusion_cache_path),
                 onnx.load(self.variance_postprocess_cache_path)
             )
-            variance_predictor_path = path / f'{self.model_name}.variance.onnx'
+            variance_predictor_path = path / f'{model_name}.variance.onnx'
             onnx.save(variance_predictor_onnx, variance_predictor_path)
             self.variance_preprocess_cache_path.unlink()
             self.variance_diffusion_cache_path.unlink()
@@ -109,6 +133,11 @@ class DiffSingerVarianceExporter(BaseExporter):
             print(f'| export variance predictor => {variance_predictor_path}')
 
     def export_attachments(self, path: Path):
+        for spk in self.export_spk:
+            self._export_spk_embed(
+                path / f'{self.model_name}.{spk[0]}.emb',
+                self._perform_spk_mix(spk[1])
+            )
         self._export_dictionary(path / 'dictionary.txt')
         self._export_phonemes((path / f'{self.model_name}.phonemes.txt'))
 
@@ -131,6 +160,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 1: 'n_tokens'
             }
         }
+        input_spk_embed = hparams['use_spk_id'] and not self.freeze_spk
 
         print(f'Exporting {self.fs2_class_name}...')
         if self.model.predict_dur:
@@ -169,13 +199,18 @@ class DiffSingerVarianceExporter(BaseExporter):
                 (
                     encoder_out,
                     x_masks,
-                    ph_midi
+                    ph_midi,
+                    *([torch.rand(
+                        1, 5, hparams['hidden_size'],
+                        dtype=torch.float32, device=self.device
+                    )] if input_spk_embed else [])
                 ),
                 self.dur_predictor_cache_path,
                 input_names=[
                     'encoder_out',
                     'x_masks',
-                    'ph_midi'
+                    'ph_midi',
+                    *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
                     'ph_dur_pred'
@@ -187,6 +222,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'ph_dur_pred': {
                         1: 'n_tokens'
                     },
+                    **({'spk_embed': {1: 'n_tokens'}} if input_spk_embed else {}),
                     **encoder_common_axes
                 },
                 opset_version=15
@@ -221,7 +257,6 @@ class DiffSingerVarianceExporter(BaseExporter):
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
-            expressiveness = torch.ones_like(pitch)
             retake = torch.ones_like(pitch, dtype=torch.bool)
             torch.onnx.export(
                 self.model.view_as_pitch_preprocess(),
@@ -230,15 +265,25 @@ class DiffSingerVarianceExporter(BaseExporter):
                     ph_dur,
                     note_midi,
                     note_dur,
-                    expressiveness,
                     pitch,
-                    retake
+                    *([
+                        torch.ones_like(pitch)
+                        if self.expose_expr else []
+                    ]),
+                    retake,
+                    *([torch.rand(
+                        1, 15, hparams['hidden_size'],
+                        dtype=torch.float32, device=self.device
+                    )] if input_spk_embed else [])
                 ),
                 self.pitch_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur',
                     'note_midi', 'note_dur',
-                    'expressiveness', 'pitch', 'retake'
+                    'pitch',
+                    *(['expr'] if self.expose_expr else []),
+                    'retake',
+                    *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
                     'pitch_cond', 'base_pitch'
@@ -256,9 +301,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'note_dur': {
                         1: 'n_notes'
                     },
-                    'expressiveness': {
-                        1: 'n_frames'
-                    },
+                    **({'expr': {1: 'n_frames'}} if self.expose_expr else {}),
                     'pitch': {
                         1: 'n_frames'
                     },
@@ -270,7 +313,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     },
                     'base_pitch': {
                         1: 'n_frames'
-                    }
+                    },
+                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {})
                 },
                 opset_version=15
             )
@@ -362,7 +406,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
         if self.model.predict_variances:
-            repeat_bins = hparams['variances_prediction_args']['repeat_bins']
+            total_repeat_bins = hparams['variances_prediction_args']['total_repeat_bins']
+            repeat_bins = total_repeat_bins // len(self.model.variance_prediction_list)
 
             # Prepare inputs for preprocessor of MultiVarianceDiffusion
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
@@ -370,7 +415,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 v_name: torch.FloatTensor([[0.] * 15]).to(self.device)
                 for v_name in self.model.variance_prediction_list
             }
-            retake = torch.ones_like(pitch, dtype=torch.bool)
+            retake = torch.ones_like(pitch, dtype=torch.bool)[..., None].tile(len(self.model.variance_prediction_list))
             torch.onnx.export(
                 self.model.view_as_variance_preprocess(),
                 (
@@ -378,13 +423,18 @@ class DiffSingerVarianceExporter(BaseExporter):
                     ph_dur,
                     pitch,
                     variances,
-                    retake
+                    retake,
+                    *([torch.rand(
+                        1, 15, hparams['hidden_size'],
+                        dtype=torch.float32, device=self.device
+                    )] if input_spk_embed else [])
                 ),
                 self.variance_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur', 'pitch',
                     *self.model.variance_prediction_list,
-                    'retake'
+                    'retake',
+                    *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
                     'variance_cond'
@@ -407,7 +457,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     },
                     'retake': {
                         1: 'n_frames'
-                    }
+                    },
+                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {})
                 },
                 opset_version=15
             )
@@ -500,6 +551,27 @@ class DiffSingerVarianceExporter(BaseExporter):
                 },
                 opset_version=15
             )
+
+    @torch.no_grad()
+    def _perform_spk_mix(self, spk_mix: Dict[str, float]):
+        spk_mix_ids = []
+        spk_mix_values = []
+        for name, value in spk_mix.items():
+            spk_mix_ids.append(self.spk_map[name])
+            assert value >= 0., f'Speaker mix checks failed.\n' \
+                                f'Proportion of speaker \'{name}\' is negative.'
+            spk_mix_values.append(value)
+        spk_mix_id_N = torch.LongTensor(spk_mix_ids).to(self.device)[None]  # => [1, N]
+        spk_mix_value_N = torch.FloatTensor(spk_mix_values).to(self.device)[None]  # => [1, N]
+        spk_mix_value_sum = spk_mix_value_N.sum()
+        assert spk_mix_value_sum > 0., f'Speaker mix checks failed.\n' \
+                                       f'Proportions of speaker mix sum to zero.'
+        spk_mix_value_N /= spk_mix_value_sum  # normalize
+        spk_mix_embed = torch.sum(
+            self.model.spk_embed(spk_mix_id_N) * spk_mix_value_N.unsqueeze(2),  # => [1, N, H]
+            dim=1, keepdim=False
+        )  # => [1, H]
+        return spk_mix_embed
 
     def _optimize_linguistic_graph(self, linguistic: onnx.ModelProto) -> onnx.ModelProto:
         onnx_helper.model_override_io_shapes(
@@ -612,10 +684,14 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
         onnx_helper.model_add_prefixes(
-            var_pre, node_prefix='/pre', ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
+            var_pre, node_prefix='/pre', value_info_prefix='/pre',
+            ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
         )
         onnx_helper.model_add_prefixes(var_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_frames)')
-        onnx_helper.model_add_prefixes(var_post, node_prefix='/post', ignored_pattern=None)
+        onnx_helper.model_add_prefixes(
+            var_post, node_prefix='/post', value_info_prefix='/post',
+            ignored_pattern=None
+        )
         onnx_helper.model_add_prefixes(var_post, dim_prefix='post.', ignored_pattern='n_frames')
 
         print(f'Merging {self.variance_diffusion_class_name} subroutines...')
@@ -634,6 +710,12 @@ class DiffSingerVarianceExporter(BaseExporter):
         )
         var_predictor.graph.name = var_pre.graph.name
         return var_predictor
+
+    # noinspection PyMethodMayBeStatic
+    def _export_spk_embed(self, path: Path, spk_embed: torch.Tensor):
+        with open(path, 'wb') as f:
+            f.write(spk_embed.cpu().numpy().tobytes())
+        print(f'| export spk embed => {path}')
 
     # noinspection PyMethodMayBeStatic
     def _export_dictionary(self, path: Path):

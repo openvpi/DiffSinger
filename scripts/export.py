@@ -32,49 +32,7 @@ def find_exp(exp):
     return exp
 
 
-@click.group()
-def main():
-    pass
-
-
-@main.command(help='Export DiffSinger acoustic model to ONNX format.')
-@click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
-@click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
-@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
-@click.option('--expose_gender', is_flag=True, show_default=True,
-              help='(for random pitch shifting) Expose gender control functionality.')
-@click.option('--freeze_gender', type=float, default=0., show_default=True, metavar='<value>',
-              help='(for random pitch shifting) Freeze gender value into the model.')
-@click.option('--expose_velocity', is_flag=True, show_default=True,
-              help='(for random time stretching) Expose velocity control functionality.')
-@click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
-              help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
-@click.option('--freeze_spk', type=str, required=False)
-def acoustic(
-        exp: str,
-        ckpt: int = None,
-        out: str = None,
-        expose_gender: bool = False,
-        freeze_gender: float = 0.,
-        expose_velocity: bool = False,
-        export_spk: List[str] = None,
-        freeze_spk: str = None
-):
-    # Validate arguments
-    if expose_gender and freeze_gender:
-        print('--expose_gender is exclusive to --freeze_gender.')
-        exit(-1)
-    if export_spk and freeze_spk:
-        print('--export_spk is exclusive to --freeze_spk.')
-        exit(-1)
-    if freeze_gender is not None:
-        assert -1. <= freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
-    exp = find_exp(exp)
-    if out is None:
-        out = root_dir / 'artifacts' / exp
-    else:
-        out = Path(out)
-    out = out.resolve()
+def parse_spk_settings(export_spk, freeze_spk):
     if export_spk is None:
         export_spk = []
     else:
@@ -101,6 +59,54 @@ def acoustic(
             freeze_spk_mix = (alias, parse_commandline_spk_mix(mix))
         else:
             freeze_spk_mix = (freeze_spk, {freeze_spk: 1.0})
+    return export_spk_mix, freeze_spk_mix
+
+
+@click.group()
+def main():
+    pass
+
+
+@main.command(help='Export DiffSinger acoustic model to ONNX format.')
+@click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
+@click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
+@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
+@click.option('--expose_gender', is_flag=True, show_default=True,
+              help='(for random pitch shifting) Expose gender control functionality.')
+@click.option('--freeze_gender', type=float, default=0., show_default=True, metavar='<value>',
+              help='(for random pitch shifting) Freeze gender value into the model.')
+@click.option('--expose_velocity', is_flag=True, show_default=True,
+              help='(for random time stretching) Expose velocity control functionality.')
+@click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
+              help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
+@click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
+              help='(for multi-speaker models) Freeze one speaker or speaker mix into the model.')
+def acoustic(
+        exp: str,
+        ckpt: int = None,
+        out: str = None,
+        expose_gender: bool = False,
+        freeze_gender: float = 0.,
+        expose_velocity: bool = False,
+        export_spk: List[str] = None,
+        freeze_spk: str = None
+):
+    # Validate arguments
+    if expose_gender and freeze_gender:
+        print('--expose_gender is exclusive to --freeze_gender.')
+        exit(-1)
+    if export_spk and freeze_spk:
+        print('--export_spk is exclusive to --freeze_spk.')
+        exit(-1)
+    if freeze_gender is not None:
+        assert -1. <= freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
+    exp = find_exp(exp)
+    if out is None:
+        out = root_dir / 'artifacts' / exp
+    else:
+        out = Path(out)
+    out = out.resolve()
+    export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
     sys.argv = [
@@ -124,25 +130,38 @@ def acoustic(
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
-    exporter.export(out)
+    try:
+        exporter.export(out)
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 @main.command(help='Export DiffSinger variance model to ONNX format.')
 @click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
 @click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
+@click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
+              help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
+@click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
+              help='(for multi-speaker models) Freeze one speaker or speaker mix into the model.')
 def variance(
         exp: str,
         ckpt: int = None,
         out: str = None,
+        export_spk: List[str] = None,
+        freeze_spk: str = None
 ):
     # Validate arguments
+    if export_spk and freeze_spk:
+        print('--export_spk is exclusive to --freeze_spk.')
+        exit(-1)
     exp = find_exp(exp)
     if out is None:
         out = root_dir / 'artifacts' / exp
     else:
         out = Path(out)
     out = out.resolve()
+    export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
     sys.argv = [
@@ -158,8 +177,13 @@ def variance(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
+        export_spk=export_spk_mix,
+        freeze_spk=freeze_spk_mix
     )
-    exporter.export(out)
+    try:
+        exporter.export(out)
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
@@ -193,7 +217,10 @@ def nsf_hifigan(
         model_path=Path(hparams['vocoder_ckpt']).resolve(),
         model_name=name
     )
-    exporter.export(out)
+    try:
+        exporter.export(out)
+    except KeyboardInterrupt:
+        exit(-1)
 
 
 if __name__ == '__main__':

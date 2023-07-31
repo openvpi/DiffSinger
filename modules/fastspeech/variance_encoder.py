@@ -25,9 +25,6 @@ class FastSpeech2Variance(nn.Module):
         else:
             self.ph_dur_embed = Linear(1, hparams['hidden_size'])
 
-        if hparams['use_spk_id']:
-            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
-
         self.encoder = FastSpeech2Encoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']

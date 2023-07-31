@@ -12,22 +12,21 @@ import pathlib
 import random
 from copy import deepcopy
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from basics.base_binarizer import BaseBinarizer, BinarizationError
+from basics.base_binarizer import BaseBinarizer
+from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
+from modules.pe import initialize_pe
 from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
-    get_pitch_parselmouth,
     get_energy_librosa,
     get_breathiness_pyworld
 )
 from utils.hparams import hparams
-from utils.phoneme_utils import build_phoneme_list
 
 os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = [
@@ -42,6 +41,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'speed'
 ]
 
+pitch_extractor: BasePE = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
 
@@ -53,7 +53,7 @@ class AcousticBinarizer(BaseBinarizer):
         self.need_energy = hparams.get('use_energy_embed', False)
         self.need_breathiness = hparams.get('use_breathiness_embed', False)
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
         if (raw_data_dir / 'transcriptions.csv').exists():
             for utterance_label in csv.DictReader(
@@ -64,7 +64,7 @@ class AcousticBinarizer(BaseBinarizer):
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
                     'ph_seq': utterance_label['ph_seq'].split(),
                     'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
-                    'spk_id': ds_id
+                    'spk_id': spk_id
                 }
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
@@ -77,60 +77,6 @@ class AcousticBinarizer(BaseBinarizer):
                 'python scripts/migrate.py txt <INPUT_TXT>'
             )
         self.items.update(meta_data_dict)
-
-    def check_coverage(self):
-        # Group by phonemes in the dictionary.
-        ph_required = set(build_phoneme_list())
-        phoneme_map = {}
-        for ph in ph_required:
-            phoneme_map[ph] = 0
-        ph_occurred = []
-        # Load and count those phones that appear in the actual data
-        for item_name in self.items:
-            ph_occurred += self.items[item_name]['ph_seq']
-            if len(ph_occurred) == 0:
-                raise BinarizationError(f'Empty tokens in {item_name}.')
-        for ph in ph_occurred:
-            if ph not in ph_required:
-                continue
-            phoneme_map[ph] += 1
-        ph_occurred = set(ph_occurred)
-
-        print('===== Phoneme Distribution Summary =====')
-        for i, key in enumerate(sorted(phoneme_map.keys())):
-            if i == len(ph_required) - 1:
-                end = '\n'
-            elif i % 10 == 9:
-                end = ',\n'
-            else:
-                end = ', '
-            print(f'\'{key}\': {phoneme_map[key]}', end=end)
-
-        # Draw graph.
-        plt.figure(figsize=(int(len(ph_required) * 0.8), 10))
-        x = sorted(phoneme_map.keys())
-        values = [phoneme_map[k] for k in x]
-        plt.bar(x=x, height=values)
-        plt.tick_params(labelsize=15)
-        plt.xlim(-1, len(ph_required))
-        for a, b in zip(x, values):
-            plt.text(a, b, b, ha='center', va='bottom', fontsize=15)
-        plt.grid()
-        plt.title('Phoneme Distribution Summary', fontsize=30)
-        plt.xlabel('Phoneme', fontsize=20)
-        plt.ylabel('Number of occurrences', fontsize=20)
-        filename = self.binary_data_dir / 'phoneme_distribution.jpg'
-        plt.savefig(fname=filename,
-                    bbox_inches='tight',
-                    pad_inches=0.25)
-        print(f'| save summary to \'{filename}\'')
-        # Check unrecognizable or missing phonemes
-        if ph_occurred != ph_required:
-            unrecognizable_phones = ph_occurred.difference(ph_required)
-            missing_phones = ph_required.difference(ph_occurred)
-            raise BinarizationError('transcriptions and dictionary mismatch.\n'
-                                    f' (+) {sorted(unrecognizable_phones)}\n'
-                                    f' (-) {sorted(missing_phones)}')
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
@@ -157,7 +103,10 @@ class AcousticBinarizer(BaseBinarizer):
         ).cpu().numpy()
 
         # get ground truth f0
-        gt_f0, uv = get_pitch_parselmouth(
+        global pitch_extractor
+        if pitch_extractor is None:
+            pitch_extractor = initialize_pe()
+        gt_f0, uv = pitch_extractor.get_pitch(
             wav, length, hparams, interp_uv=hparams['interp_uv']
         )
         if uv.all():  # All unvoiced
@@ -179,7 +128,7 @@ class AcousticBinarizer(BaseBinarizer):
             processed_input['energy'] = energy.cpu().numpy()
 
         if self.need_breathiness:
-            # get ground truth energy
+            # get ground truth breathiness
             breathiness = get_breathiness_pyworld(wav, gt_f0 * ~uv, length, hparams).astype(np.float32)
 
             global breathiness_smooth
@@ -204,6 +153,7 @@ class AcousticBinarizer(BaseBinarizer):
         aug_list = []
         all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
+        aug_pe = initialize_pe()
         if self.augmentation_args['random_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
@@ -213,7 +163,7 @@ class AcousticBinarizer(BaseBinarizer):
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
             aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
 
@@ -241,20 +191,22 @@ class AcousticBinarizer(BaseBinarizer):
             aug_args = self.augmentation_args['fixed_pitch_shifting']
             targets = aug_args['targets']
             scale = aug_args['scale']
+            spk_id_size = max(self.spk_ids) + 1
+            min_num_spk = (1 + len(targets)) * spk_id_size
             assert not self.augmentation_args['random_pitch_shifting']['enabled'], \
                 'Fixed pitch shifting augmentation is not compatible with random pitch shifting.'
             assert len(targets) == len(set(targets)), \
                 'Fixed pitch shifting augmentation requires having no duplicate targets.'
             assert hparams['use_spk_id'], 'Fixed pitch shifting augmentation requires use_spk_id == True.'
-            assert hparams['num_spk'] >= (1 + len(targets)) * len(self.spk_map), \
-                'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * len(speakers).'
+            assert hparams['num_spk'] >= min_num_spk, \
+                f'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * (max(spk_ids) + 1).'
             assert scale < 1, 'Fixed pitch shifting augmentation requires scale < 1.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             for i, target in enumerate(targets):
                 aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
                 for aug_item_name in aug_item_names:
-                    replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * len(self.spk_map)
+                    replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * spk_id_size
                     aug_task = {
                         'name': aug_item_name,
                         'func': aug_ins.process_item,
@@ -279,7 +231,7 @@ class AcousticBinarizer(BaseBinarizer):
                 'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
             assert domain in ['log', 'linear'], 'domain must be \'log\' or \'linear\'.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args)
+            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
             k_from_raw = int(scale / (1 + total_scale) * len(all_item_names))
             k_from_aug = int(total_scale * scale / (1 + total_scale) * len(all_item_names))
@@ -307,7 +259,11 @@ class AcousticBinarizer(BaseBinarizer):
                         aug_map[aug_item] = [aug_task]
                     aug_list.append(aug_task)
                 elif aug_type == 1:
-                    aug_task = deepcopy(aug_item)
+                    aug_task = {
+                        'name': aug_item,
+                        'func': aug_item['func'],
+                        'kwargs': deepcopy(aug_item['kwargs'])
+                    }
                     aug_task['kwargs']['speed'] = speed
                     if aug_item['name'] in aug_map:
                         aug_map[aug_item['name']].append(aug_task)
