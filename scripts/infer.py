@@ -142,7 +142,7 @@ def acoustic(
 @click.option('--title', type=str, required=False, help='Title of output file')
 @click.option('--num', type=int, required=False, default=1, help='Number of runs')
 @click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
-@click.option('--expressiveness', type=float, required=False, help='Static expressiveness control')
+@click.option('--expr', type=float, required=False, help='Static expressiveness control')
 @click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
 @click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
 def variance(
@@ -155,7 +155,7 @@ def variance(
         title: str,
         num: int,
         key: int,
-        expressiveness: float,
+        expr: float,
         seed: int,
         speedup: int
 ):
@@ -169,8 +169,8 @@ def variance(
     if (not out or out.resolve() == proj.parent.resolve()) and not title:
         name += '_variance'
 
-    if expressiveness is not None:
-        assert 0 <= expressiveness <= 1, 'Expressiveness must be in [0, 1].'
+    if expr is not None:
+        assert 0 <= expr <= 1, 'Expressiveness must be in [0, 1].'
 
     with open(proj, 'r', encoding='utf-8') as f:
         params = json.load(f)
@@ -207,8 +207,8 @@ def variance(
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
-        if expressiveness is not None:
-            param['expressiveness'] = expressiveness
+        if expr is not None:
+            param['expr'] = expr
 
         if spk_mix is not None:
             param['ph_spk_mix_backup'] = param.get('ph_spk_mix')

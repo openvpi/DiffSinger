@@ -140,6 +140,8 @@ def acoustic(
 @click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
 @click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
+@click.option('--expose_expr', is_flag=True, show_default=True,
+              help='Expose pitch expressiveness control functionality.')
 @click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
               help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
 @click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
@@ -148,6 +150,7 @@ def variance(
         exp: str,
         ckpt: int = None,
         out: str = None,
+        expose_expr: bool = False,
         export_spk: List[str] = None,
         freeze_spk: str = None
 ):
@@ -177,6 +180,7 @@ def variance(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
+        expose_expr=expose_expr,
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
