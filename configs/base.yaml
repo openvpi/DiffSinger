@@ -55,7 +55,6 @@ optimizer_args:
   weight_decay: 0
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR
-  warmup_steps: 2000
   step_size: 50000
   gamma: 0.5
 clip_grad_norm: 1
