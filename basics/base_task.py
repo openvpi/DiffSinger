@@ -89,7 +89,7 @@ class BaseTask(pl.LightningModule):
         self.model = self.build_model()
         # utils.load_warp(self)
         self.unfreeze_all_params()
-        if hparams['frozen_params_on_train_enabled']:
+        if hparams['freezing_enabled']:
             self.freeze_params()
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
             self.load_finetune_ckpt(self.load_pre_train_model())

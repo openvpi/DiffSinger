@@ -1422,6 +1422,54 @@ int
 
 16000
 
+### freezing_enabled
+
+Whether enabling parameter freezing during training.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+False
+
+### frozen_params
+
+Parameter name prefixes to freeze during training.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+list
+
+#### default
+
+[]
+
 ### fmin
 
 Minimum frequency of mel extraction.
@@ -3415,5 +3463,4 @@ int
 #### default
 
 2048
-
 

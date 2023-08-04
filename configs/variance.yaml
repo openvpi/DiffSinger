@@ -112,5 +112,5 @@ finetune_ignored_params:
   - model.fs2.encoder.embed_tokens
 finetune_strict_shapes: true
 
-frozen_params_on_train_enabled: false
+freezing_enabled: false
 frozen_params: []
