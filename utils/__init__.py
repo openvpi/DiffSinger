@@ -271,6 +271,7 @@ def build_object_from_class_name(cls_str, parent_cls, *args, **kwargs):
 
     return cls_type(*args, **filter_kwargs(kwargs, cls_type))
 
+
 def build_lr_scheduler_from_config(optimizer, scheduler_args):
     def helper(params):
         if isinstance(params, list):
@@ -278,14 +279,17 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
         elif isinstance(params, dict):
             resolved = {k: helper(v) for k, v in params.items()}
             if 'cls' in resolved:
+                if (
+                    resolved["cls"] == "torch.optim.lr_scheduler.ChainedScheduler"
+                    and scheduler_args["scheduler_cls"] == "torch.optim.lr_scheduler.SequentialLR"
+                ):
+                    raise ValueError(f"ChainedScheduler cannot be part of a SequentialLR.")
                 resolved['optimizer'] = optimizer
                 obj = build_object_from_class_name(
                     resolved['cls'],
                     torch.optim.lr_scheduler.LRScheduler,
                     **resolved
                 )
-                if not hasattr(obj, 'last_epoch'):
-                    obj.last_epoch = -1
                 return obj
             return resolved
         else:
@@ -298,6 +302,7 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
         **resolved
     )
 
+
 def simulate_lr_scheduler(optimizer_args, scheduler_args, step_count, num_param_groups=1):
     optimizer = build_object_from_class_name(
         optimizer_args['optimizer_cls'],
@@ -306,8 +311,7 @@ def simulate_lr_scheduler(optimizer_args, scheduler_args, step_count, num_param_
         **optimizer_args
     )
     scheduler = build_lr_scheduler_from_config(optimizer, scheduler_args)
-    scheduler._initial_step()
-    optimizer._step_count = 1
+    scheduler.optimizer._step_count = 1
     for _ in range(step_count):
         scheduler.step()
     return scheduler.state_dict()
