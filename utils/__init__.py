@@ -260,29 +260,57 @@ def num_params(model, print_out=True, model_name="model"):
     return parameters
 
 
-def build_object_from_config(cls_str, *args, **kwargs):
+def build_object_from_class_name(cls_str, parent_cls, *args, **kwargs):
     import importlib
 
     pkg = ".".join(cls_str.split(".")[:-1])
     cls_name = cls_str.split(".")[-1]
     cls_type = getattr(importlib.import_module(pkg), cls_name)
+    if parent_cls is not None:
+        assert issubclass(cls_type, parent_cls), f'| {cls_type} is not subclass of {parent_cls}.'
 
     return cls_type(*args, **filter_kwargs(kwargs, cls_type))
 
+def build_lr_scheduler_from_config(optimizer, scheduler_args):
+    def helper(params):
+        if isinstance(params, list):
+            return [helper(s) for s in params]
+        elif isinstance(params, dict):
+            resolved = {k: helper(v) for k, v in params.items()}
+            resolved['optimizer'] = optimizer
+            if 'cls' in resolved:
+                obj = build_object_from_class_name(
+                    resolved['cls'],
+                    torch.optim.lr_scheduler.LRScheduler,
+                    **resolved
+                )
+                if not hasattr(obj, 'last_epoch'):
+                    obj.last_epoch = -1
+                return obj
+            return resolved
+        else:
+            return params
+    resolved = helper(scheduler_args)
+    resolved['optimizer'] = optimizer
+    return build_object_from_class_name(
+        scheduler_args['scheduler_cls'],
+        torch.optim.lr_scheduler.LRScheduler,
+        **resolved
+    )
 
-def simulate_lr_scheduler(optimizer_args, scheduler_args, last_epoch=-1, num_param_groups=1):
-    optimizer = build_object_from_config(
+def simulate_lr_scheduler(optimizer_args, scheduler_args, step_count, num_param_groups=1):
+    optimizer = build_object_from_class_name(
         optimizer_args['optimizer_cls'],
+        torch.optim.Optimizer,
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args
     )
-    scheduler = build_object_from_config(scheduler_args['scheduler_cls'], optimizer, last_epoch=last_epoch,
-                                         **scheduler_args)
-
-    if hasattr(scheduler, '_get_closed_form_lr'):
-        return scheduler._get_closed_form_lr()
-    else:
-        return scheduler.get_lr()
+    scheduler = build_lr_scheduler_from_config(optimizer, scheduler_args)
+    scheduler._initial_step()
+    optimizer._step_count = 1
+    for _ in range(step_count):
+        scheduler.step()
+    return scheduler.state_dict()
 
 
 def remove_suffix(string: str, suffix: str):
