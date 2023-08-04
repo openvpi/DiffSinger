@@ -277,8 +277,8 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
             return [helper(s) for s in params]
         elif isinstance(params, dict):
             resolved = {k: helper(v) for k, v in params.items()}
-            resolved['optimizer'] = optimizer
             if 'cls' in resolved:
+                resolved['optimizer'] = optimizer
                 obj = build_object_from_class_name(
                     resolved['cls'],
                     torch.optim.lr_scheduler.LRScheduler,
