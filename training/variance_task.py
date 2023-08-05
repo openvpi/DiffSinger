@@ -10,6 +10,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.losses.dur_loss import DurationLoss
+from modules.metrics.duration import RhythmCorrectness, PhonemeDurationAccuracy
 from modules.metrics.rca import RawCurveAccuracy
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
@@ -104,6 +105,8 @@ class VarianceTask(BaseTask):
                 lambda_wdur=dur_hparams['lambda_wdur_loss'],
                 lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
+            self.register_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))
+            self.register_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
         if self.predict_pitch:
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
@@ -178,7 +181,17 @@ class VarianceTask(BaseTask):
                 and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
             dur_pred, pitch_pred, variances_pred = self.run_model(sample, infer=True)
             if dur_pred is not None:
-                self.plot_dur(batch_idx, sample['ph_dur'], dur_pred, txt=sample['tokens'])
+                tokens = sample['tokens']
+                dur_gt = sample['ph_dur']
+                ph2word = sample['ph2word']
+                mask = tokens != 0
+                self.rhythm_corr.update(
+                    pdur_pred=dur_pred, pdur_target=dur_gt, ph2word=ph2word, mask=mask
+                )
+                self.ph_dur_acc.update(
+                    pdur_pred=dur_pred, pdur_target=dur_gt, ph2word=ph2word, mask=mask
+                )
+                self.plot_dur(batch_idx, dur_gt, dur_pred, txt=tokens)
             if pitch_pred is not None:
                 base_pitch = sample['base_pitch']
                 pred_pitch = base_pitch + pitch_pred
