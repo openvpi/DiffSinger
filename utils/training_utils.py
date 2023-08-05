@@ -316,7 +316,9 @@ class DsTQDMProgressBar(TQDMProgressBar):
             items['steps'] = str(trainer.global_step)
         for k, v in items.items():
             if isinstance(v, float):
-                if 0.001 <= v < 10:
+                if np.isnan(v):
+                    items[k] = 'nan'
+                elif 0.001 <= v < 10:
                     items[k] = np.format_float_positional(v, unique=True, precision=5, trim='-')
                 elif 0.00001 <= v < 0.001:
                     if len(np.format_float_positional(v, unique=True, precision=8, trim='-')) > 8:

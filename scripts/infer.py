@@ -120,7 +120,7 @@ def acoustic(
             param['spk_mix'] = spk_mix
 
     from inference.ds_acoustic import DiffSingerAcousticInfer
-    infer_ins = DiffSingerAcousticInfer(load_model=not mel, ckpt_steps=ckpt)
+    infer_ins = DiffSingerAcousticInfer(load_vocoder=not mel, ckpt_steps=ckpt)
     print(f'| Model: {type(infer_ins.model)}')
 
     try:

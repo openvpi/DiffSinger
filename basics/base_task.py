@@ -89,16 +89,40 @@ class BaseTask(pl.LightningModule):
         self.phone_encoder = self.build_phone_encoder()
         self.model = self.build_model()
         # utils.load_warp(self)
+        self.unfreeze_all_params()
+        if hparams['freezing_enabled']:
+            self.freeze_params()
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
-            self.load_finetune_ckpt( self.load_pre_train_model())
+            self.load_finetune_ckpt(self.load_pre_train_model())
         self.print_arch()
         self.build_losses_and_metrics()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
 
+    def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
+        key_list = []
+        for i in hparams['frozen_params']:
+            for j in model_state_dict:
+                if j.startswith(i):
+                    key_list.append(j)
+        return list(set(key_list))
+
+    def freeze_params(self) -> None:
+        model_state_dict = self.state_dict().keys()
+        freeze_key = self.get_need_freeze_state_dict_key(model_state_dict=model_state_dict)
+
+        for i in freeze_key:
+            params=self.get_parameter(i)
+
+            params.requires_grad = False
+
+    def unfreeze_all_params(self) -> None:
+        for i in self.model.parameters():
+            i.requires_grad = True
+
     def load_finetune_ckpt(
             self, state_dict
-    ):
+    ) -> None:
 
         adapt_shapes = hparams['finetune_strict_shapes']
         if not adapt_shapes:
@@ -265,28 +289,25 @@ class BaseTask(pl.LightningModule):
 
     # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
-        from utils import build_object_from_config
+        from utils import build_lr_scheduler_from_config
 
         scheduler_args = hparams['lr_scheduler_args']
         assert scheduler_args['scheduler_cls'] != ''
-        scheduler = build_object_from_config(
-            scheduler_args['scheduler_cls'],
-            optimizer,
-            **scheduler_args
-        )
+        scheduler = build_lr_scheduler_from_config(optimizer, scheduler_args)
         return scheduler
 
     # noinspection PyMethodMayBeStatic
     def build_optimizer(self, model):
-        from utils import build_object_from_config
+        from utils import build_object_from_class_name
 
         optimizer_args = hparams['optimizer_args']
         assert optimizer_args['optimizer_cls'] != ''
         if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
-        optimizer = build_object_from_config(
+        optimizer = build_object_from_class_name(
             optimizer_args['optimizer_cls'],
-            filter(lambda p: p.requires_grad, model.parameters()),
+            torch.optim.Optimizer,
+            model.parameters(),
             **optimizer_args
         )
         return optimizer
@@ -473,27 +494,22 @@ class BaseTask(pl.LightningModule):
                         param_group[k] = v
                 if 'initial_lr' in param_group and param_group['initial_lr'] != optimizer_args['lr']:
                     rank_zero_info(
-                        f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}')
+                        f'| Overriding optimizer parameter initial_lr from checkpoint: {param_group["initial_lr"]} -> {optimizer_args["lr"]}'
+                    )
                     param_group['initial_lr'] = optimizer_args['lr']
 
         if checkpoint.get('lr_schedulers', None):
             assert checkpoint.get('optimizer_states', False)
-            schedulers = checkpoint['lr_schedulers']
-            assert len(schedulers) == 1  # only support one scheduler
-            scheduler = schedulers[0]
-            for k, v in scheduler_args.items():
-                if k in scheduler and scheduler[k] != v:
-                    rank_zero_info(f'| Overriding scheduler parameter {k} from checkpoint: {scheduler[k]} -> {v}')
-                    scheduler[k] = v
-            scheduler['base_lrs'] = [group['initial_lr'] for group in checkpoint['optimizer_states'][0]['param_groups']]
-            new_lrs = simulate_lr_scheduler(
+            assert len(checkpoint['lr_schedulers']) == 1  # only support one scheduler
+            checkpoint['lr_schedulers'][0] = simulate_lr_scheduler(
                 optimizer_args, scheduler_args,
-                last_epoch=scheduler['last_epoch'],
+                step_count=checkpoint['global_step'],
                 num_param_groups=len(checkpoint['optimizer_states'][0]['param_groups'])
             )
-            scheduler['_last_lr'] = new_lrs
-            for param_group, new_lr in zip(checkpoint['optimizer_states'][0]['param_groups'], new_lrs):
+            for param_group, new_lr in zip(
+                checkpoint['optimizer_states'][0]['param_groups'],
+                checkpoint['lr_schedulers'][0]['_last_lr'],
+            ):
                 if param_group['lr'] != new_lr:
-                    rank_zero_info(
-                        f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
+                    rank_zero_info(f'| Overriding optimizer parameter lr from checkpoint: {param_group["lr"]} -> {new_lr}')
                     param_group['lr'] = new_lr

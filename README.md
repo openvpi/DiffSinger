@@ -51,6 +51,7 @@ TBD
 - [PNDM](https://arxiv.org/abs/2202.09778) for diffusion sampling acceleration
 - [DPM-Solver++](https://github.com/LuChengTHU/dpm-solver) for diffusion sampling acceleration
 - [UniPC](https://github.com/wl-zhao/UniPC) for diffusion sampling acceleration
+- [RMVPE](https://github.com/Dream-High/RMVPE) and yxlllc's [fork](https://github.com/yxlllc/RMVPE) for pitch extraction
 
 ## Disclaimer
 
