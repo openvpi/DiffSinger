@@ -23,6 +23,7 @@ midi_smooth_width: 0.06  # in seconds
 binarization_args:
   shuffle: true
   num_workers: 0
+  prefer_ds: false
 
 raw_data_dir: 'data/opencpop_variance/raw'
 binary_data_dir: 'data/opencpop_variance/binary'
