@@ -57,21 +57,30 @@ class VarianceBinarizer(BaseBinarizer):
         self.lr = LengthRegulator().to(self.device)
         self.prefer_ds = self.binarization_args['prefer_ds']
         self.cached_ds = {}
+        self.ds_idx_sep = '#'
 
     def load_attr_from_ds(self, ds_id, name, attr, idx=0):
         item_name = f'{ds_id}:{name}'
-        if item_name not in self.cached_ds:
-            ds_path = self.raw_data_dirs[ds_id] / 'ds' / f'{name}.ds'
+        item_name_with_idx = f'{item_name}{self.ds_idx_sep}{idx}'
+        if item_name_with_idx in self.cached_ds:
+            ds = self.cached_ds[item_name_with_idx][0]
+        elif item_name in self.cached_ds:
+            ds = self.cached_ds[item_name][idx]
+        else:
+            ds_path = self.raw_data_dirs[ds_id] / 'ds' / f'{name}{self.ds_idx_sep}{idx}.ds'
+            if ds_path.exists():
+                cache_key = item_name_with_idx
+            else:
+                ds_path  = self.raw_data_dirs[ds_id] / 'ds' / f'{name}.ds'
+                cache_key = item_name
             if not ds_path.exists():
                 return None
             with open(ds_path, 'r', encoding='utf8') as f:
                 ds = json.load(f)
             if not isinstance(ds, list):
                 ds = [ds]
-            self.cached_ds[item_name] = ds
+            self.cached_ds[cache_key] = ds
             ds = ds[idx]
-        else:
-            ds = self.cached_ds[item_name][idx]
         return ds.get(attr)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
@@ -81,7 +90,7 @@ class VarianceBinarizer(BaseBinarizer):
                 open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8')
         ):
             item_name = utterance_label['name']
-            item_idx = int(item_name.rsplit('#', maxsplit=1)[-1]) if '#' in item_name else 0
+            item_idx = int(item_name.rsplit(self.ds_idx_sep, maxsplit=1)[-1]) if self.ds_idx_sep in item_name else 0
 
             def fallback(attr):
                 if self.prefer_ds:
