@@ -38,6 +38,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'energy',  # frame-level RMS (dB), float32[T_s,]
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
 ]
+DS_INDEX_SEP = '#'
 
 # These operators are used as global variables due to a PyTorch shared memory bug on Windows platforms.
 # See https://github.com/pytorch/pytorch/issues/100358
@@ -57,17 +58,16 @@ class VarianceBinarizer(BaseBinarizer):
         self.lr = LengthRegulator().to(self.device)
         self.prefer_ds = self.binarization_args['prefer_ds']
         self.cached_ds = {}
-        self.ds_idx_sep = '#'
 
     def load_attr_from_ds(self, ds_id, name, attr, idx=0):
         item_name = f'{ds_id}:{name}'
-        item_name_with_idx = f'{item_name}{self.ds_idx_sep}{idx}'
+        item_name_with_idx = f'{item_name}{DS_INDEX_SEP}{idx}'
         if item_name_with_idx in self.cached_ds:
             ds = self.cached_ds[item_name_with_idx][0]
         elif item_name in self.cached_ds:
             ds = self.cached_ds[item_name][idx]
         else:
-            ds_path = self.raw_data_dirs[ds_id] / 'ds' / f'{name}{self.ds_idx_sep}{idx}.ds'
+            ds_path = self.raw_data_dirs[ds_id] / 'ds' / f'{name}{DS_INDEX_SEP}{idx}.ds'
             if ds_path.exists():
                 cache_key = item_name_with_idx
             else:
@@ -90,7 +90,7 @@ class VarianceBinarizer(BaseBinarizer):
                 open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8')
         ):
             item_name = utterance_label['name']
-            item_idx = int(item_name.rsplit(self.ds_idx_sep, maxsplit=1)[-1]) if self.ds_idx_sep in item_name else 0
+            item_idx = int(item_name.rsplit(DS_INDEX_SEP, maxsplit=1)[-1]) if DS_INDEX_SEP in item_name else 0
 
             def fallback(attr):
                 if self.prefer_ds:

@@ -63,18 +63,12 @@ class BaseBinarizer:
         self.build_spk_map()
 
         self.items = {}
+        self.item_names: list = None
+        self._train_item_names: list = None
+        self._valid_item_names: list = None
+
         self.phone_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
         self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
-
-        # load each dataset
-        for ds_id, spk_id, data_dir in zip(range(len(self.raw_data_dirs)), self.spk_ids, self.raw_data_dirs):
-            self.load_meta_data(pathlib.Path(data_dir), ds_id=ds_id, spk_id=spk_id)
-        self.item_names = sorted(list(self.items.keys()))
-        self._train_item_names, self._valid_item_names = self.split_train_valid_set()
-
-        if self.binarization_args['shuffle']:
-            random.seed(hparams['seed'])
-            random.shuffle(self.item_names)
 
     def build_spk_map(self):
         assert isinstance(self.speakers, list), 'Speakers must be a list'
@@ -171,6 +165,16 @@ class BaseBinarizer:
             yield item_name, meta_data
 
     def process(self):
+        # load each dataset
+        for ds_id, spk_id, data_dir in zip(range(len(self.raw_data_dirs)), self.spk_ids, self.raw_data_dirs):
+            self.load_meta_data(pathlib.Path(data_dir), ds_id=ds_id, spk_id=spk_id)
+        self.item_names = sorted(list(self.items.keys()))
+        self._train_item_names, self._valid_item_names = self.split_train_valid_set()
+
+        if self.binarization_args['shuffle']:
+            random.seed(hparams['seed'])
+            random.shuffle(self.item_names)
+
         self.binary_data_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy spk_map and dictionary to binary data dir
