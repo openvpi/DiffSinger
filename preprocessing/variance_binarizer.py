@@ -97,8 +97,9 @@ class VarianceBinarizer(BaseBinarizer):
                     value = self.load_attr_from_ds(ds_id, item_name, attr, item_idx)
                 else:
                     value = None
-                if value is None:
-                    return utterance_label[attr]
+                if value is not None:
+                    return value
+                return utterance_label[attr]
 
             temp_dict = {
                 'ds_idx': item_idx,
@@ -206,7 +207,6 @@ class VarianceBinarizer(BaseBinarizer):
         else:
             waveform = None
 
-
         global pitch_extractor
         if pitch_extractor is None:
             pitch_extractor = initialize_pe()
@@ -221,7 +221,7 @@ class VarianceBinarizer(BaseBinarizer):
                     align_length=length
                 )
                 uv = f0 == 0
-                f0 = interp_f0(f0, uv)
+                f0, _ = interp_f0(f0, uv)
         if f0 is None:
             f0, uv = pitch_extractor.get_pitch(waveform, length, hparams, interp_uv=True)
         if uv.all():  # All unvoiced
