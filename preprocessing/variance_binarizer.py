@@ -176,6 +176,7 @@ class VarianceBinarizer(BaseBinarizer):
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
         ds_id, name = item_name.split(':', maxsplit=1)
+        name = name.rsplit(DS_INDEX_SEP, maxsplit=1)[0]
         ds_id = int(ds_id)
         ds_seg_idx = meta_data['ds_idx']
         seconds = sum(meta_data['ph_dur'])
