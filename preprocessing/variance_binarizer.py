@@ -278,6 +278,7 @@ class VarianceBinarizer(BaseBinarizer):
         # Below: extract energy
         if hparams['predict_energy']:
             energy = None
+            energy_from_wav = False
             if self.prefer_ds:
                 energy_seq = self.load_attr_from_ds(ds_id, name, 'energy', idx=ds_seg_idx)
                 if energy_seq is not None:
@@ -291,19 +292,22 @@ class VarianceBinarizer(BaseBinarizer):
                     )
             if energy is None:
                 energy = get_energy_librosa(waveform, length, hparams).astype(np.float32)
+                energy_from_wav = True
 
-            global energy_smooth
-            if energy_smooth is None:
-                energy_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['energy_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
-            energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0]
+            if energy_from_wav:
+                global energy_smooth
+                if energy_smooth is None:
+                    energy_smooth = SinusoidalSmoothingConv1d(
+                        round(hparams['energy_smooth_width'] / self.timestep)
+                    ).eval().to(self.device)
+                energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0].cpu().numpy()
 
-            processed_input['energy'] = energy.cpu().numpy()
+            processed_input['energy'] = energy
 
         # Below: extract breathiness
         if hparams['predict_breathiness']:
             breathiness = None
+            breathiness_from_wav = False
             if self.prefer_ds:
                 breathiness_seq = self.load_attr_from_ds(ds_id, name, 'breathiness', idx=ds_seg_idx)
                 if breathiness_seq is not None:
@@ -317,15 +321,17 @@ class VarianceBinarizer(BaseBinarizer):
                     )
             if breathiness is None:
                 breathiness = get_breathiness_pyworld(waveform, f0 * ~uv, length, hparams).astype(np.float32)
+                breathiness_from_wav = True
 
-            global breathiness_smooth
-            if breathiness_smooth is None:
-                breathiness_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['breathiness_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
-            breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
+            if breathiness_from_wav:
+                global breathiness_smooth
+                if breathiness_smooth is None:
+                    breathiness_smooth = SinusoidalSmoothingConv1d(
+                        round(hparams['breathiness_smooth_width'] / self.timestep)
+                    ).eval().to(self.device)
+                breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0].cpu().numpy()
 
-            processed_input['breathiness'] = breathiness.cpu().numpy()
+            processed_input['breathiness'] = breathiness
 
         return processed_input
 
