@@ -1,4 +1,5 @@
 # DiffSinger (OpenVPI maintained version)
+but with Harvest and DIO heehee
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2105.02446)
 [![downloads](https://img.shields.io/github/downloads/openvpi/DiffSinger/total.svg)](https://github.com/openvpi/DiffSinger/releases)
