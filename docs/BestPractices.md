@@ -15,7 +15,7 @@ A dataset mainly includes recordings and transcriptions, which is called a _raw 
 
 In the example above, the _my_raw_data_ folder is the root directory of a raw dataset.
 
-The _transcriptions.csv_ file contains all labels of the recordings. The common column of the CSV file is `name`, which represents all recording items by their filenames **without extension**. Other required columns may vary according to the category of the model you are training, and will be introduced in the following sections.
+The _transcriptions.csv_ file contains all labels of the recordings. The common column of the CSV file is `name`, which represents all recording items by their filenames **without extension**. Elements of sequence attributes should be split by `space`. Other required columns may vary according to the category of the model you are training, and will be introduced in the following sections.
 
 ### Dictionaries
 
@@ -43,6 +43,50 @@ A configuration file is a YAML file that defines enabled features, model hyperpa
 DS files are JSON files with _.ds_ suffix that contains phoneme sequence, phoneme durations, music scores or curve parameters. They are mainly used to run inference on models for test and evaluation purposes, and they can be used as training data in some cases. There are some example DS files in the [samples/](../samples) folder.
 
 The current recommended way of using a model for production purposes is to use [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau). It can export DS files as well.
+
+## Overview: training acoustic models
+
+An acoustic model takes low-level singing information as input, including (but not limited to) phoneme sequence, phoneme durations and F0 sequence. The only output of an acoustic model is the mel-spectrogram, which can be converted to waveform (the final audio) through the vocoder. Briefly speaking, an acoustic model takes in all features that are explicitly given, and produces the singing voice.
+
+### Datasets
+
+To train an acoustic model, you must have three columns in your transcriptions.csv: `name`, `ph_seq` and `ph_dur`, where `ph_seq` is the phoneme sequence and `ph_dur` is the phoneme duration sequence in seconds. You must have all corresponding recordings declared by the `name` column in mono, WAV format.
+
+Training from multiple datasets in one model (so that the model is a multi-speaker model) is supported. See `speakers`, `spk_ids` and `use_spk_id` in the configuration schemas.
+
+### Functionalities
+
+Functionalities of acoustic models are defined by their inputs. Acoustic models have three basic and fixed inputs: phoneme sequence, phoneme duration sequence and F0 (pitch) sequence. There are three categories of additional inputs (control parameters):
+
+- speaker IDs: if your acoustic model is a multi-speaker model, you can use different speaker in the same model, or mix their timbre and style.
+- variance parameters: these curve parameters are features extracted from the recordings, and can control the timbre and style of the singing voice. See `use_energy_embed` and `use_breathiness_embed` in the configuration schemas. Please note that variance parameters **do not have default values**, so they are usually obtained from the variance model at inference time.
+- transition parameters: these values represent the transition of the mel-spectrogram, and are obtained by enabling data augmentation. They are scalars at training time and sequences at inference time. See `augmentation_args`, `use_key_shift_embed` and `use_speed_embed` in the configuration schemas.
+
+## Overview: training variance models
+
+A variance model takes high-level music information as input, including phoneme sequence, word division, word durations and music scores. The outputs of a variance model may include phoneme durations, pitch curve and other control parameters that will be consumed by acoustic models. Briefly speaking, a variance model works as an auxiliary tool (so-called _automatic parameter generator_) for the acoustic models.
+
+### Datasets
+
+To train a variance model, you must have all the required attributes listed in the following table in your transcriptions.csv according to the functionalities enabled.
+
+|                               | name | ph_seq | ph_dur | ph_num | note_seq | note_dur |
+|:-----------------------------:|:----:|:------:|:------:|:------:|:--------:|:--------:|
+|  phoneme duration prediction  |  ✓   |   ✓    |   ✓    |   ✓    |          |          |
+|       pitch prediction        |  ✓   |   ✓    |   ✓    |        |    ✓     |    ✓     |
+| variance parameter prediction |  ✓   |   ✓    |   ✓    |        |          |          |
+
+The recommended way of building a variance dataset is to extend an acoustic dataset. You may have all the recordings prepared like the acoustic dataset as well.
+
+Variance models support multi-speaker settings like acoustic models do.
+
+### Functionalities
+
+Functionalities of variance models are defined by their outputs. There are three main prediction modules that can be enabled/disable independently:
+
+- Duration Predictor: predicts the phoneme durations. See `predict_dur` in the configuration schemas.
+- Pitch Diffusion: predicts the pitch curve. See `predict_pitch` in the configuration schemas.
+- Multi-Variance Diffusion: jointly predicts other variance parameters. See `predict_energy` and `predict_breathiness` in the configuration schemas.
 
 ## Using custom dictionaries
 
@@ -129,13 +173,13 @@ Enabling automatic mixed precision (AMP) can accelerate training and save GPU me
 By default, the training runs in FP32 precision. To enable AMP, edit your configuration file:
 
 ```yaml
-pl_trainer_precision: 16  # FP16 precision
+pl_trainer_precision: 16-mixed  # FP16 precision
 ```
 
 or
 
 ```yaml
-pl_trainer_precision: bf16  # BF16 precision
+pl_trainer_precision: bf16-mixed  # BF16 precision
 ```
 
 For more precision options, please checkout the official [documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).

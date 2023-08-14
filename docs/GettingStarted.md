@@ -51,6 +51,14 @@ Checkpoints will be saved at the `checkpoints/my_experiment/` directory. When in
 
 For more suggestions related to training performance, see [performance tuning](BestPractices.md#performance-tuning).
 
+### TensorBoard
+
+Run the following command to start the TensorBoard:
+
+```bash
+tensorboard --logdir checkpoints/
+```
+
 ## Inference
 
 Inference of DiffSinger is based on DS files. Assume that you have a DS file named `my_song.ds` and your model is named `my_experiment`.
