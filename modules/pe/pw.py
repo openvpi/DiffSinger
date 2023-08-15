@@ -12,8 +12,8 @@ class HarvestPE(BasePE):
         f0_floor = hparams['fmin']
         f0_ceil = hparams['fmax']
 
-        f0, _ = pw.harvest(waveform, hparams['audio_sample_rate'], f0_floor=f0_floor, f0_ceil=f0_ceil, frame_period=time_step).astype(np.float32)
-        f0 = pad_frames(f0, hop_size, waveform.shape[0], length)
+        f0, _ = pw.harvest(waveform, hparams['audio_sample_rate'], f0_floor=f0_floor, f0_ceil=f0_ceil, frame_period=time_step)
+        f0 = pad_frames(f0.astype(np.float32), hop_size, waveform.shape[0], length)
         uv = f0 == 0
 
         if interp_uv:
