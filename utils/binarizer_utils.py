@@ -45,8 +45,8 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
     hop_size = int(np.round(hparams['hop_size'] * speed))
 
     time_step = hop_size / hparams['audio_sample_rate']
-    f0_min = hparams['fmin']
-    f0_max = hparams['fmax']
+    f0_min = hparams['f0_min']
+    f0_max = hparams['f0_max']
 
     # noinspection PyArgumentList
     f0 = parselmouth.Sound(wav_data, sampling_frequency=hparams['audio_sample_rate']).to_pitch_ac(

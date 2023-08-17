@@ -9,8 +9,8 @@ class HarvestPE(BasePE):
         hop_size = int(np.round(hparams['hop_size'] * speed))
 
         time_step = 1000 * hop_size / hparams['audio_sample_rate']
-        f0_floor = hparams['fmin']
-        f0_ceil = hparams['fmax']
+        f0_floor = hparams['f0_min']
+        f0_ceil = hparams['f0_max']
 
         f0, _ = pw.harvest(waveform.astype(np.float64), hparams['audio_sample_rate'], f0_floor=f0_floor, f0_ceil=f0_ceil, frame_period=time_step)
         f0 = pad_frames(f0.astype(np.float32), hop_size, waveform.shape[0], length)
@@ -25,8 +25,8 @@ class DioPE(BasePE):
         hop_size = int(np.round(hparams['hop_size'] * speed))
 
         time_step = 1000 * hop_size / hparams['audio_sample_rate']
-        f0_floor = hparams['fmin']
-        f0_ceil = hparams['fmax']
+        f0_floor = hparams['f0_min']
+        f0_ceil = hparams['f0_max']
 
         wav64 = waveform.astype(np.float64)
         f0, t = pw.dio(wav64, hparams['audio_sample_rate'], f0_floor=f0_floor, f0_ceil=f0_ceil, frame_period=time_step)
