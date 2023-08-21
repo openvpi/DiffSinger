@@ -206,7 +206,7 @@ class AcousticBinarizer(BaseBinarizer):
             for i, target in enumerate(targets):
                 aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
                 for aug_item_name in aug_item_names:
-                    replace_spk_id = int(aug_item_name.split(':', maxsplit=1)[0]) + (i + 1) * spk_id_size
+                    replace_spk_id = self.spk_ids[int(aug_item_name.split(':', maxsplit=1)[0])] + (i + 1) * spk_id_size
                     aug_task = {
                         'name': aug_item_name,
                         'func': aug_ins.process_item,

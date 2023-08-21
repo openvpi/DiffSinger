@@ -74,7 +74,7 @@ class BaseBinarizer:
         assert isinstance(self.speakers, list), 'Speakers must be a list'
         assert len(self.speakers) == len(self.raw_data_dirs), \
             'Number of raw data dirs must equal number of speaker names!'
-        if not self.spk_ids:
+        if len(self.spk_ids) == 0:
             self.spk_ids = list(range(len(self.raw_data_dirs)))
         else:
             assert len(self.spk_ids) == len(self.raw_data_dirs), \
