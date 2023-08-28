@@ -426,6 +426,30 @@ int
 
 1
 
+### binarization_args.prefer_ds
+
+Whether to prefer loading attributes and parameters from DS files.
+
+#### visibility
+
+variance
+
+#### scope
+
+preprocessing
+
+#### customizability
+
+recommended
+
+#### type
+
+bool
+
+#### default
+
+False
+
 ### binarization_args.shuffle
 
 Whether binarized dataset will be shuffled or not.
@@ -1686,30 +1710,6 @@ int
 
 100
 
-### lr_scheduler_args.gamma
-
-Learning rate decay ratio of `torch.optim.lr_scheduler.StepLR`.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
-0.5
-
 ### lr_scheduler_args
 
 Arguments of learning rate scheduler. Keys will be used as keyword arguments of the `__init__()` method of [lr_scheduler_args.scheduler_cls](#lr_scheduler_args.scheduler_cls).
@@ -1741,54 +1741,6 @@ str
 #### default
 
 torch.optim.lr_scheduler.StepLR
-
-### lr_scheduler_args.step_size
-
-Learning rate decays every this number of training steps.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-50000
-
-### lr_scheduler_args.warmup_steps
-
-Number of warmup steps of the learning rate scheduler.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-2000
 
 ### max_batch_frames
 
@@ -2160,78 +2112,6 @@ Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__
 
 dict
 
-### optimizer_args.beta1
-
-Parameter of the `torch.optim.AdamW` optimizer.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-0.9
-
-### optimizer_args.beta2
-
-Parameter of the `torch.optim.AdamW` optimizer.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-0.98
-
-### optimizer_args.lr
-
-Initial learning rate of the optimizer.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
-0.0004
-
 ### optimizer_args.optimizer_cls
 
 Optimizer class name
@@ -2255,30 +2135,6 @@ str
 #### default
 
 torch.optim.AdamW
-
-### optimizer_args.weight_decay
-
-Weight decay ratio of optimizer.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-0
 
 ### pe
 

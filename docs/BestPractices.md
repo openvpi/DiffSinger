@@ -70,13 +70,13 @@ A variance model takes high-level music information as input, including phoneme 
 
 To train a variance model, you must have all the required attributes listed in the following table in your transcriptions.csv according to the functionalities enabled.
 
-|                               | name | ph_seq | ph_dur | ph_num | note_seq | note_dur |
-|:-----------------------------:|:----:|:------:|:------:|:------:|:--------:|:--------:|
-|  phoneme duration prediction  |  ✓   |   ✓    |   ✓    |   ✓    |          |          |
-|       pitch prediction        |  ✓   |   ✓    |   ✓    |        |    ✓     |    ✓     |
-| variance parameter prediction |  ✓   |   ✓    |   ✓    |        |          |          |
+|                                | name | ph_seq | ph_dur | ph_num | note_seq | note_dur |
+|:------------------------------:|:----:|:------:|:------:|:------:|:--------:|:--------:|
+|  phoneme duration prediction   |  ✓   |   ✓    |   ✓    |   ✓    |          |          |
+|        pitch prediction        |  ✓   |   ✓    |   ✓    |        |    ✓     |    ✓     |
+| variance parameters prediction |  ✓   |   ✓    |   ✓    |        |          |          |
 
-The recommended way of building a variance dataset is to extend an acoustic dataset. You may have all the recordings prepared like the acoustic dataset as well.
+The recommended way of building a variance dataset is to extend an acoustic dataset. You may have all the recordings prepared like the acoustic dataset as well, or [use DS files in your variance datasets](#build-variance-datasets-with-ds-files).
 
 Variance models support multi-speaker settings like acoustic models do.
 
@@ -143,13 +143,76 @@ You can submit or propose a new dictionary by raising a topic in [Discussions](h
 - Most native speakers/singers of that language should be able to easily cover all phonemes in the dictionary. This means the dictionary should not contain extremely rare or highly customized phonemes of some dialects or accents.
 - It should not bring too much difficulty and complexity to the data labeling workflow, and it should be easy to use for end users of voicebanks.
 
+## Build variance datasets with DS files
+
+By default, the variance binarizer loads attributes from transcriptions.csv and searches for recording files (*.wav) to extract features and parameters. These attributes and parameters also exist in DS files, which are normally used for inference. This section introduces the required settings and important notes to build a variance dataset from DS files.
+
+First of all, you should edit your configuration file to enable loading from DS files:
+
+```yaml
+binarization_args:
+  prefer_ds: true  # prefer loading from DS files
+```
+
+Then you should prepare some DS files which are properly segmented. If you export DS files with OpenUTAU for DiffSinger, the DS files are already segmented according to the spaces between notes. You should put these DS files in a folder named `ds` in your raw dataset directory (besides the `wavs` folder).
+
+The DS files should also use the same dictionary as that of your target model. The attributes required vary from your target functionalities, as listed below:
+
+|        attribute name        | required by duration prediction | required by pitch prediction | required by variance parameters prediction | previous source | current source |
+|:----------------------------:|:-------------------------------:|:----------------------------:|:------------------------------------------:|:---------------:|:--------------:|
+|            `name`            |                ✓                |              ✓               |                     ✓                      |       CSV       |      CSV       |
+|           `ph_seq`           |                ✓                |              ✓               |                     ✓                      |       CSV       |     DS/CSV     |
+|           `ph_dur`           |                ✓                |              ✓               |                     ✓                      |       CSV       |     DS/CSV     |
+|           `ph_num`           |                ✓                |                              |                                            |       CSV       |     DS/CSV     |
+|          `note_seq`          |                                 |              ✓               |                                            |       CSV       |     DS/CSV     |
+|          `note_dur`          |                                 |              ✓               |                                            |       CSV       |     DS/CSV     |
+|           `f0_seq`           |                ✓                |              ✓               |                     ✓                      |       WAV       |     DS/WAV     |
+| `energy`, `breathiness`, ... |                                 |                              |                     ✓                      |       WAV       |     DS/WAV     |
+
+This means you only need one column in trancriptions.csv, the `name` column, to declare all DS files included in the dataset. The name pattern can be:
+
+- Full name: `some-name` will firstly match the first segment in `some-name.ds`.
+- Name with index: `some-name#0` and `some-name#1` will match segment 0 and segment 1 in `some-name.ds` if there are no match with full name.
+
+Though not recommended, the binarizer will still try to load attributes from transcriptions.csv or extract parameters from recordings if there are no matching DS files. In this case the full name matching logic is applied (the same as the normal binarization process).
+
+## Pitch extractors
+
+A pitch extractor estimates pitch (F0 sequence) from given recordings. F0 (fundamental frequency) is one of the most important components of singing voice that is needed by both acoustic models and variance models.
+
+```yaml
+pe: parselmouth  # pitch extractor type
+pe_ckpt: checkpoints/xxx/model.pt  # pitch extractor model path (if it requires any)
+```
+
+### Parselmouth
+
+[Parselmouth](https://github.com/YannickJadoul/Parselmouth) is the default pitch extractor in this repository. It is based on DSP algorithms, runs fast on CPU and can get accurate F0 on clean and normal recordings.
+
+To use parselmouth, simply include the following line in your configuration file:
+
+```yaml
+pe: parselmouth
+```
+
+### RMVPE
+
+[RMVPE](https://github.com/Dream-High/RMVPE) (Robust Model for Vocal Pitch Estimation) is the state-of-the-art NN-based pitch estimation model for singing voice. It runs slower than parselmouth, consumes more memory, however uses CUDA to accelerate computation (if available) and produce better results on noisy recordings and edge cases.
+
+To enable RMVPE, download its pre-trained checkpoint from [here](https://github.com/openvpi/DiffSinger/releases/download/v2.1.0/rmvpe.zip), extract it into the `checkpoints/` folder and edit the configuration file:
+
+```yaml
+pe: rmvpe
+pe_ckpt: checkpoints/rmvpe/model.pt
+```
+
 ## Performance tuning
 
 This section is about accelerating training and utilizing hardware.
 
 ### Data loader and batch sampler
 
-The data loader loads data pieces from the binarized dataset, and the batch sampler forms batches according to data lengths.
+The data loader loads data pieces from the binary dataset, and the batch sampler forms batches according to data lengths.
 
 To configure the data loader, edit your configuration file:
 
@@ -182,7 +245,7 @@ or
 pl_trainer_precision: bf16-mixed  # BF16 precision
 ```
 
-For more precision options, please checkout the official [documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).
+For more precision options, please check out the [official documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).
 
 ### Training on multiple GPUs
 
@@ -191,7 +254,7 @@ Using distributed data parallel (DDP) can divide training tasks to multiple GPUs
 By default, the trainer will utilize all CUDA devices defined in the `CUDA_VISIBLE_DEVICES` environment variable (empty means using all available devices). If you want to specify which GPUs to use, edit your configuration file:
 
 ```yaml
-pl_trainer_devices: [0, 1, 2, 3]  # using the first 4 GPUs defined in CUDA_VISIBLE_DEVICES
+pl_trainer_devices: [0, 1, 2, 3]  # use the first 4 GPUs defined in CUDA_VISIBLE_DEVICES
 ```
 
 Please note that `max_batch_size` and `max_batch_frames` are values for **each** GPU.
@@ -220,11 +283,13 @@ accumulate_grad_batches: 4  # the actual batch size will be 4x.
 
 Please note that enabling gradient accumulation will slow down training because the losses must be calculated for several times before the weights are updated (1 update to the weights = 1 actual training step).
 
-### Optimizer and learning rate
+## Optimizers and learning rate schedulers
 
-The optimizer and the learning rate scheduler can take an important role in accelerating the training process. DiffSinger uses a flexible configuration logic for these two modules.
+The optimizer and the learning rate scheduler can take an important role in the training process. DiffSinger uses a flexible configuration logic for these two modules.
 
-You can modify options of the optimizer and learning rate scheduler, or even use other classes of them by editing the configuration file:
+### Basic configurations
+
+The optimizer and learning rate scheduler used during training can be configured by their full class name and keyword arguments in the configuration file. Take the following as an example for the optimizer:
 
 ```yaml
 optimizer_args:
@@ -233,6 +298,11 @@ optimizer_args:
   beta1: 0.9
   beta2: 0.98
   weight_decay: 0
+```
+
+and for the learning rate scheduler:
+
+```yaml
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR  # class name of learning rate schedule
   warmup_steps: 2000
@@ -246,4 +316,80 @@ Also, note that the LR scheduler performs scheduling on the granularity of steps
 
 The special case applies when a tuple is needed in `__init__`: `beta1` and `beta2` are treated separately and form a tuple in the code. You could try to pass in an array instead. (And as an experiment, AdamW does accept `[beta1, beta2]`). If there is another special treatment required, please submit an issue.
 
-If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
+For PyTorch built-in optimizers and LR schedulers, see official [documentation](https://pytorch.org/docs/stable/optim.html) of the `torch.optim` package. If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
+
+### Composite LR schedulers
+
+Some LR schedulers like `SequentialLR` and `ChainedScheduler` may use other schedulers as arguments. Besides built-in types, there is a special design to configure these scheduler objects. See the following example.
+
+```yaml
+lr_scheduler_args:
+  scheduler_cls: torch.optim.lr_scheduler.SequentialLR
+  schedulers:
+  - cls: torch.optim.lr_scheduler.ExponentialLR
+    gamma: 0.5
+  - cls: torch.optim.lr_scheduler.LinearLR
+  - cls: torch.optim.lr_scheduler.MultiStepLR
+    milestones:
+    - 10
+    - 20
+  milestones:
+  - 10
+  - 20
+```
+
+The LR scheduler objects will be recursively construct objects if `cls` is present in sub-arguments. Please note that `cls` must be a scheduler class because this is a special design.
+
+**WARNING:** Nested `SequentialLR` and `ChainedScheduler` have unexpected behavior. **DO NOT** nest them. Also, make sure the scheduler is _chainable_ before using it in `ChainedScheduler`.
+
+## Fine-tuning and parameter freezing
+
+### Fine-tuning from existing checkpoints
+
+By default, the training starts from a model from scratch with randomly initialized parameters. However, if you already have some pre-trained checkpoints, and you need to adapt them to other datasets with their functionalities unchanged, fine-tuning may save training steps and time. In general, you need to add the following structure into the configuration file:
+
+```yaml
+# take acoustic models as an example
+finetune_enabled: true  # the main switch to enable fine-tuning
+finetune_ckpt_path: checkpoints/pretrained/model_ckpt_steps_320000.ckpt  # path to your pre-trained checkpoint
+finetune_ignored_params:  # prefix rules to exclude specific parameters when loading the checkpoints
+  - model.fs2.encoder.embed_tokens  # in case when the phoneme set is changed
+  - model.fs2.txt_embed  # same as above
+  - model.fs2.spk_embed  # in case when the speaker set is changed
+finetune_strict_shapes: true  # whether to raise an error when parameter shapes mismatch
+```
+
+For the pre-trained checkpoint, it must be a file saved with `torch.save`, containing a `dict` object and a `state_dict` key, like the following example:
+
+```json5
+{
+  "state_dict": {
+    "model.fs2.txt_embed": null,  // torch.Tensor
+    "model.fs2.pitch_embed.weight": null,  // torch.Tensor
+    "model.fs2.pitch_embed.bias": null,  // torch.Tensor
+    // ... (other parameters)
+  }
+  // ... (other possible keys
+}
+```
+
+**IMPORTANT NOTES**:
+
+- The pre-trained checkpoint is **loaded only once** at the beginning of the training experiment. You may interrupt the training at any time, but after this new experiment has saved its own checkpoint, the pre-trained checkpoint will not be loaded again when the training is resumed.
+- Only the state dict of the checkpoint will be loaded. The optimizer state in the pre-trained checkpoint will be ignored.
+- The parameter name matching is **not strict** when loading the pre-trained checkpoint. This means that missing parameters in the state dict will still be left as randomly initialized, and redundant parameters will be ignored without any warnings and errors. There are cases where the tensor shapes mismatch between the pre-trained state dict and the model - edit `finetune_strict_shapes` to change the behavior when dealing with this.
+- Be careful if you want to change the functionalities when fine-tuning. Starting from a checkpoint trained under different functionalities may be even slower than training from scratch.
+
+### Freezing model parameters
+
+Sometimes you want to freeze part of the model during training or fine-tuning to save GPU memory, accelerate the training process or avoid catastrophic forgetting. Parameter freezing may also be useful if you want to add/remove functionalities from pre-trained checkpoints. In general, you need to add the following structure into the configuration file:
+
+```yaml
+# take acoustic models as an example
+freezing_enabled: true  # main switch to enable parameter freezing
+frozen_params:  # prefix rules to freeze specific parameters during training
+  - model.fs2.encoder
+  - model.fs2.pitch_embed
+```
+
+You may interrupt the training and change the settings above at any time. Sometimes this will cause mismatching optimizer state - and it will be discarded silently.
