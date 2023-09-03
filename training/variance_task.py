@@ -42,6 +42,14 @@ class VarianceDataset(BaseDataset):
             batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
             batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
         if hparams['predict_pitch']:
+            if hparams['use_melody_encoder']:
+                batch['note_midi'] = utils.collate_nd([s['note_midi'] for s in samples], -1)
+                batch['note_rest'] = utils.collate_nd([s['note_rest'] for s in samples], True)
+                batch['note_dur'] = utils.collate_nd([s['note_dur'] for s in samples], 0)
+                if hparams['use_glide_embed']:
+                    batch['note_glide'] = utils.collate_nd([s['note_glide'] for s in samples], 0)
+                batch['mel2note'] = utils.collate_nd([s['mel2note'] for s in samples], 0)
+
             batch['base_pitch'] = utils.collate_nd([s['base_pitch'] for s in samples], 0)
         if hparams['predict_pitch'] or self.predict_variances:
             batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)
@@ -124,6 +132,13 @@ class VarianceTask(BaseTask):
         ph2word = sample.get('ph2word')  # [B, T_ph]
         midi = sample.get('midi')  # [B, T_ph]
         mel2ph = sample.get('mel2ph')  # [B, T_s]
+
+        note_midi = sample.get('note_midi')  # [B, T_n]
+        note_rest = sample.get('note_rest')  # [B, T_n]
+        note_dur = sample.get('note_dur')  # [B, T_n]
+        note_glide = sample.get('note_glide')  # [B, T_n]
+        mel2note = sample.get('mel2note')  # [B, T_s]
+
         base_pitch = sample.get('base_pitch')  # [B, T_s]
         pitch = sample.get('pitch')  # [B, T_s]
         energy = sample.get('energy')  # [B, T_s]
@@ -146,6 +161,8 @@ class VarianceTask(BaseTask):
         output = self.model(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, mel2ph=mel2ph,
+            note_midi=note_midi, note_rest=note_rest,
+            note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
             base_pitch=base_pitch, pitch=pitch,
             energy=energy, breathiness=breathiness,
             pitch_retake=pitch_retake, variance_retake=variance_retake,

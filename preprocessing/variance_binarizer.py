@@ -32,6 +32,11 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'midi',  # phoneme-level mean MIDI pitch, int64[T_ph,]
     'ph2word',  # similar to mel2ph format, representing number of phones within each note, int64[T_ph,]
     'mel2ph',  # mel2ph format representing number of frames within each phone, int64[T_s,]
+    'note_midi',  # note-level MIDI pitch, float32[T_n,]
+    'note_rest',  # flags for rest notes, bool[T_n,]
+    'note_dur',  # durations of notes, in number of frames, int64[T_n,]
+    'note_glide',  # flags for glides, 0 = none, 1 = up, 2 = down, int64[T_n,]
+    'mel2note',  # mel2ph format representing number of frames within each note, int64[T_s,]
     'base_pitch',  # interpolated and smoothed frame-level MIDI pitch, float32[T_s,]
     'pitch',  # actual pitch in semitones, float32[T_s,]
     'uv',  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
@@ -127,6 +132,9 @@ class VarianceBinarizer(BaseBinarizer):
                     f'Lengths of note_seq and note_dur mismatch in \'{item_name}\'.'
                 assert any([note != 'rest' for note in temp_dict['note_seq']]), \
                     f'All notes are rest in \'{item_name}\'.'
+                if hparams['use_glide_embed']:
+                    glide_map = {'none': 0, 'up': 1, 'down': 2}
+                    temp_dict['note_glide'] = [glide_map[x] for x in require('note_glide').split()]
 
             meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
@@ -244,22 +252,44 @@ class VarianceBinarizer(BaseBinarizer):
             processed_input['midi'] = ph_midi.round().long().clamp(min=0, max=127).cpu().numpy()
 
         if hparams['predict_pitch']:
-            # Below: calculate and interpolate frame-level MIDI pitch, which is a step function curve
-            note_dur = torch.FloatTensor(meta_data['note_dur']).to(self.device)
-            mel2note = get_mel2ph_torch(
-                self.lr, note_dur, mel2ph.shape[0], self.timestep, device=self.device
+            # Below: get note sequence and interpolate rest notes
+            note_midi = np.array(
+                [(librosa.note_to_midi(n, round_midi=False) if n != 'rest' else -1) for n in meta_data['note_seq']],
+                dtype=np.float32
             )
-            note_pitch = torch.FloatTensor(
-                [(librosa.note_to_midi(n, round_midi=False) if n != 'rest' else -1) for n in meta_data['note_seq']]
-            ).to(self.device)
-            frame_midi_pitch = torch.gather(F.pad(note_pitch, [1, 0], value=0), 0, mel2note)
-            rest = (frame_midi_pitch < 0).cpu().numpy()
-            frame_midi_pitch = frame_midi_pitch.cpu().numpy()
+            note_rest = note_midi < 0
             interp_func = interpolate.interp1d(
-                np.where(~rest)[0], frame_midi_pitch[~rest],
+                np.where(~note_rest)[0], note_midi[~note_rest],
                 kind='nearest', fill_value='extrapolate'
             )
-            frame_midi_pitch[rest] = interp_func(np.where(rest)[0])
+            note_midi[note_rest] = interp_func(np.where(note_rest)[0])
+            processed_input['note_midi'] = note_midi
+            processed_input['note_rest'] = note_rest
+            note_midi = torch.from_numpy(note_midi).to(self.device)
+
+            note_dur_sec = torch.FloatTensor(meta_data['note_dur']).to(self.device)
+            note_acc = torch.round(torch.cumsum(note_dur_sec, dim=0) / self.timestep + 0.5).long()
+            note_dur = torch.diff(note_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+            processed_input['note_dur'] = note_dur.cpu().numpy()
+
+            mel2note = get_mel2ph_torch(
+                self.lr, note_dur_sec, mel2ph.shape[0], self.timestep, device=self.device
+            )
+            processed_input['mel2note'] = mel2note.cpu().numpy()
+
+            # Below: get ornament attributes
+            if hparams['use_glide_embed']:
+                processed_input['note_glide'] = np.array(meta_data['note_glide'], dtype=np.int64)
+
+            # Below: calculate and interpolate frame-level MIDI pitch, which is a step function curve
+            frame_midi_pitch = torch.gather(F.pad(note_midi, [1, 0], value=0), 0, mel2note)
+            frame_rest = (frame_midi_pitch < 0).cpu().numpy()
+            frame_midi_pitch = frame_midi_pitch.cpu().numpy()
+            interp_func = interpolate.interp1d(
+                np.where(~frame_rest)[0], frame_midi_pitch[~frame_rest],
+                kind='nearest', fill_value='extrapolate'
+            )
+            frame_midi_pitch[frame_rest] = interp_func(np.where(frame_rest)[0])
             frame_midi_pitch = torch.from_numpy(frame_midi_pitch).to(self.device)
 
             # Below: smoothen the pitch step curve as the base pitch curve
