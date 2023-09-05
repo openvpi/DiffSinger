@@ -6,22 +6,20 @@ from torch.nn import functional as F
 
 from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer, BatchNorm1dTBC
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
-from utils.hparams import hparams
 
 DEFAULT_MAX_SOURCE_POSITIONS = 2000
 DEFAULT_MAX_TARGET_POSITIONS = 2000
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, kernel_size=None, num_heads=2, norm='ln'):
+    def __init__(self, hidden_size, dropout, kernel_size=None, padding='SAME', act='gelu', num_heads=2, norm='ln'):
         super().__init__()
         self.op = EncSALayer(
             hidden_size, num_heads, dropout=dropout,
             attention_dropout=0.0, relu_dropout=dropout,
-            kernel_size=kernel_size
-            if kernel_size is not None else hparams['enc_ffn_kernel_size'],
-            padding=hparams['ffn_padding'],
-            norm=norm, act=hparams['ffn_act']
+            kernel_size=kernel_size,
+            padding=padding,
+            norm=norm, act=act
         )
 
     def forward(self, x, **kwargs):
@@ -365,28 +363,23 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 
 
 class FastSpeech2Encoder(nn.Module):
-    def __init__(self, embed_tokens, hidden_size, num_layers, ffn_kernel_size=9, dropout=None, num_heads=2,
-                 use_pos_embed=False, use_last_norm=True, norm='ln', use_pos_embed_alpha=True):
+    def __init__(self, embed_tokens, hidden_size, num_layers,
+                 ffn_kernel_size=9, ffn_padding='SAME', ffn_act='gelu',
+                 dropout=None, num_heads=2, use_last_norm=True, norm='ln',
+                 use_pos_embed=True, rel_pos=True):
         super().__init__()
-        hidden_size = hparams['hidden_size'] if hidden_size is None else hidden_size
-        kernel_size = hparams['enc_ffn_kernel_size'] if ffn_kernel_size is None else ffn_kernel_size
-        num_layers = hparams['enc_layers'] if num_layers is None else num_layers
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
-        self.dropout = dropout if dropout is not None else hparams['dropout']
+        self.dropout = dropout
         self.use_pos_embed = use_pos_embed
         self.use_last_norm = use_last_norm
-        if use_pos_embed:
-            self.max_source_positions = DEFAULT_MAX_TARGET_POSITIONS
-            self.padding_idx = 0
-            self.pos_embed_alpha = nn.Parameter(torch.Tensor([1])) if use_pos_embed_alpha else 1
-            self.embed_positions = SinusoidalPositionalEmbedding(
-                embed_dim, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
-            )
 
         self.layers = nn.ModuleList([
-            TransformerEncoderLayer(self.hidden_size, self.dropout,
-                                    kernel_size=kernel_size, num_heads=num_heads)
+            TransformerEncoderLayer(
+                self.hidden_size, self.dropout,
+                kernel_size=ffn_kernel_size, padding=ffn_padding, act=ffn_act,
+                num_heads=num_heads
+            )
             for _ in range(self.num_layers)
         ])
         if self.use_last_norm:
@@ -397,43 +390,53 @@ class FastSpeech2Encoder(nn.Module):
         else:
             self.layer_norm = None
 
-        self.embed_tokens = embed_tokens
+        self.embed_tokens = embed_tokens  # redundant, but have to persist for compatibility with old checkpoints
         self.embed_scale = math.sqrt(hidden_size)
         self.padding_idx = 0
-        if hparams['rel_pos']:
+        self.rel_pos = rel_pos
+        if self.rel_pos:
             self.embed_positions = RelPositionalEncoding(hidden_size, dropout_rate=0.0)
         else:
             self.embed_positions = SinusoidalPositionalEmbedding(
                 hidden_size, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
             )
 
-    def forward_embedding(self, txt_tokens, extra_embed=None):
+    def forward_embedding(self, main_embed, extra_embed=None, padding_mask=None):
         # embed tokens and positions
-        x = self.embed_scale * self.embed_tokens(txt_tokens)
+        x = self.embed_scale * main_embed
         if extra_embed is not None:
             x = x + extra_embed
-        if hparams['use_pos_embed']:
-            if hparams['rel_pos']:
+        if self.use_pos_embed:
+            if self.rel_pos:
                 x = self.embed_positions(x)
             else:
-                positions = self.embed_positions(txt_tokens)
+                positions = self.embed_positions(~padding_mask)
                 x = x + positions
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
-    def forward(self, txt_tokens, dur_embed, attn_mask=None, return_hiddens=False):
-        encoder_padding_mask = txt_tokens.eq(self.padding_idx).detach()
-        x = self.forward_embedding(txt_tokens, dur_embed)  # [B, T, H]
-        nonpadding_mask_TB = 1 - encoder_padding_mask.transpose(0, 1).float()[:, :, None]  # [T, B, 1]
-        if self.use_pos_embed:
-            positions = self.pos_embed_alpha * self.embed_positions(x[..., 0])
-            x = x + positions
-            x = F.dropout(x, p=self.dropout, training=self.training)
+    def forward(self, main_embed, extra_embed, padding_mask, attn_mask=None, return_hiddens=False):
+        x = self.forward_embedding(main_embed, extra_embed, padding_mask=padding_mask)  # [B, T, H]
+        nonpadding_mask_TB = 1 - padding_mask.transpose(0, 1).float()[:, :, None]  # [T, B, 1]
+
+        # NOTICE:
+        # The following codes are commented out because
+        # `self.use_pos_embed` is always False in the older versions,
+        # and this argument did not compat with `hparams['use_pos_embed']`,
+        # which defaults to True. The new version fixed this inconsistency,
+        # resulting in temporary removal of pos_embed_alpha, which has actually
+        # never been used before.
+
+        # if self.use_pos_embed:
+        #     positions = self.pos_embed_alpha * self.embed_positions(x[..., 0])
+        #     x = x + positions
+        #     x = F.dropout(x, p=self.dropout, training=self.training)
+
         # B x T x C -> T x B x C
         x = x.transpose(0, 1) * nonpadding_mask_TB
         hiddens = []
         for layer in self.layers:
-            x = layer(x, encoder_padding_mask=encoder_padding_mask, attn_mask=attn_mask) * nonpadding_mask_TB
+            x = layer(x, encoder_padding_mask=padding_mask, attn_mask=attn_mask) * nonpadding_mask_TB
             hiddens.append(x)
         if self.use_last_norm:
             x = self.layer_norm(x) * nonpadding_mask_TB

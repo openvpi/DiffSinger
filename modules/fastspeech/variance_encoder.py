@@ -27,7 +27,10 @@ class FastSpeech2Variance(nn.Module):
 
         self.encoder = FastSpeech2Encoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
-            ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']
+            ffn_kernel_size=hparams['enc_ffn_kernel_size'],
+            ffn_padding=hparams['ffn_padding'], ffn_act=hparams['ffn_act'],
+            dropout=hparams['dropout'], num_heads=hparams['num_heads'],
+            use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams['rel_pos']
         )
 
         dur_hparams = hparams['dur_prediction_args']
@@ -55,6 +58,7 @@ class FastSpeech2Variance(nn.Module):
         :param infer: whether inference
         :return: encoder_out, ph_dur_pred
         """
+        txt_embed = self.txt_embed(txt_tokens)
         if self.linguistic_mode == 'word':
             b = txt_tokens.shape[0]
             onset = torch.diff(ph2word, dim=1, prepend=ph2word.new_zeros(b, 1)) > 0
@@ -67,10 +71,10 @@ class FastSpeech2Variance(nn.Module):
             word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
             word_dur_embed = self.word_dur_embed(word_dur.float()[:, :, None])
 
-            encoder_out = self.encoder(txt_tokens, onset_embed + word_dur_embed)
+            encoder_out = self.encoder(txt_embed, onset_embed + word_dur_embed, txt_tokens == 0)
         else:
             ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
-            encoder_out = self.encoder(txt_tokens, ph_dur_embed)
+            encoder_out = self.encoder(txt_embed, ph_dur_embed, txt_tokens == 0)
 
         if self.predict_dur:
             midi_embed = self.midi_embed(midi)  # => [B, T_ph, H]

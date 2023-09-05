@@ -19,7 +19,10 @@ class FastSpeech2Acoustic(nn.Module):
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
             self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
-            ffn_kernel_size=hparams['enc_ffn_kernel_size'], num_heads=hparams['num_heads']
+            ffn_kernel_size=hparams['enc_ffn_kernel_size'],
+            ffn_padding=hparams['ffn_padding'], ffn_act=hparams['ffn_act'],
+            dropout=hparams['dropout'], num_heads=hparams['num_heads'],
+            use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams['rel_pos']
         )
 
         self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
@@ -80,9 +83,10 @@ class FastSpeech2Acoustic(nn.Module):
             key_shift=None, speed=None,
             spk_embed_id=None, **kwargs
     ):
+        txt_embed = self.txt_embed(txt_tokens)
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
         dur_embed = self.dur_embed(dur[:, :, None])
-        encoder_out = self.encoder(txt_tokens, dur_embed)
+        encoder_out = self.encoder(txt_embed, dur_embed, txt_tokens == 0)
 
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])

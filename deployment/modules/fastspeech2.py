@@ -46,12 +46,13 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
 
     # noinspection PyMethodOverriding
     def forward(self, tokens, durations, f0, variances: dict, gender=None, velocity=None, spk_embed=None):
+        txt_embed = self.txt_embed(tokens)
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         f0 = f0 * (mel2ph > 0)
         mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
         dur_embed = self.dur_embed(durations.float()[:, :, None])
-        encoded = self.encoder(tokens, dur_embed)
+        encoded = self.encoder(txt_embed, dur_embed, tokens == 0)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)
 
@@ -102,16 +103,18 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         self.lr = LengthRegulator()
 
     def forward_encoder_word(self, tokens, word_div, word_dur):
+        txt_embed = self.txt_embed(tokens)
         ph2word = self.lr(word_div)
         onset = ph2word > F.pad(ph2word, [1, -1])
         onset_embed = self.onset_embed(onset.long())
         ph_word_dur = torch.gather(F.pad(word_dur, [1, 0]), 1, ph2word)
         word_dur_embed = self.word_dur_embed(ph_word_dur.float()[:, :, None])
-        return self.encoder(tokens, onset_embed + word_dur_embed), tokens == 0
+        return self.encoder(txt_embed, onset_embed + word_dur_embed, txt_embed == 0), tokens == 0
 
     def forward_encoder_phoneme(self, tokens, ph_dur):
+        txt_embed = self.txt_embed(tokens)
         ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
-        return self.encoder(tokens, ph_dur_embed), tokens == PAD_INDEX
+        return self.encoder(txt_embed, ph_dur_embed, tokens == 0), tokens == PAD_INDEX
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)
