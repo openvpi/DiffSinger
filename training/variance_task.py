@@ -14,7 +14,7 @@ from modules.metrics.curve import RawCurveAccuracy
 from modules.metrics.duration import RhythmCorrectness, PhonemeDurationAccuracy
 from modules.toplevel import DiffSingerVariance
 from utils.hparams import hparams
-from utils.plot import dur_to_figure, curve_to_figure
+from utils.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
@@ -210,18 +210,17 @@ class VarianceTask(BaseTask):
                 )
                 self.plot_dur(batch_idx, dur_gt, dur_pred, txt=tokens)
             if pitch_pred is not None:
-                base_pitch = sample['base_pitch']
-                pred_pitch = base_pitch + pitch_pred
+                pred_pitch = sample['base_pitch'] + pitch_pred
                 gt_pitch = sample['pitch']
                 mask = (sample['mel2ph'] > 0) & ~sample['uv']
                 self.pitch_acc.update(pred=pred_pitch, target=gt_pitch, mask=mask)
-                self.plot_curve(
+                self.plot_pitch(
                     batch_idx,
-                    gt_curve=gt_pitch,
-                    pred_curve=pred_pitch,
-                    base_curve=base_pitch,
-                    curve_name='pitch',
-                    grid=1
+                    gt_pitch=gt_pitch,
+                    pred_pitch=pred_pitch,
+                    note_midi=sample['note_midi'],
+                    note_dur=sample['note_dur'],
+                    note_rest=sample['note_rest']
                 )
             for name in self.variance_prediction_list:
                 variance = sample[name]
@@ -244,6 +243,17 @@ class VarianceTask(BaseTask):
         pred_dur = pred_dur[0].cpu().numpy()
         txt = self.phone_encoder.decode(txt[0].cpu().numpy()).split()
         self.logger.experiment.add_figure(name, dur_to_figure(gt_dur, pred_dur, txt), self.global_step)
+
+    def plot_pitch(self, batch_idx, gt_pitch, pred_pitch, note_midi, note_dur, note_rest):
+        name = f'pitch_{batch_idx}'
+        gt_pitch = gt_pitch[0].cpu().numpy()
+        pred_pitch = pred_pitch[0].cpu().numpy()
+        note_midi = note_midi[0].cpu().numpy()
+        note_dur = note_dur[0].cpu().numpy()
+        note_rest = note_rest[0].cpu().numpy()
+        self.logger.experiment.add_figure(name, pitch_note_to_figure(
+            gt_pitch, pred_pitch, note_midi, note_dur, note_rest
+        ), self.global_step)
 
     def plot_curve(self, batch_idx, gt_curve, pred_curve, base_curve=None, grid=None, curve_name='curve'):
         name = f'{curve_name}_{batch_idx}'
