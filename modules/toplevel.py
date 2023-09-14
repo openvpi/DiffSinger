@@ -88,10 +88,12 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             self.use_melody_encoder = hparams['use_melody_encoder']
             if self.use_melody_encoder:
                 self.melody_encoder = MelodyEncoder(enc_hparams=hparams['melody_encoder_args'])
+                self.delta_pitch_embed = Linear(1, hparams['hidden_size'])
+            else:
+                self.base_pitch_embed = Linear(1, hparams['hidden_size'])
 
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
-            self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             self.pitch_predictor = PitchDiffusion(
                 vmin=pitch_hparams['pitd_norm_min'],
                 vmax=pitch_hparams['pitd_norm_max'],
@@ -170,8 +172,6 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
             if pitch_retake is None:
                 pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
-            else:
-                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
 
             if pitch_expr is None:
                 pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
@@ -186,7 +186,13 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
                 pitch_retake_embed = pitch_expr * retake_true_embed + (1. - pitch_expr) * retake_false_embed
 
             pitch_cond += pitch_retake_embed
-            pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+            if self.use_melody_encoder:
+                delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
+                pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
+            else:
+                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+
             if infer:
                 pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
             else:
