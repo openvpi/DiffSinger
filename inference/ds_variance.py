@@ -160,7 +160,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         batch['note_midi'] = note_seq
         batch['note_dur'] = note_dur
         batch['note_rest'] = note_seq < 0
-        if hparams['use_glide_embed'] and param.get('note_glide') is not None:
+        if hparams.get('use_glide_embed', False) and param.get('note_glide') is not None:
             glide_map = {'none': 0, 'up': 1, 'down': 2}
             batch['note_glide'] = torch.LongTensor(
                 [[glide_map[x] for x in param['note_glide'].split()]]
