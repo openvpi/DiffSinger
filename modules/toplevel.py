@@ -170,7 +170,8 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             else:
                 pitch_cond = condition
 
-            if pitch_retake is None:
+            retake_unset = pitch_retake is None
+            if retake_unset:
                 pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
 
             if pitch_expr is None:
@@ -187,7 +188,10 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
 
             pitch_cond += pitch_retake_embed
             if self.use_melody_encoder:
-                delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
+                if retake_unset:  # generate from scratch
+                    delta_pitch_in = torch.zeros_like(base_pitch)
+                else:
+                    delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
                 pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
             else:
                 base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
