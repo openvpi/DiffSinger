@@ -4,14 +4,14 @@ base_config:
 task_cls: training.variance_task.VarianceTask
 num_spk: 1
 speakers:
-  - opencpop
+  - csdvar
 spk_ids: []
 test_prefixes: [
-    '2044',
-    '2086',
-    '2092',
-    '2093',
-    '2100',
+    'kr007a',
+    'kr031b',
+    'kr016a',
+    'kr050a',
+    'kr026b',
 ]
 
 audio_sample_rate: 44100
@@ -25,10 +25,10 @@ binarization_args:
   num_workers: 0
   prefer_ds: false
 
-raw_data_dir: 'data/opencpop_variance/raw'
-binary_data_dir: 'data/opencpop_variance/binary'
+raw_data_dir: 'data/dataset_var/raw'
+binary_data_dir: 'data/dataset_var/binary'
 binarizer_cls: preprocessing.variance_binarizer.VarianceBinarizer
-dictionary: dictionaries/opencpop-extension.txt
+dictionary: dictionaries/dictionary-csd-g2p-2.txt
 num_pad_tokens: 1
 
 use_spk_id: false
@@ -97,7 +97,7 @@ lr_scheduler_args:
   step_size: 12000
   gamma: 0.75
 max_batch_frames: 80000
-max_batch_size: 48
+max_batch_size: 24 #48
 val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 288000
