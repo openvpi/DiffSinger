@@ -52,7 +52,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         f0 = f0 * (mel2ph > 0)
         mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
         dur_embed = self.dur_embed(durations.float()[:, :, None])
-        encoded = self.encoder(txt_embed, dur_embed, tokens == 0)
+        encoded = self.encoder(txt_embed, dur_embed, tokens == PAD_INDEX)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)
 
@@ -109,12 +109,14 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         onset_embed = self.onset_embed(onset.long())
         ph_word_dur = torch.gather(F.pad(word_dur, [1, 0]), 1, ph2word)
         word_dur_embed = self.word_dur_embed(ph_word_dur.float()[:, :, None])
-        return self.encoder(txt_embed, onset_embed + word_dur_embed, txt_embed == 0), tokens == 0
+        x_masks = tokens == PAD_INDEX
+        return self.encoder(txt_embed, onset_embed + word_dur_embed, x_masks), x_masks
 
     def forward_encoder_phoneme(self, tokens, ph_dur):
         txt_embed = self.txt_embed(tokens)
         ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
-        return self.encoder(txt_embed, ph_dur_embed, tokens == 0), tokens == PAD_INDEX
+        x_masks = tokens == PAD_INDEX
+        return self.encoder(txt_embed, ph_dur_embed, x_masks), x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)
