@@ -85,7 +85,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
         self.lr = LengthRegulator()
 
         if self.predict_pitch:
-            self.use_melody_encoder = hparams['use_melody_encoder']
+            self.use_melody_encoder = hparams.get('use_melody_encoder', False)
             if self.use_melody_encoder:
                 self.melody_encoder = MelodyEncoder(enc_hparams=hparams['melody_encoder_args'])
                 self.delta_pitch_embed = Linear(1, hparams['hidden_size'])
