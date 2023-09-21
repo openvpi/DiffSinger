@@ -39,7 +39,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         )
 
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
-        self.shallow_args = hparams['shallow_diffusion_args']
+        self.shallow_args = hparams.get('shallow_diffusion_args', {})
         if self.use_shallow_diffusion:
             self.train_aux_decoder = self.shallow_args['train_aux_decoder']
             self.train_diffusion = self.shallow_args['train_diffusion']
