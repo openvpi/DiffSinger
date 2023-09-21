@@ -9,6 +9,7 @@ import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
+from modules.aux_decoder import build_aux_loss
 from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import get_vocoder_cls
@@ -62,9 +63,9 @@ class AcousticTask(BaseTask):
         self.dataset_cls = AcousticDataset
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
         if self.use_shallow_diffusion:
-            shallow_args = hparams['shallow_diffusion_args']
-            self.train_aux_decoder = shallow_args['train_aux_decoder']
-            self.train_diffusion = shallow_args['train_diffusion']
+            self.shallow_args = hparams['shallow_diffusion_args']
+            self.train_aux_decoder = self.shallow_args['train_aux_decoder']
+            self.train_diffusion = self.shallow_args['train_diffusion']
 
         self.use_vocoder = hparams['infer'] or hparams['val_with_vocoder']
         if self.use_vocoder:
@@ -85,7 +86,7 @@ class AcousticTask(BaseTask):
     # noinspection PyAttributeOutsideInit
     def build_losses_and_metrics(self):
         if self.use_shallow_diffusion:
-            self.aux_mel_loss = self.model.aux_decoder.get_loss()
+            self.aux_mel_loss = build_aux_loss(self.shallow_args['aux_decoder_arch'])
             self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
 
@@ -118,7 +119,8 @@ class AcousticTask(BaseTask):
 
             if output.aux_out is not None:
                 aux_out = output.aux_out
-                aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, target)
+                norm_gt = self.model.aux_decoder.norm_spec(target)
+                aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, norm_gt)
                 losses['aux_mel_loss'] = aux_mel_loss
 
             if output.diff_out is not None:

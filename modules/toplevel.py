@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from basics.base_module import CategorizedModule
+from modules.aux_decoder import AuxDecoderAdaptor
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding
@@ -17,7 +18,6 @@ from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
-from modules.aux_decoder.shallow_adapter import shallow_adapt
 from utils.hparams import hparams
 
 
@@ -25,16 +25,6 @@ class ShallowDiffusionOutput:
     def __init__(self, *, aux_out=None, diff_out=None):
         self.aux_out = aux_out
         self.diff_out = diff_out
-
-
-# TODO: replace the following placeholder with real modules
-class ExampleAuxDecoder(nn.Module):
-    def __init__(self, out_dims):
-        super().__init__()
-        self.out_dims = out_dims
-
-    def forward(self, condition, infer=True):
-        return torch.randn(condition.shape[0], condition.shape[1], self.out_dims, device=condition.device)
 
 
 class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
@@ -54,7 +44,12 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
             self.train_aux_decoder = self.shallow_args['train_aux_decoder']
             self.train_diffusion = self.shallow_args['train_diffusion']
             self.aux_decoder_grad = self.shallow_args['aux_decoder_grad']
-            self.aux_decoder = shallow_adapt(hparams, out_dims,vocab_size)
+            self.aux_decoder = AuxDecoderAdaptor(
+                in_dims=hparams['hidden_size'], out_dims=out_dims, num_feats=1,
+                spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
+                aux_decoder_arch=self.shallow_args['aux_decoder_arch'],
+                aux_decoder_args=self.shallow_args['aux_decoder_args']
+            )
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -81,8 +76,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
         )
         if infer:
             if self.use_shallow_diffusion:
-                aux_mel_pred = self.aux_decoder(condition, infer=True,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
-            key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id, **kwargs)
+                aux_mel_pred = self.aux_decoder(condition, infer=True)
                 aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
                 if gt_mel is not None and self.shallow_args['val_gt_start']:
                     src_mel = gt_mel
@@ -97,8 +91,7 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
             if self.use_shallow_diffusion:
                 if self.train_aux_decoder:
                     aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
-                    aux_out = self.aux_decoder(aux_cond, infer=False,txt_tokens=txt_tokens, mel2ph=mel2ph, f0=f0,
-            key_shift=key_shift, speed=speed,spk_embed_id=spk_embed_id,gt_mel=gt_mel,mask=((mel2ph > 0).float()[:, :, None]), **kwargs)
+                    aux_out = self.aux_decoder(aux_cond, infer=False)
                 else:
                     aux_out = None
                 if self.train_diffusion:

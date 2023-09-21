@@ -12,15 +12,13 @@ class ConvNeXtBlock(nn.Module):
         intermediate_dim (int): Dimensionality of the intermediate layer.
         layer_scale_init_value (float, optional): Initial value for the layer scale. None means no scaling.
             Defaults to None.
-        adanorm_num_embeddings (int, optional): Number of embeddings for AdaLayerNorm.
-            None means non-conditional LayerNorm. Defaults to None.
     """
 
     def __init__(
             self,
             dim: int,
             intermediate_dim: int,
-            layer_scale_init_value: Optional[float] = None, drop_path: float = 0.0, drop_out: float = 0.0
+            layer_scale_init_value: Optional[float] = None, drop_out: float = 0.0
 
     ):
         super().__init__()
@@ -57,34 +55,33 @@ class ConvNeXtBlock(nn.Module):
         return x
 
 
-class fs2_loss(nn.Module):
-    def __init__(self):
+class ConvNeXtDecoder(nn.Module):
+    def __init__(
+            self, in_dims, out_dims, /, *,
+            num_channels=512, num_layers=6, kernel_size=7, dropout_rate=0.1
+    ):
         super().__init__()
+        self.inconv = nn.Conv1d(
+            in_dims, num_channels, kernel_size,
+            stride=1, padding=(kernel_size - 1) // 2
+        )
+        self.conv = nn.ModuleList(
+            ConvNeXtBlock(
+                dim=num_channels, intermediate_dim=num_channels * 4,
+                layer_scale_init_value=1e-6, drop_out=dropout_rate
+            ) for _ in range(num_layers)
+        )
+        self.outconv = nn.Conv1d(
+            num_channels, out_dims, kernel_size,
+            stride=1, padding=(kernel_size - 1) // 2
+        )
 
-    def forward(self, y, x):
-        x = (x - (-5)) / (0 - (-5)) * 2 - 1
-        return nn.L1Loss()(y, x)
-
-
-class fs2_decode(nn.Module):
-    def __init__(self, encoder_hidden, out_dims, n_chans, kernel_size, dropout_rate, n_layers, parame):
-        super().__init__()
-        self.inconv = nn.Conv1d(encoder_hidden, n_chans, kernel_size, stride=1, padding=(kernel_size - 1) // 2)
-        self.conv = nn.ModuleList([ConvNeXtBlock(dim=n_chans, intermediate_dim=n_chans * 4, layer_scale_init_value=1e-6,
-                                                 drop_out=dropout_rate) for _ in range(n_layers)])
-        self.outconv = nn.Conv1d(n_chans, out_dims, kernel_size, stride=1, padding=(kernel_size - 1) // 2)
-
-    def build_loss(self):
-
-        return fs2_loss()
-
-    def forward(self, x, infer, *args, **kwargs):
+    # noinspection PyUnusedLocal
+    def forward(self, x, infer=False):
         x = x.transpose(1, 2)
         x = self.inconv(x)
-        for i in self.conv:
-            x = i(x)
-        x = self.outconv(x).transpose(1, 2)
-        if infer:
-            x = (x + 1) / 2 * (0 - (-5)) + (-5)
+        for conv in self.conv:
+            x = conv(x)
+        x = self.outconv(x)
+        x = x.transpose(1, 2)
         return x
-        pass
