@@ -105,7 +105,9 @@ class GaussianDiffusionONNX(GaussianDiffusion):
             x_start = self.norm_spec(x_start).transpose(-2, -1)
             if self.num_feats == 1:
                 x_start = x_start[:, None, :, :]
-            if depth > 0:
+            if depth >= self.timesteps:
+                x = noise
+            elif depth > 0:
                 x = self.q_sample(
                     x_start, torch.full((1,), depth - 1, device=device, dtype=torch.long), noise
                 )
