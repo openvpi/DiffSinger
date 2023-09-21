@@ -79,18 +79,23 @@ schedule_type: 'linear'
 # shallow diffusion
 use_shallow_diffusion: false
 diff_depth: 400
+
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
+  shared_encoder: true
   val_gt_start: false
   aux_share_encoder: true
   aux_encoder_strict_hparams: false
-  aux_encoder_arch: fs2
-  aux_encoder_args: {}
-  aux_decoder_grad: 0.1
-  aux_decoder_arch: fs2
+  aux_decoder_arch: convnext
+  aux_decoder_args:
+    num_channels: 512
+    num_layers: 6
+    kernel_size: 7
+    dropout_rate: 0.1
   aux_decoder_strict_hparams: true
-  aux_decoder_args: {}
+  aux_decoder_grad: 0.1
+
 lambda_aux_mel_loss: 0.2
 
 # train and eval

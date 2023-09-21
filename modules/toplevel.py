@@ -17,7 +17,7 @@ from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
-from modules.shallow.shallow_adapter import shallow_adapt
+from modules.aux_decoder.shallow_adapter import shallow_adapt
 from utils.hparams import hparams
 
 
