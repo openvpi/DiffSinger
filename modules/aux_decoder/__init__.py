@@ -46,10 +46,14 @@ class AuxDecoderAdaptor(nn.Module):
             self.register_buffer('spec_max', spec_max, persistent=False)
 
     def norm_spec(self, x):
-        return (x - self.spec_min) / (self.spec_max - self.spec_min) * 2 - 1
+        k = (self.spec_max - self.spec_min) / 2.
+        b = (self.spec_max + self.spec_min) / 2.
+        return (x - b) / k
 
     def denorm_spec(self, x):
-        return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
+        k = (self.spec_max - self.spec_min) / 2.
+        b = (self.spec_max + self.spec_min) / 2.
+        return x * k + b
 
     def forward(self, condition, infer=False):
         x = self.decoder(condition, infer=infer)  # [B, T, F x C]

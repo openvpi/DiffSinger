@@ -16,6 +16,12 @@ def extract(a, t):
 
 # noinspection PyMethodOverriding
 class GaussianDiffusionONNX(GaussianDiffusion):
+    def q_sample(self, x_start, t, noise):
+        return (
+                extract(self.sqrt_alphas_cumprod, t) * x_start +
+                extract(self.sqrt_one_minus_alphas_cumprod, t) * noise
+        )
+
     def p_sample(self, x, t, cond):
         x_pred = self.denoise_fn(x, t, cond)
         x_recon = (
@@ -74,18 +80,37 @@ class GaussianDiffusionONNX(GaussianDiffusion):
         x_prev = self.plms_get_x_pred(x_prev, noise_pred_prime, t, t_prev)
         return noise_pred, x_prev
 
-    def denorm_spec(self, x):
-        d = (self.spec_max - self.spec_min) / 2.
-        m = (self.spec_max + self.spec_min) / 2.
-        return x * d + m
+    def norm_spec(self, x):
+        k = (self.spec_max - self.spec_min) / 2.
+        b = (self.spec_max + self.spec_min) / 2.
+        return (x - b) / k
 
-    def forward(self, condition, speedup: int):
+    def denorm_spec(self, x):
+        k = (self.spec_max - self.spec_min) / 2.
+        b = (self.spec_max + self.spec_min) / 2.
+        return x * k + b
+
+    def forward(self, condition, x_start=None, depth: int = 1000, speedup: int = 1):
         condition = condition.transpose(1, 2)  # [1, T, H] => [1, H, T]
         device = condition.device
         n_frames = condition.shape[2]
 
-        step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)[:, None]
-        x = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
+        noise = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
+        if x_start is None:
+            step_range = torch.arange(0, self.k_step, speedup, dtype=torch.long, device=device).flip(0)[:, None]
+            x = noise
+        else:
+            depth = min(depth, self.k_step)
+            step_range = torch.arange(0, depth, speedup, dtype=torch.long, device=device).flip(0)[:, None]
+            x_start = self.norm_spec(x_start).transpose(-2, -1)
+            if self.num_feats == 1:
+                x_start = x_start[:, None, :, :]
+            if depth > 0:
+                x = self.q_sample(
+                    x_start, torch.full((1,), depth - 1, device=device, dtype=torch.long), noise
+                )
+            else:
+                x = x_start
 
         if speedup > 1:
             for t in step_range:
