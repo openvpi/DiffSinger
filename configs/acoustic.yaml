@@ -78,7 +78,7 @@ schedule_type: 'linear'
 
 # shallow diffusion
 use_shallow_diffusion: false
-diff_depth: 400
+K_step_infer: 400
 
 shallow_diffusion_args:
   train_aux_decoder: true

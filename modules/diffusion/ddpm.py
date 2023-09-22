@@ -223,7 +223,7 @@ class GaussianDiffusion(nn.Module):
         return x_recon, noise
 
     def inference(self, cond, b=1, x_start=None, device=None):
-        depth = hparams.get('diff_depth', self.k_step)
+        depth = hparams.get('K_step_infer', self.k_step)
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
         if self.use_shallow_diffusion:
             t_max = min(depth, self.k_step)
