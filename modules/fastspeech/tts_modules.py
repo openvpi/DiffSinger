@@ -416,7 +416,7 @@ class FastSpeech2Encoder(nn.Module):
         return x
 
     def forward(self, main_embed, extra_embed, padding_mask, attn_mask=None, return_hiddens=False):
-        x = self.forward_embedding(main_embed, extra_embed)  # [B, T, H]
+        x = self.forward_embedding(main_embed, extra_embed, padding_mask=padding_mask)  # [B, T, H]
         nonpadding_mask_TB = 1 - padding_mask.transpose(0, 1).float()[:, :, None]  # [T, B, 1]
 
         # NOTICE:

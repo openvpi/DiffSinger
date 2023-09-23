@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from basics.base_module import CategorizedModule
+from modules.aux_decoder import AuxDecoderAdaptor
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding
@@ -20,16 +21,36 @@ from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncod
 from utils.hparams import hparams
 
 
-class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
+class ShallowDiffusionOutput:
+    def __init__(self, *, aux_out=None, diff_out=None):
+        self.aux_out = aux_out
+        self.diff_out = diff_out
+
+
+class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
     @property
     def category(self):
         return 'acoustic'
 
     def __init__(self, vocab_size, out_dims):
-        super().__init__()
+        CategorizedModule.__init__(self)
+        ParameterAdaptorModule.__init__(self)
         self.fs2 = FastSpeech2Acoustic(
             vocab_size=vocab_size
         )
+
+        self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
+        self.shallow_args = hparams.get('shallow_diffusion_args', {})
+        if self.use_shallow_diffusion:
+            self.train_aux_decoder = self.shallow_args['train_aux_decoder']
+            self.train_diffusion = self.shallow_args['train_diffusion']
+            self.aux_decoder_grad = self.shallow_args['aux_decoder_grad']
+            self.aux_decoder = AuxDecoderAdaptor(
+                in_dims=hparams['hidden_size'], out_dims=out_dims, num_feats=1,
+                spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
+                aux_decoder_arch=self.shallow_args['aux_decoder_arch'],
+                aux_decoder_args=self.shallow_args['aux_decoder_args']
+            )
 
         self.diffusion = GaussianDiffusion(
             out_dims=out_dims,
@@ -49,28 +70,52 @@ class DiffSingerAcoustic(ParameterAdaptorModule, CategorizedModule):
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
             spk_embed_id=None, gt_mel=None, infer=True, **kwargs
-    ):
+    ) -> ShallowDiffusionOutput:
         condition = self.fs2(
             txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
             spk_embed_id=spk_embed_id, **kwargs
         )
-
         if infer:
-            mel_pred = self.diffusion(condition, infer=True)
+            if self.use_shallow_diffusion:
+                aux_mel_pred = self.aux_decoder(condition, infer=True)
+                aux_mel_pred *= ((mel2ph > 0).float()[:, :, None])
+                if gt_mel is not None and self.shallow_args['val_gt_start']:
+                    src_mel = gt_mel
+                else:
+                    src_mel = aux_mel_pred
+            else:
+                aux_mel_pred = src_mel = None
+            mel_pred = self.diffusion(condition, src_spec=src_mel, infer=True)
             mel_pred *= ((mel2ph > 0).float()[:, :, None])
-            return mel_pred
+            return ShallowDiffusionOutput(aux_out=aux_mel_pred, diff_out=mel_pred)
         else:
-            x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-            return x_recon, noise
+            if self.use_shallow_diffusion:
+                if self.train_aux_decoder:
+                    aux_cond = condition * self.aux_decoder_grad + condition.detach() * (1 - self.aux_decoder_grad)
+                    aux_out = self.aux_decoder(aux_cond, infer=False)
+                else:
+                    aux_out = None
+                if self.train_diffusion:
+                    x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                    diff_out = (x_recon, noise)
+                else:
+                    diff_out = None
+                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=diff_out)
+
+            else:
+                aux_out = None
+                x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise))
 
 
-class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
+class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
     @property
     def category(self):
         return 'variance'
 
     def __init__(self, vocab_size):
-        super().__init__()
+        CategorizedModule.__init__(self)
+        ParameterAdaptorModule.__init__(self)
         self.predict_dur = hparams['predict_dur']
         self.predict_pitch = hparams['predict_pitch']
 
@@ -219,7 +264,7 @@ class DiffSingerVariance(ParameterAdaptorModule, CategorizedModule):
             ]
             condition += torch.stack(variance_embeds, dim=-1).sum(-1)
 
-        variance_outputs = self.variance_predictor(condition, variance_inputs, infer)
+        variance_outputs = self.variance_predictor(condition, variance_inputs, infer=infer)
 
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)

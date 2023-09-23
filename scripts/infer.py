@@ -47,6 +47,7 @@ def main():
 @click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
 @click.option('--gender', type=float, required=False, help='Formant shifting (gender control)')
 @click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
+@click.option('--depth', type=int, required=False, default=-1, help='Shallow diffusion depth')
 @click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
 @click.option('--mel', is_flag=True, help='Save intermediate mel format instead of waveform')
 def acoustic(
@@ -60,6 +61,7 @@ def acoustic(
         key: int,
         gender: float,
         seed: int,
+        depth: int,
         speedup: int,
         mel: bool
 ):
@@ -107,8 +109,16 @@ def acoustic(
         f'Vocoder ckpt \'{hparams["vocoder_ckpt"]}\' not found. ' \
         f'Please put it to the checkpoints directory to run inference.'
 
+    if depth >= 0:
+        assert depth <= hparams['K_step'], f'Diffusion depth should not be larger than K_step {hparams["K_step"]}.'
+        hparams['K_step_infer'] = depth
+    elif hparams.get('use_shallow_diffusion', False):
+        depth = hparams['K_step_infer']
+    else:
+        depth = hparams['K_step']  # gaussian start (full depth diffusion)
+
     if speedup > 0:
-        assert hparams['K_step'] % speedup == 0, f'Acceleration ratio must be factor of K_step {hparams["K_step"]}.'
+        assert depth % speedup == 0, f'Acceleration ratio must be factor of diffusion depth {depth}.'
         hparams['pndm_speedup'] = speedup
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None

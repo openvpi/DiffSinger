@@ -33,12 +33,22 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.spk_map: dict = self.build_spk_map()
         self.vocab = TokenTextEncoder(vocab_list=build_phoneme_list())
         self.model = self.build_model()
-        self.fs2_cache_path = self.cache_dir / 'fs2.onnx'
+        self.fs2_aux_cache_path = self.cache_dir / (
+            'fs2_aux.onnx' if self.model.use_shallow_diffusion else 'fs2.onnx'
+        )
         self.diffusion_cache_path = self.cache_dir / 'diffusion.onnx'
 
         # Attributes for logging
         self.model_class_name = remove_suffix(self.model.__class__.__name__, 'ONNX')
-        self.fs2_class_name = remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')
+        fs2_aux_cls_logging = [remove_suffix(self.model.fs2.__class__.__name__, 'ONNX')]
+        if self.model.use_shallow_diffusion:
+            fs2_aux_cls_logging.append(remove_suffix(
+                self.model.aux_decoder.decoder.__class__.__name__, 'ONNX'
+            ))
+        self.fs2_aux_class_name = ', '.join(fs2_aux_cls_logging)
+        self.aux_decoder_class_name = remove_suffix(
+            self.model.aux_decoder.decoder.__class__.__name__, 'ONNX'
+        ) if self.model.use_shallow_diffusion else None
         self.denoiser_class_name = remove_suffix(self.model.diffusion.denoise_fn.__class__.__name__, 'ONNX')
         self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
 
@@ -86,11 +96,11 @@ class DiffSingerAcousticExporter(BaseExporter):
 
     def export_model(self, path: Path):
         self._torch_export_model()
-        fs2_onnx = self._optimize_fs2_graph(onnx.load(self.fs2_cache_path))
+        fs2_aux_onnx = self._optimize_fs2_aux_graph(onnx.load(self.fs2_aux_cache_path))
         diffusion_onnx = self._optimize_diffusion_graph(onnx.load(self.diffusion_cache_path))
-        model_onnx = self._merge_fs2_diffusion_graphs(fs2_onnx, diffusion_onnx)
+        model_onnx = self._merge_fs2_aux_diffusion_graphs(fs2_aux_onnx, diffusion_onnx)
         onnx.save(model_onnx, path)
-        self.fs2_cache_path.unlink()
+        self.fs2_aux_cache_path.unlink()
         self.diffusion_cache_path.unlink()
         print(f'| export model => {path}')
 
@@ -105,7 +115,7 @@ class DiffSingerAcousticExporter(BaseExporter):
 
     @torch.no_grad()
     def _torch_export_model(self):
-        # Prepare inputs for FastSpeech2 tracing
+        # Prepare inputs for FastSpeech2 and aux decoder tracing
         n_frames = 10
         tokens = torch.LongTensor([[1]]).to(self.device)
         durations = torch.LongTensor([[n_frames]]).to(self.device)
@@ -161,22 +171,30 @@ class DiffSingerAcousticExporter(BaseExporter):
             1: 'n_frames'
         }
 
-        # PyTorch ONNX export for FastSpeech2
-        print(f'Exporting {self.fs2_class_name}...')
+        # PyTorch ONNX export for FastSpeech2 and aux decoder
+        output_names = ['condition']
+        if self.model.use_shallow_diffusion:
+            output_names.append('aux_mel')
+            dynamix_axes['aux_mel'] = {
+                1: 'n_frames'
+            }
+        print(f'Exporting {self.fs2_aux_class_name}...')
         torch.onnx.export(
-            self.model.view_as_fs2(),
+            self.model.view_as_fs2_aux(),
             arguments,
-            self.fs2_cache_path,
+            self.fs2_aux_cache_path,
             input_names=input_names,
-            output_names=['condition'],
+            output_names=output_names,
             dynamic_axes=dynamix_axes,
             opset_version=15
         )
 
+        condition = torch.rand((1, n_frames, hparams['hidden_size']), device=self.device)
+
         # Prepare inputs for denoiser tracing and GaussianDiffusion scripting
         shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)
         noise = torch.randn(shape, device=self.device)
-        condition = torch.rand((1, hparams['hidden_size'], n_frames), device=self.device)
+        x_start = torch.randn((1, n_frames, hparams['audio_num_mel_bins']),device=self.device)
         step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
 
         print(f'Tracing {self.denoiser_class_name} denoiser...')
@@ -186,20 +204,24 @@ class DiffSingerAcousticExporter(BaseExporter):
             (
                 noise,
                 step,
-                condition
+                condition.transpose(1, 2)
             )
         )
 
         print(f'Scripting {self.diffusion_class_name}...')
+        diffusion_inputs = [
+            condition,
+            *([x_start, 100] if self.model.use_shallow_diffusion else [])
+        ]
         diffusion = torch.jit.script(
             diffusion,
             example_inputs=[
                 (
-                    condition.transpose(1, 2),
+                    *diffusion_inputs,
                     1  # p_sample branch
                 ),
                 (
-                    condition.transpose(1, 2),
+                    *diffusion_inputs,
                     200  # p_sample_plms branch
                 )
             ]
@@ -210,12 +232,14 @@ class DiffSingerAcousticExporter(BaseExporter):
         torch.onnx.export(
             diffusion,
             (
-                condition.transpose(1, 2),
+                *diffusion_inputs,
                 200
             ),
             self.diffusion_cache_path,
             input_names=[
-                'condition', 'speedup'
+                'condition',
+                *(['x_start', 'depth'] if self.model.use_shallow_diffusion else []),
+                'speedup'
             ],
             output_names=[
                 'mel'
@@ -224,6 +248,7 @@ class DiffSingerAcousticExporter(BaseExporter):
                 'condition': {
                     1: 'n_frames'
                 },
+                **({'x_start': {1: 'n_frames'}} if self.model.use_shallow_diffusion else {}),
                 'mel': {
                     1: 'n_frames'
                 }
@@ -252,11 +277,11 @@ class DiffSingerAcousticExporter(BaseExporter):
         )  # => [1, H]
         return spk_mix_embed
 
-    def _optimize_fs2_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
-        print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
+    def _optimize_fs2_aux_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
+        print(f'Running ONNX Simplifier on {self.fs2_aux_class_name}...')
         fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
-        print(f'| optimize graph: {self.fs2_class_name}')
+        print(f'| optimize graph: {self.fs2_aux_class_name}')
         return fs2
 
     def _optimize_diffusion_graph(self, diffusion: onnx.ModelProto) -> onnx.ModelProto:
@@ -282,18 +307,33 @@ class DiffSingerAcousticExporter(BaseExporter):
         print(f'| optimize graph: {self.diffusion_class_name}')
         return diffusion
 
-    def _merge_fs2_diffusion_graphs(self, fs2: onnx.ModelProto, diffusion: onnx.ModelProto) -> onnx.ModelProto:
-        onnx_helper.model_add_prefixes(fs2, dim_prefix='fs2.', ignored_pattern=r'(n_tokens)|(n_frames)')
+    def _merge_fs2_aux_diffusion_graphs(self, fs2: onnx.ModelProto, diffusion: onnx.ModelProto) -> onnx.ModelProto:
+        onnx_helper.model_add_prefixes(
+            fs2, dim_prefix=('fs2aux.' if self.model.use_shallow_diffusion else 'fs2.'),
+            ignored_pattern=r'(n_tokens)|(n_frames)'
+        )
         onnx_helper.model_add_prefixes(diffusion, dim_prefix='diffusion.', ignored_pattern='n_frames')
-        print(f'Merging {self.fs2_class_name} and {self.diffusion_class_name} '
+        print(f'Merging {self.fs2_aux_class_name} and {self.diffusion_class_name} '
               f'back into {self.model_class_name}...')
         merged = onnx.compose.merge_models(
-            fs2, diffusion, io_map=[('condition', 'condition')],
+            fs2, diffusion, io_map=[
+                ('condition', 'condition'),
+                *([('aux_mel', 'x_start')] if self.model.use_shallow_diffusion else []),
+            ],
             prefix1='', prefix2='', doc_string='',
             producer_name=fs2.producer_name, producer_version=fs2.producer_version,
             domain=fs2.domain, model_version=fs2.model_version
         )
         merged.graph.name = fs2.graph.name
+
+        print(f'Running ONNX Simplifier on {self.model_class_name}...')
+        merged, check = onnxsim.simplify(
+            merged,
+            include_subgraph=True
+        )
+        assert check, 'Simplified ONNX model could not be validated'
+        print(f'| optimize graph: {self.model_class_name}')
+
         return merged
 
     # noinspection PyMethodMayBeStatic
