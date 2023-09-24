@@ -11,7 +11,7 @@ from typing import Dict
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.toplevel import DiffSingerAcoustic
+from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
 from utils.hparams import hparams
@@ -170,12 +170,12 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             )  # => [B, T, H]
         else:
             spk_mix_embed = None
-        mel_pred = self.model(
+        mel_pred: ShallowDiffusionOutput = self.model(
             txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'], **variances,
             key_shift=sample.get('key_shift'), speed=sample.get('speed'),
             spk_mix_embed=spk_mix_embed, infer=True
         )
-        return mel_pred
+        return mel_pred.diff_out
 
     @torch.no_grad()
     def run_vocoder(self, spec, **kwargs):

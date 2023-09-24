@@ -1,6 +1,6 @@
-import numpy as np
 import copy
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -37,7 +37,7 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             spec_max=hparams['spec_max']
         )
 
-    def forward_fs2(
+    def forward_fs2_aux(
             self,
             tokens: Tensor,
             durations: Tensor,
@@ -46,41 +46,40 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             gender: Tensor = None,
             velocity: Tensor = None,
             spk_embed: Tensor = None
-    ) -> Tensor:
-        return self.fs2(
+    ):
+        condition = self.fs2(
             tokens, durations, f0, variances=variances,
             gender=gender, velocity=velocity, spk_embed=spk_embed
         )
+        if self.use_shallow_diffusion:
+            aux_mel_pred = self.aux_decoder(condition, infer=True)
+            return condition, aux_mel_pred
+        else:
+            return condition
 
-    def forward_diffusion(self, condition: Tensor, speedup: int) -> Tensor:
-        return self.diffusion(condition, speedup)
+    def forward_shallow_diffusion(
+            self, condition: Tensor, x_start: Tensor,
+            depth: int, speedup: int
+    ) -> Tensor:
+        return self.diffusion(condition, x_start=x_start, depth=depth, speedup=speedup)
 
-    def view_as_fs2(self) -> nn.Module:
+    def forward_diffusion(self, condition: Tensor, speedup: int):
+        return self.diffusion(condition, speedup=speedup)
+
+    def view_as_fs2_aux(self) -> nn.Module:
         model = copy.deepcopy(self)
-        try:
-            del model.variance_embeds
-            del model.variance_adaptor
-        except AttributeError:
-            pass
         del model.diffusion
-        model.forward = model.forward_fs2
+        model.forward = model.forward_fs2_aux
         return model
-
-    def view_as_adaptor(self) -> nn.Module:
-        model = copy.deepcopy(self)
-        del model.fs2
-        del model.diffusion
-        raise NotImplementedError()
 
     def view_as_diffusion(self) -> nn.Module:
         model = copy.deepcopy(self)
         del model.fs2
-        try:
-            del model.variance_embeds
-            del model.variance_adaptor
-        except AttributeError:
-            pass
-        model.forward = model.forward_diffusion
+        if self.use_shallow_diffusion:
+            del model.aux_decoder
+            model.forward = model.forward_shallow_diffusion
+        else:
+            model.forward = model.forward_diffusion
         return model
 
 
@@ -188,7 +187,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
     def forward_pitch_diffusion(
             self, pitch_cond, speedup: int = 1
     ):
-        x_pred = self.pitch_predictor(pitch_cond, speedup)
+        x_pred = self.pitch_predictor(pitch_cond, speedup=speedup)
         return x_pred
 
     def forward_pitch_postprocess(self, x_pred, base_pitch):
@@ -215,7 +214,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return variance_cond
 
     def forward_variance_diffusion(self, variance_cond, speedup: int = 1):
-        xs_pred = self.variance_predictor(variance_cond, speedup)
+        xs_pred = self.variance_predictor(variance_cond, speedup=speedup)
         return xs_pred
 
     def forward_variance_postprocess(self, xs_pred):

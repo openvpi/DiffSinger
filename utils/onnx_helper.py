@@ -277,27 +277,31 @@ def graph_extract_conditioner_projections(
                 to_be_removed.append(sub_node)
         [subgraph.node.remove(_n) for _n in to_be_removed]
 
+    toplevel_if_idx = toplevel_if_node = None
+    # Find the **last** If node in toplevel graph
     for i, n in enumerate(graph.node):
         if n.op_type == 'If':
-            for a in n.attribute:
-                b = onnx.helper.get_attribute_value(a)
-                _extract_conv_nodes_recursive(b)
-            # Insert the extracted nodes before the first 'If' node which carries the main denoising loop.
-            for key in reversed(node_dict):
-                alias, node = node_dict[key]
-                # Rename output of the node.
-                out_name = node.output[0]
-                node.output.remove(node.output[0])
-                node.output.insert(0, alias)
-                # Insert node into the main graph.
-                graph.node.insert(i, node)
-                # Rename value info of the output.
-                for v in graph.value_info:
-                    if v.name == out_name:
-                        v.name = alias
-                        break
-                _verbose(f'| extract conditioner projection: \'{node.name}\'')
-            break
+            toplevel_if_idx = i
+            toplevel_if_node = n
+    if toplevel_if_node is not None:
+        for a in toplevel_if_node.attribute:
+            b = onnx.helper.get_attribute_value(a)
+            _extract_conv_nodes_recursive(b)
+        # Insert the extracted nodes before the first 'If' node which carries the main denoising loop.
+        for key in reversed(node_dict):
+            alias, node = node_dict[key]
+            # Rename output of the node.
+            out_name = node.output[0]
+            node.output.remove(node.output[0])
+            node.output.insert(0, alias)
+            # Insert node into the main graph.
+            graph.node.insert(toplevel_if_idx, node)
+            # Rename value info of the output.
+            for v in graph.value_info:
+                if v.name == out_name:
+                    v.name = alias
+                    break
+            _verbose(f'| extract conditioner projection: \'{node.name}\'')
 
 
 def graph_remove_unused_values(graph: GraphProto):

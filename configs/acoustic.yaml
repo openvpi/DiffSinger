@@ -62,7 +62,6 @@ use_breathiness_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 
-K_step: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
@@ -75,6 +74,25 @@ dilation_cycle_length: 4  # *
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2
 schedule_type: 'linear'
+
+# shallow diffusion
+use_shallow_diffusion: false
+K_step: 1000
+K_step_infer: 400
+
+shallow_diffusion_args:
+  train_aux_decoder: true
+  train_diffusion: true
+  val_gt_start: false
+  aux_decoder_arch: convnext
+  aux_decoder_args:
+    num_channels: 512
+    num_layers: 6
+    kernel_size: 7
+    dropout_rate: 0.1
+  aux_decoder_grad: 0.1
+
+lambda_aux_mel_loss: 0.2
 
 # train and eval
 num_sanity_val_steps: 1
