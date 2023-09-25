@@ -62,7 +62,6 @@ use_breathiness_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 
-K_step: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
@@ -78,6 +77,7 @@ schedule_type: 'linear'
 
 # shallow diffusion
 use_shallow_diffusion: false
+K_step: 1000
 K_step_infer: 400
 
 shallow_diffusion_args:

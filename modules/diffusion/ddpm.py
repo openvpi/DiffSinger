@@ -84,10 +84,8 @@ class GaussianDiffusion(nn.Module):
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
             assert k_step <= timesteps, 'K_step should not be larger than timesteps.'
-        else:
-            assert k_step == timesteps, 'K_step must equal timesteps if use_shallow_diffusion is False.'
         self.timesteps = timesteps
-        self.k_step = k_step
+        self.k_step = k_step if self.use_shallow_diffusion else timesteps
         self.noise_list = deque(maxlen=4)
 
         to_torch = partial(torch.tensor, dtype=torch.float32)

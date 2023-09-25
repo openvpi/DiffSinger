@@ -197,7 +197,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
     def forward_pitch_diffusion(
             self, pitch_cond, speedup: int = 1
     ):
-        x_pred = self.pitch_predictor(pitch_cond, speedup)
+        x_pred = self.pitch_predictor(pitch_cond, speedup=speedup)
         return x_pred
 
     def forward_pitch_postprocess(self, x_pred, base_pitch):
@@ -224,7 +224,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return variance_cond
 
     def forward_variance_diffusion(self, variance_cond, speedup: int = 1):
-        xs_pred = self.variance_predictor(variance_cond, speedup)
+        xs_pred = self.variance_predictor(variance_cond, speedup=speedup)
         return xs_pred
 
     def forward_variance_postprocess(self, xs_pred):
