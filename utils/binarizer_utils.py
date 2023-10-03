@@ -20,18 +20,6 @@ def get_mel2ph_torch(lr, durs, length, timestep, device='cpu'):
     return mel2ph
 
 
-def pad_frames(frames, hop_size, n_samples, n_expect):
-    n_frames = frames.shape[0]
-    lpad = (int(n_samples // hop_size) - n_frames + 1) // 2
-    rpad = n_expect - n_frames - lpad
-    if rpad < 0:
-        frames = frames[:rpad]
-        rpad = 0
-    if lpad > 0 or rpad > 0:
-        frames = np.pad(frames, (lpad, rpad), mode='constant', constant_values=(frames[0], frames[-1]))
-    return frames
-
-
 def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
     """
 
@@ -43,17 +31,23 @@ def get_pitch_parselmouth(wav_data, length, hparams, speed=1, interp_uv=False):
     :return: f0, uv
     """
     hop_size = int(np.round(hparams['hop_size'] * speed))
-
     time_step = hop_size / hparams['audio_sample_rate']
     f0_min = 65
     f0_max = 800
-
+    
+    l_pad = int(np.ceil(1.5 / f0_min * hparams['audio_sample_rate']))
+    r_pad = hop_size * ((len(wav_data) - 1) // hop_size + 1) - len(wav_data) + l_pad + 1
+    wav_data = np.pad(wav_data, (l_pad, r_pad))
+    
     # noinspection PyArgumentList
-    f0 = parselmouth.Sound(wav_data, sampling_frequency=hparams['audio_sample_rate']).to_pitch_ac(
+    s = parselmouth.Sound(wav_data, sampling_frequency=hparams['audio_sample_rate']).to_pitch_ac(
         time_step=time_step, voicing_threshold=0.6,
-        pitch_floor=f0_min, pitch_ceiling=f0_max
-    ).selected_array['frequency'].astype(np.float32)
-    f0 = pad_frames(f0, hop_size, wav_data.shape[0], length)
+        pitch_floor=f0_min, pitch_ceiling=f0_max)
+    assert np.abs(s.t1 - 1.5 / f0_min) < 0.001
+    f0 = s.selected_array['frequency'].astype(np.float32)
+    if len(f0) < length:
+        f0 = np.pad(f0, (0, length - len(f0)))
+    f0 = f0[: length]
     uv = f0 == 0
     if interp_uv:
         f0, uv = interp_f0(f0, uv)
