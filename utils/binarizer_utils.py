@@ -66,7 +66,9 @@ def get_energy_librosa(wav_data, length, hparams):
     win_size = hparams['win_size']
 
     energy = librosa.feature.rms(y=wav_data, frame_length=win_size, hop_length=hop_size)[0]
-    energy = pad_frames(energy, hop_size, wav_data.shape[0], length)
+    if len(energy) < length:
+        energy = np.pad(energy, (0, length - len(energy)))
+    energy = energy[: length]
     energy_db = librosa.amplitude_to_db(energy)
     return energy_db
 
