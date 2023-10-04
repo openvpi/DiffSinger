@@ -160,13 +160,15 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return x_cond
 
     def forward_pitch_preprocess(
-            self, encoder_out, ph_dur, note_midi=None, note_rest=None, note_dur=None,
+            self, encoder_out, ph_dur,
+            note_midi=None, note_rest=None, note_dur=None, note_glide=None,
             pitch=None, expr=None, retake=None, spk_embed=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
         if self.use_melody_encoder:
             melody_encoder_out = self.melody_encoder(
-                note_midi, note_rest, note_dur
+                note_midi, note_rest, note_dur,
+                glide=note_glide
             )
             melody_encoder_out = self.forward_mel2x_gather(melody_encoder_out, note_dur, x_dim=self.hidden_size)
             condition += melody_encoder_out
