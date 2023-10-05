@@ -58,6 +58,12 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         smooth_kernel /= smooth_kernel.sum()
         self.smooth.weight.data = smooth_kernel[None, None]
 
+        glide_types = hparams.get('glide_types', ['none'])
+        self.glide_map = {
+            typename: idx
+            for idx, typename in enumerate(glide_types)
+        }
+
         self.auto_completion_mode = len(predictions) == 0
         self.global_predict_dur = 'dur' in predictions and hparams['predict_dur']
         self.global_predict_pitch = 'pitch' in predictions and hparams['predict_pitch']
@@ -161,9 +167,8 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         batch['note_dur'] = note_dur
         batch['note_rest'] = note_seq < 0
         if hparams.get('use_glide_embed', False) and param.get('note_glide') is not None:
-            glide_map = {'none': 0, 'up': 1, 'down': 2}
             batch['note_glide'] = torch.LongTensor(
-                [[glide_map[x] for x in param['note_glide'].split()]]
+                [[self.glide_map.get(x, 0) for x in param['note_glide'].split()]]
             ).to(self.device)
         else:
             batch['note_glide'] = torch.zeros(1, T_n, dtype=torch.long, device=self.device)

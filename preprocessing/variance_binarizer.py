@@ -57,6 +57,13 @@ class VarianceBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=VARIANCE_ITEM_ATTRIBUTES)
 
+        glide_types = hparams['glide_types']
+        assert glide_types[0] == 'none', 'The first glide type must be \'none\'.'
+        self.glide_map = {
+            typename: idx
+            for idx, typename in enumerate(glide_types)
+        }
+
         predict_energy = hparams['predict_energy']
         predict_breathiness = hparams['predict_breathiness']
         self.predict_variances = predict_energy or predict_breathiness
@@ -133,8 +140,7 @@ class VarianceBinarizer(BaseBinarizer):
                 assert any([note != 'rest' for note in temp_dict['note_seq']]), \
                     f'All notes are rest in \'{item_name}\'.'
                 if hparams['use_glide_embed']:
-                    glide_map = {'none': 0, 'up': 1, 'down': 2}
-                    temp_dict['note_glide'] = [glide_map[x] for x in require('note_glide').split()]
+                    temp_dict['note_glide'] = [self.glide_map.get(x, 0) for x in require('note_glide').split()]
 
             meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
