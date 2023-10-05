@@ -102,6 +102,7 @@ class MelodyEncoder(nn.Module):
 
         # ornament inputs
         self.use_glide_embed = hparams['use_glide_embed']
+        self.glide_embed_scale = hparams['glide_embed_scale']
         if self.use_glide_embed:
             # 0: none, 1: up, 2: down
             self.note_glide_embed = Embedding(len(hparams['glide_types']), hidden_size, padding_idx=0)
@@ -127,7 +128,7 @@ class MelodyEncoder(nn.Module):
         dur_embed = self.note_dur_embed(note_dur.float()[:, :, None])
         ornament_embed = 0
         if self.use_glide_embed:
-            ornament_embed += self.note_glide_embed(glide)
+            ornament_embed += self.note_glide_embed(glide) * self.glide_embed_scale
         encoder_out = self.encoder(
             midi_embed, dur_embed + ornament_embed,
             padding_mask=note_midi < 0
