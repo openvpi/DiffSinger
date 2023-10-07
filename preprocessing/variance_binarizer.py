@@ -290,18 +290,10 @@ class VarianceBinarizer(BaseBinarizer):
             if hparams['use_glide_embed']:
                 processed_input['note_glide'] = np.array(meta_data['note_glide'], dtype=np.int64)
 
-            # Below: calculate and interpolate frame-level MIDI pitch, which is a step function curve
+            # Below:
+            # 1. Get the frame-level MIDI pitch, which is a step function curve
+            # 2. smoothen the pitch step curve as the base pitch curve
             frame_midi_pitch = torch.gather(F.pad(note_midi, [1, 0], value=0), 0, mel2note)
-            frame_rest = (frame_midi_pitch < 0).cpu().numpy()
-            frame_midi_pitch = frame_midi_pitch.cpu().numpy()
-            interp_func = interpolate.interp1d(
-                np.where(~frame_rest)[0], frame_midi_pitch[~frame_rest],
-                kind='nearest', fill_value='extrapolate'
-            )
-            frame_midi_pitch[frame_rest] = interp_func(np.where(frame_rest)[0])
-            frame_midi_pitch = torch.from_numpy(frame_midi_pitch).to(self.device)
-
-            # Below: smoothen the pitch step curve as the base pitch curve
             global midi_smooth
             if midi_smooth is None:
                 midi_smooth = SinusoidalSmoothingConv1d(
