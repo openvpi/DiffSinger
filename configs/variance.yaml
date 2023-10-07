@@ -58,7 +58,7 @@ melody_encoder_args:
   hidden_size: 128
   enc_layers: 4
 use_glide_embed: false
-glide_types: [none, up, down]
+glide_types: [up, down]
 glide_embed_scale: 11.313708498984760  # sqrt(128)
 
 pitch_prediction_args:

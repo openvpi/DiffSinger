@@ -57,11 +57,14 @@ class VarianceBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=VARIANCE_ITEM_ATTRIBUTES)
 
-        glide_types = hparams['glide_types']
-        assert glide_types[0] == 'none', 'The first glide type must be \'none\'.'
+        glide_types = hparams.get('glide_types', [])
+        assert 'none' not in glide_types, 'Type name \'none\' is reserved and should not appear in glide_types.'
         self.glide_map = {
-            typename: idx
-            for idx, typename in enumerate(glide_types)
+            'none': 0,
+            **{
+                typename: idx + 1
+                for idx, typename in enumerate(glide_types)
+            }
         }
 
         predict_energy = hparams['predict_energy']

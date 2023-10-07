@@ -105,7 +105,7 @@ class MelodyEncoder(nn.Module):
         self.glide_embed_scale = hparams['glide_embed_scale']
         if self.use_glide_embed:
             # 0: none, 1: up, 2: down
-            self.note_glide_embed = Embedding(len(hparams['glide_types']), hidden_size, padding_idx=0)
+            self.note_glide_embed = Embedding(len(hparams['glide_types']) + 1, hidden_size, padding_idx=0)
 
         self.encoder = FastSpeech2Encoder(
             None, hidden_size, num_layers=get_hparam('enc_layers'),

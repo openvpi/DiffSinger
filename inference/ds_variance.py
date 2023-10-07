@@ -58,10 +58,14 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         smooth_kernel /= smooth_kernel.sum()
         self.smooth.weight.data = smooth_kernel[None, None]
 
-        glide_types = hparams.get('glide_types', ['none'])
+        glide_types = hparams.get('glide_types', [])
+        assert 'none' not in glide_types, 'Type name \'none\' is reserved and should not appear in glide_types.'
         self.glide_map = {
-            typename: idx
-            for idx, typename in enumerate(glide_types)
+            'none': 0,
+            **{
+                typename: idx + 1
+                for idx, typename in enumerate(glide_types)
+            }
         }
 
         self.auto_completion_mode = len(predictions) == 0
