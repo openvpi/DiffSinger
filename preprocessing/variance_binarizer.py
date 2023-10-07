@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from scipy import interpolate
 
-from basics.base_binarizer import BaseBinarizer
+from basics.base_binarizer import BaseBinarizer, BinarizationError
 from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
@@ -57,7 +57,8 @@ class VarianceBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=VARIANCE_ITEM_ATTRIBUTES)
 
-        glide_types = hparams.get('glide_types', [])
+        self.use_glide_embed = hparams['use_glide_embed']
+        glide_types = hparams['glide_types']
         assert 'none' not in glide_types, 'Type name \'none\' is reserved and should not appear in glide_types.'
         self.glide_map = {
             'none': 0,
@@ -143,7 +144,7 @@ class VarianceBinarizer(BaseBinarizer):
                 assert any([note != 'rest' for note in temp_dict['note_seq']]), \
                     f'All notes are rest in \'{item_name}\'.'
                 if hparams['use_glide_embed']:
-                    temp_dict['note_glide'] = [self.glide_map.get(x, 0) for x in require('note_glide').split()]
+                    temp_dict['note_glide'] = require('note_glide').split()
 
             meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
@@ -189,6 +190,35 @@ class VarianceBinarizer(BaseBinarizer):
                     bbox_inches='tight',
                     pad_inches=0.25)
         print(f'| save summary to \'{filename}\'')
+
+        if self.use_glide_embed:
+            # Glide type distribution summary
+            glide_count = {
+                g: 0
+                for g in self.glide_map
+            }
+            for item_name in self.items:
+                for glide in self.items[item_name]['note_glide']:
+                    if glide == 'none' or glide not in self.glide_map:
+                        glide_count['none'] += 1
+                    else:
+                        glide_count[glide] += 1
+
+            print('===== Glide Type Distribution Summary =====')
+            for i, key in enumerate(sorted(glide_count.keys(), key=lambda k: self.glide_map[k])):
+                if i == len(glide_count) - 1:
+                    end = '\n'
+                elif i % 10 == 9:
+                    end = ',\n'
+                else:
+                    end = ', '
+                print(f'\'{key}\': {glide_count[key]}', end=end)
+
+            if any(n == 0 for _, n in glide_count.items()):
+                raise BinarizationError(
+                    f'Missing glide types in dataset: '
+                    f'{sorted([g for g, n in glide_count.items() if n == 0], key=lambda k: self.glide_map[k])}'
+                )
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
@@ -288,7 +318,9 @@ class VarianceBinarizer(BaseBinarizer):
 
             # Below: get ornament attributes
             if hparams['use_glide_embed']:
-                processed_input['note_glide'] = np.array(meta_data['note_glide'], dtype=np.int64)
+                processed_input['note_glide'] = np.array([
+                    self.glide_map.get(x, 0) for x in meta_data['note_glide']
+                ], dtype=np.int64)
 
             # Below:
             # 1. Get the frame-level MIDI pitch, which is a step function curve
