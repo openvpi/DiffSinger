@@ -53,6 +53,14 @@ dur_prediction_args:
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
 
+use_melody_encoder: false
+melody_encoder_args:
+  hidden_size: 128
+  enc_layers: 4
+use_glide_embed: false
+glide_types: [up, down]
+glide_embed_scale: 11.313708498984760  # sqrt(128)
+
 pitch_prediction_args:
   pitd_norm_min: -8.0
   pitd_norm_max: 8.0

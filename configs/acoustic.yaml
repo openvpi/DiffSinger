@@ -77,7 +77,7 @@ schedule_type: 'linear'
 
 # shallow diffusion
 use_shallow_diffusion: false
-K_step: 1000
+K_step: 400
 K_step_infer: 400
 
 shallow_diffusion_args:

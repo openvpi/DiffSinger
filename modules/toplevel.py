@@ -17,7 +17,7 @@ from modules.diffusion.ddpm import (
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
-from modules.fastspeech.variance_encoder import FastSpeech2Variance
+from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncoder
 from utils.hparams import hparams
 
 
@@ -130,9 +130,15 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         self.lr = LengthRegulator()
 
         if self.predict_pitch:
+            self.use_melody_encoder = hparams.get('use_melody_encoder', False)
+            if self.use_melody_encoder:
+                self.melody_encoder = MelodyEncoder(enc_hparams=hparams['melody_encoder_args'])
+                self.delta_pitch_embed = Linear(1, hparams['hidden_size'])
+            else:
+                self.base_pitch_embed = Linear(1, hparams['hidden_size'])
+
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
-            self.base_pitch_embed = Linear(1, hparams['hidden_size'])
             self.pitch_predictor = PitchDiffusion(
                 vmin=pitch_hparams['pitd_norm_min'],
                 vmax=pitch_hparams['pitd_norm_max'],
@@ -159,6 +165,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
+            note_midi=None, note_rest=None, note_dur=None, note_glide=None, mel2note=None,
             base_pitch=None, pitch=None, pitch_expr=None, pitch_retake=None,
             variance_retake: Dict[str, Tensor] = None,
             spk_id=None, infer=True, **kwargs
@@ -196,10 +203,21 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             condition += spk_embed
 
         if self.predict_pitch:
-            if pitch_retake is None:
-                pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
+            if self.use_melody_encoder:
+                melody_encoder_out = self.melody_encoder(
+                    note_midi, note_rest, note_dur,
+                    glide=note_glide
+                )
+                melody_encoder_out = F.pad(melody_encoder_out, [0, 0, 1, 0])
+                mel2note_ = mel2note[..., None].repeat([1, 1, hparams['hidden_size']])
+                melody_condition = torch.gather(melody_encoder_out, 1, mel2note_)
+                pitch_cond = condition + melody_condition
             else:
-                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+                pitch_cond = condition
+
+            retake_unset = pitch_retake is None
+            if retake_unset:
+                pitch_retake = torch.ones_like(mel2ph, dtype=torch.bool)
 
             if pitch_expr is None:
                 pitch_retake_embed = self.pitch_retake_embed(pitch_retake.long())
@@ -213,8 +231,17 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 pitch_expr = (pitch_expr * pitch_retake)[:, :, None]  # [B, T, 1]
                 pitch_retake_embed = pitch_expr * retake_true_embed + (1. - pitch_expr) * retake_false_embed
 
-            pitch_cond = condition + pitch_retake_embed
-            pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+            pitch_cond += pitch_retake_embed
+            if self.use_melody_encoder:
+                if retake_unset:  # generate from scratch
+                    delta_pitch_in = torch.zeros_like(base_pitch)
+                else:
+                    delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
+                pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
+            else:
+                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+
             if infer:
                 pitch_pred_out = self.pitch_predictor(pitch_cond, infer=True)
             else:

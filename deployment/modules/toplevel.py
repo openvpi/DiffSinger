@@ -160,10 +160,18 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return x_cond
 
     def forward_pitch_preprocess(
-            self, encoder_out, ph_dur, note_midi, note_dur,
+            self, encoder_out, ph_dur,
+            note_midi=None, note_rest=None, note_dur=None, note_glide=None,
             pitch=None, expr=None, retake=None, spk_embed=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
+        if self.use_melody_encoder:
+            melody_encoder_out = self.melody_encoder(
+                note_midi, note_rest, note_dur,
+                glide=note_glide
+            )
+            melody_encoder_out = self.forward_mel2x_gather(melody_encoder_out, note_dur, x_dim=self.hidden_size)
+            condition += melody_encoder_out
         if expr is None:
             retake_embed = self.pitch_retake_embed(retake.long())
         else:
@@ -178,8 +186,12 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         pitch_cond = condition + retake_embed
         frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
         base_pitch = self.smooth(frame_midi_pitch)
-        base_pitch = base_pitch * retake + pitch * ~retake
-        pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+        if self.use_melody_encoder:
+            delta_pitch = (pitch - base_pitch) * ~retake
+            pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None])
+        else:
+            base_pitch = base_pitch * retake + pitch * ~retake
+            pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
         if hparams['use_spk_id'] and spk_embed is not None:
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
@@ -229,6 +241,8 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         model = copy.deepcopy(self)
         if self.predict_pitch:
             del model.pitch_predictor
+            if self.use_melody_encoder:
+                del model.melody_encoder
         if self.predict_variances:
             del model.variance_predictor
         model.fs2 = model.fs2.view_as_encoder()
@@ -239,12 +253,14 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return model
 
     def view_as_dur_predictor(self):
+        assert self.predict_dur
         model = copy.deepcopy(self)
         if self.predict_pitch:
             del model.pitch_predictor
+            if self.use_melody_encoder:
+                del model.melody_encoder
         if self.predict_variances:
             del model.variance_predictor
-        assert self.predict_dur
         model.fs2 = model.fs2.view_as_dur_predictor()
         model.forward = model.forward_dur_predictor
         return model
@@ -260,18 +276,22 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return model
 
     def view_as_pitch_diffusion(self):
+        assert self.predict_pitch
         model = copy.deepcopy(self)
         del model.fs2
         del model.lr
+        if self.use_melody_encoder:
+            del model.melody_encoder
         if self.predict_variances:
             del model.variance_predictor
-        assert self.predict_pitch
         model.forward = model.forward_pitch_diffusion
         return model
 
     def view_as_pitch_postprocess(self):
         model = copy.deepcopy(self)
         del model.fs2
+        if self.use_melody_encoder:
+            del model.melody_encoder
         if self.predict_variances:
             del model.variance_predictor
         model.forward = model.forward_pitch_postprocess
@@ -282,18 +302,22 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         del model.fs2
         if self.predict_pitch:
             del model.pitch_predictor
+            if self.use_melody_encoder:
+                del model.melody_encoder
         if self.predict_variances:
             del model.variance_predictor
         model.forward = model.forward_variance_preprocess
         return model
 
     def view_as_variance_diffusion(self):
+        assert self.predict_variances
         model = copy.deepcopy(self)
         del model.fs2
         del model.lr
         if self.predict_pitch:
             del model.pitch_predictor
-        assert self.predict_variances
+            if self.use_melody_encoder:
+                del model.melody_encoder
         model.forward = model.forward_variance_diffusion
         return model
 
@@ -302,5 +326,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         del model.fs2
         if self.predict_pitch:
             del model.pitch_predictor
+            if self.use_melody_encoder:
+                del model.melody_encoder
         model.forward = model.forward_variance_postprocess
         return model

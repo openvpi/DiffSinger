@@ -253,6 +253,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
         if self.model.predict_pitch:
+            use_melody_encoder = hparams.get('use_melody_encoder', False)
+            use_glide_embed = use_melody_encoder and hparams['use_glide_embed']
             # Prepare inputs for preprocessor of PitchDiffusion
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
@@ -261,10 +263,12 @@ class DiffSingerVarianceExporter(BaseExporter):
             pitch_input_args = (
                 encoder_out,
                 ph_dur,
-                note_midi,
-                note_dur,
-                pitch,
                 {
+                    'note_midi': note_midi,
+                    **({'note_rest': note_midi >= 0} if use_melody_encoder else {}),
+                    'note_dur': note_dur,
+                    **({'note_glide': torch.zeros_like(note_midi, dtype=torch.long)} if use_glide_embed else {}),
+                    'pitch': pitch,
                     **({'expr': torch.ones_like(pitch)} if self.expose_expr else {}),
                     'retake': retake,
                     **({'spk_embed': torch.rand(
@@ -277,8 +281,10 @@ class DiffSingerVarianceExporter(BaseExporter):
                 pitch_input_args,
                 self.pitch_preprocess_cache_path,
                 input_names=[
-                    'encoder_out', 'ph_dur',
-                    'note_midi', 'note_dur',
+                    'encoder_out', 'ph_dur', 'note_midi',
+                    *(['note_rest'] if use_melody_encoder else []),
+                    'note_dur',
+                    *(['note_glide'] if use_glide_embed else []),
                     'pitch',
                     *(['expr'] if self.expose_expr else []),
                     'retake',
@@ -297,13 +303,15 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'note_midi': {
                         1: 'n_notes'
                     },
+                    **({'note_rest': {1: 'n_notes'}} if use_melody_encoder else {}),
                     'note_dur': {
                         1: 'n_notes'
                     },
-                    **({'expr': {1: 'n_frames'}} if self.expose_expr else {}),
+                    **({'note_glide': {1: 'n_notes'}} if use_glide_embed else {}),
                     'pitch': {
                         1: 'n_frames'
                     },
+                    **({'expr': {1: 'n_frames'}} if self.expose_expr else {}),
                     'retake': {
                         1: 'n_frames'
                     },

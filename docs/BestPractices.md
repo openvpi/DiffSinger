@@ -199,7 +199,7 @@ pe: parselmouth
 
 [RMVPE](https://github.com/Dream-High/RMVPE) (Robust Model for Vocal Pitch Estimation) is the state-of-the-art NN-based pitch estimation model for singing voice. It runs slower than parselmouth, consumes more memory, however uses CUDA to accelerate computation (if available) and produce better results on noisy recordings and edge cases.
 
-To enable RMVPE, download its pre-trained checkpoint from [here](https://github.com/openvpi/DiffSinger/releases/download/v2.1.0/rmvpe.zip), extract it into the `checkpoints/` folder and edit the configuration file:
+To enable RMVPE, download its pre-trained checkpoint from [here](https://github.com/yxlllc/RMVPE/releases), extract it into the `checkpoints/` folder and edit the configuration file:
 
 ```yaml
 pe: rmvpe

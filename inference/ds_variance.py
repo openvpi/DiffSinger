@@ -58,6 +58,16 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         smooth_kernel /= smooth_kernel.sum()
         self.smooth.weight.data = smooth_kernel[None, None]
 
+        glide_types = hparams.get('glide_types', [])
+        assert 'none' not in glide_types, 'Type name \'none\' is reserved and should not appear in glide_types.'
+        self.glide_map = {
+            'none': 0,
+            **{
+                typename: idx + 1
+                for idx, typename in enumerate(glide_types)
+            }
+        }
+
         self.auto_completion_mode = len(predictions) == 0
         self.global_predict_dur = 'dur' in predictions and hparams['predict_dur']
         self.global_predict_pitch = 'pitch' in predictions and hparams['predict_pitch']
@@ -98,6 +108,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         note_seq = torch.FloatTensor(
             [(librosa.note_to_midi(n, round_midi=False) if n != 'rest' else -1) for n in param['note_seq'].split()]
         ).to(self.device)[None]  # [B=1, T_n]
+        T_n = note_seq.shape[1]
         note_dur_sec = torch.from_numpy(np.array([param['note_dur'].split()], np.float32)).to(self.device)  # [B=1, T_n]
         note_acc = torch.round(torch.cumsum(note_dur_sec, dim=1) / self.timestep + 0.5).long()
         note_dur = torch.diff(note_acc, dim=1, prepend=note_acc.new_zeros(1, 1))
@@ -105,7 +116,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         T_s = mel2note.shape[1]
 
         summary['words'] = T_w
-        summary['notes'] = note_seq.shape[1]
+        summary['notes'] = T_n
         summary['tokens'] = T_ph
         summary['frames'] = T_s
         summary['seconds'] = '%.2f' % (T_s * self.timestep)
@@ -155,6 +166,17 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             mel2word = F.pad(mel2word, [0, T_s - mel2word.shape[1]], value=mel2word[0, -1])
             word_dur = mel2ph_to_dur(mel2word, T_w)
         batch['word_dur'] = word_dur
+
+        batch['note_midi'] = note_seq
+        batch['note_dur'] = note_dur
+        batch['note_rest'] = note_seq < 0
+        if hparams.get('use_glide_embed', False) and param.get('note_glide') is not None:
+            batch['note_glide'] = torch.LongTensor(
+                [[self.glide_map.get(x, 0) for x in param['note_glide'].split()]]
+            ).to(self.device)
+        else:
+            batch['note_glide'] = torch.zeros(1, T_n, dtype=torch.long, device=self.device)
+        batch['mel2note'] = mel2note
 
         # Calculate frame-level MIDI pitch, which is a step function curve
         frame_midi_pitch = torch.gather(
@@ -250,6 +272,11 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         word_dur = sample['word_dur']
         ph_dur = sample['ph_dur']
         mel2ph = sample['mel2ph']
+        note_midi = sample['note_midi']
+        note_rest = sample['note_rest']
+        note_dur = sample['note_dur']
+        note_glide = sample['note_glide']
+        mel2note = sample['mel2note']
         base_pitch = sample['base_pitch']
         expr = sample.get('expr')
         pitch = sample.get('pitch')
@@ -271,8 +298,9 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             ph_spk_mix_embed = spk_mix_embed = None
 
         dur_pred, pitch_pred, variance_pred = self.model(
-            txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur,
-            mel2ph=mel2ph, base_pitch=base_pitch, pitch=pitch, pitch_expr=expr,
+            txt_tokens, midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur, mel2ph=mel2ph,
+            note_midi=note_midi, note_rest=note_rest, note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
+            base_pitch=base_pitch, pitch=pitch, pitch_expr=expr,
             ph_spk_mix_embed=ph_spk_mix_embed, spk_mix_embed=spk_mix_embed,
             infer=True
         )

@@ -3,8 +3,6 @@ import numpy as np
 import torch
 from matplotlib.ticker import MultipleLocator
 
-LINE_COLORS = ['w', 'r', 'y', 'cyan', 'm', 'b', 'lime']
-
 
 def spec_to_figure(spec, vmin=None, vmax=None):
     if isinstance(spec, torch.Tensor):
@@ -39,6 +37,43 @@ def dur_to_figure(dur_gt, dur_pred, txt):
     plt.xlim(0, max(dur_pred[-1], dur_gt[-1]))
     fig.legend()
     fig.tight_layout()
+    return fig
+
+
+def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=None, note_rest=None):
+    if isinstance(pitch_gt, torch.Tensor):
+        pitch_gt = pitch_gt.cpu().numpy()
+    if isinstance(pitch_pred, torch.Tensor):
+        pitch_pred = pitch_pred.cpu().numpy()
+    if isinstance(note_midi, torch.Tensor):
+        note_midi = note_midi.cpu().numpy()
+    if isinstance(note_dur, torch.Tensor):
+        note_dur = note_dur.cpu().numpy()
+    if isinstance(note_rest, torch.Tensor):
+        note_rest = note_rest.cpu().numpy()
+    fig = plt.figure()
+    if note_midi is not None and note_dur is not None:
+        note_dur_acc = np.cumsum(note_dur)
+        if note_rest is None:
+            note_rest = np.zeros_like(note_midi, dtype=np.bool_)
+        for i in range(len(note_midi)):
+            # if note_rest[i]:
+            #     continue
+            plt.gca().add_patch(
+                plt.Rectangle(
+                    xy=(note_dur_acc[i-1] if i > 0 else 0, note_midi[i] - 0.5),
+                    width=note_dur[i], height=1,
+                    edgecolor='grey', fill=False,
+                    linewidth=1.5, linestyle='--' if note_rest[i] else '-'
+                )
+            )
+    plt.plot(pitch_gt, color='b', label='gt')
+    if pitch_pred is not None:
+        plt.plot(pitch_pred, color='r', label='pred')
+    plt.gca().yaxis.set_major_locator(MultipleLocator(1))
+    plt.grid(axis='y')
+    plt.legend()
+    plt.tight_layout()
     return fig
 
 
