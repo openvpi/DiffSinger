@@ -2,7 +2,17 @@ from basics.base_pe import BasePE
 import numpy as np
 import pyworld as pw
 from utils.pitch_utils import interp_f0
-from utils.binarizer_utils import pad_frames
+
+def pad_frames(frames, hop_size, n_samples, n_expect):
+    n_frames = frames.shape[0]
+    lpad = (int(n_samples // hop_size) - n_frames + 1) // 2
+    rpad = n_expect - n_frames - lpad
+    if rpad < 0:
+        frames = frames[:rpad]
+        rpad = 0
+    if lpad > 0 or rpad > 0:
+        frames = np.pad(frames, (lpad, rpad), mode='constant', constant_values=(frames[0], frames[-1]))
+    return frames
 
 class HarvestPE(BasePE):
     def get_pitch(self, waveform, length, hparams, interp_uv=False, speed=1):
