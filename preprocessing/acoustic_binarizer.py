@@ -21,6 +21,7 @@ from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import (
+    DeconstructedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
@@ -116,7 +117,9 @@ class AcousticBinarizer(BaseBinarizer):
 
         if self.need_energy:
             # get ground truth energy
-            energy = get_energy_librosa(wav, length, hparams).astype(np.float32)
+            energy = get_energy_librosa(
+                wav, length, hop_size=hparams['hop_size'], win_size=hparams['win_size']
+            ).astype(np.float32)
 
             global energy_smooth
             if energy_smooth is None:
@@ -127,9 +130,17 @@ class AcousticBinarizer(BaseBinarizer):
 
             processed_input['energy'] = energy.cpu().numpy()
 
+        # create a DeconstructedWaveform object for further feature extraction
+        dec_waveform = DeconstructedWaveform(
+            wav, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
+            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
+        )
+
         if self.need_breathiness:
             # get ground truth breathiness
-            breathiness = get_breathiness_pyworld(wav, gt_f0 * ~uv, length, hparams).astype(np.float32)
+            breathiness = get_breathiness_pyworld(
+                dec_waveform, None, None, length=length
+            )
 
             global breathiness_smooth
             if breathiness_smooth is None:
