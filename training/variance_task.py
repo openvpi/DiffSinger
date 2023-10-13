@@ -42,14 +42,12 @@ class VarianceDataset(BaseDataset):
             batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
             batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
         if hparams['predict_pitch']:
-            if hparams['use_melody_encoder']:
-                batch['note_midi'] = utils.collate_nd([s['note_midi'] for s in samples], -1)
-                batch['note_rest'] = utils.collate_nd([s['note_rest'] for s in samples], True)
-                batch['note_dur'] = utils.collate_nd([s['note_dur'] for s in samples], 0)
-                if hparams['use_glide_embed']:
-                    batch['note_glide'] = utils.collate_nd([s['note_glide'] for s in samples], 0)
-                batch['mel2note'] = utils.collate_nd([s['mel2note'] for s in samples], 0)
-
+            batch['note_midi'] = utils.collate_nd([s['note_midi'] for s in samples], -1)
+            batch['note_rest'] = utils.collate_nd([s['note_rest'] for s in samples], True)
+            batch['note_dur'] = utils.collate_nd([s['note_dur'] for s in samples], 0)
+            if hparams['use_glide_embed']:
+                batch['note_glide'] = utils.collate_nd([s['note_glide'] for s in samples], 0)
+            batch['mel2note'] = utils.collate_nd([s['mel2note'] for s in samples], 0)
             batch['base_pitch'] = utils.collate_nd([s['base_pitch'] for s in samples], 0)
         if hparams['predict_pitch'] or self.predict_variances:
             batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)

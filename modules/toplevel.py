@@ -213,7 +213,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 melody_condition = torch.gather(melody_encoder_out, 1, mel2note_)
                 pitch_cond = condition + melody_condition
             else:
-                pitch_cond = condition
+                pitch_cond = condition.clone()  # preserve the original tensor to avoid further inplace operations
 
             retake_unset = pitch_retake is None
             if retake_unset:
@@ -254,7 +254,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
         if pitch is None:
             pitch = base_pitch + pitch_pred_out
-        condition += self.pitch_embed(pitch[:, :, None])
+        var_cond = condition + self.pitch_embed(pitch[:, :, None])
 
         variance_inputs = self.collect_variance_inputs(**kwargs)
         if variance_retake is not None:
@@ -262,9 +262,9 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 self.variance_embeds[v_name](v_input[:, :, None]) * ~variance_retake[v_name][:, :, None]
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
-            condition += torch.stack(variance_embeds, dim=-1).sum(-1)
+            var_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
 
-        variance_outputs = self.variance_predictor(condition, variance_inputs, infer=infer)
+        variance_outputs = self.variance_predictor(var_cond, variance_inputs, infer=infer)
 
         if infer:
             variances_pred_out = self.collect_variance_outputs(variance_outputs)
