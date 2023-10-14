@@ -20,8 +20,8 @@ matplotlib.use('Agg')
 
 
 class VarianceDataset(BaseDataset):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, prefix, preload=False):
+        super(VarianceDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         need_energy = hparams['predict_energy']
         need_breathiness = hparams['predict_breathiness']
         self.predict_variances = need_energy or need_breathiness

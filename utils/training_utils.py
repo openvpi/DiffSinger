@@ -74,7 +74,8 @@ class DsBatchSampler(Sampler):
     def __init__(self, dataset, max_batch_frames, max_batch_size, sub_indices=None,
                  num_replicas=None, rank=None,
                  required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
-                 shuffle_sample=False, shuffle_batch=False, seed=0, drop_last=False) -> None:
+                 size_reversed=False, shuffle_sample=False, shuffle_batch=False,
+                 seed=0, drop_last=False) -> None:
         self.dataset = dataset
         self.max_batch_frames = max_batch_frames
         self.max_batch_size = max_batch_size
@@ -84,6 +85,7 @@ class DsBatchSampler(Sampler):
         self.required_batch_count_multiple = required_batch_count_multiple
         self.batch_by_size = batch_by_size
         self.sort_by_similar_size = sort_by_similar_size
+        self.size_reversed = size_reversed
         self.shuffle_sample = shuffle_sample
         self.shuffle_batch = shuffle_batch
         self.seed = seed
@@ -104,10 +106,10 @@ class DsBatchSampler(Sampler):
                 indices = rng.permutation(len(self.dataset))
 
             if self.sort_by_similar_size:
-                grid = int(hparams.get('sampler_frame_count_grid', 200))
+                grid = int(hparams.get('sampler_frame_count_grid', 6))
                 assert grid > 0
-                sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(
-                    np.int64)
+                sizes = (np.round(np.array(self.dataset.sizes)[indices] / grid) * grid).clip(grid, None)
+                sizes *= (-1 if self.size_reversed else 1)
                 indices = indices[np.argsort(sizes, kind='mergesort')]
 
             indices = indices.tolist()
@@ -152,6 +154,7 @@ class DsBatchSampler(Sampler):
 
         if self.shuffle_batch:
             rng.shuffle(self.batches)
+        self.formed = self.epoch + self.seed
 
         del indices
         del batches
@@ -169,6 +172,7 @@ class DsBatchSampler(Sampler):
 
     def set_epoch(self, epoch):
         self.epoch = epoch
+        self.__form_batches()
 
 
 class DsEvalBatchSampler(Sampler):

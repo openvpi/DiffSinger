@@ -20,8 +20,8 @@ matplotlib.use('Agg')
 
 
 class AcousticDataset(BaseDataset):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, prefix, preload=False):
+        super(AcousticDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         self.required_variances = {}  # key: variance name, value: padding value
         if hparams.get('use_energy_embed', False):
             self.required_variances['energy'] = 0.0

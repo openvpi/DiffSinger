@@ -634,6 +634,30 @@ bool
 
 true
 
+### dataset_size_key
+
+The key that indexes the binarized metadata to be used as the `sizes` when batching by size
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+not recommended
+
+#### type
+
+string
+
+#### default
+
+lengths
+
 ### ddp_backend
 
 The distributed training backend.
