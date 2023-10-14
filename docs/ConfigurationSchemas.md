@@ -658,34 +658,6 @@ string
 
 lengths
 
-### ddp_backend
-
-The distributed training backend.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-nccl
-
-#### constraints
-
-Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp gets stuck, use 'nccl_no_p2p'.
-
 ### dictionary
 
 Path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
@@ -1982,6 +1954,30 @@ float
 
 0.06
 
+### nccl_p2p
+
+Whether to enable P2P when using NCCL as the backend. Turn it to `false` if the training process is stuck upon beginning.
+
+#### visibility
+
+all
+
+#### scope
+
+training
+
+#### customizability
+
+normal
+
+#### type
+
+bool
+
+#### default
+
+true
+
 ### num_ckpt_keep
 
 Number of newest checkpoints kept during training.
@@ -2510,9 +2506,9 @@ int
 
 1
 
-### pl_trainer_strategy
+### pl_trainer_strategy.name
 
-Strategies of the Lightning trainer behavior.
+Strategy name for the Lightning trainer.
 
 #### visibility
 
