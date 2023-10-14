@@ -1,5 +1,6 @@
 import json
 import pathlib
+import pickle
 import random
 import shutil
 import warnings
@@ -94,55 +95,54 @@ class BaseBinarizer:
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         raise NotImplementedError()
 
-    def split_train_valid_set(self):
+    def split_train_valid_set(self, item_names):
         """
         Split the dataset into training set and validation set.
         :return: train_item_names, valid_item_names
         """
-        prefixes = set([str(pr) for pr in hparams['test_prefixes']])
-        valid_item_names = set()
+        prefixes = {str(pr): None for pr in hparams['test_prefixes']}
+        valid_item_names = []
         # Add prefixes that specified speaker index and matches exactly item name to test set
         for prefix in deepcopy(prefixes):
-            if prefix in self.item_names:
-                valid_item_names.add(prefix)
-                prefixes.remove(prefix)
+            if prefix in item_names:
+                valid_item_names.append(prefix)
+                prefixes.pop(prefix)
         # Add prefixes that exactly matches item name without speaker id to test set
         for prefix in deepcopy(prefixes):
             matched = False
-            for name in self.item_names:
+            for name in item_names:
                 if name.split(':')[-1] == prefix:
-                    valid_item_names.add(name)
+                    valid_item_names.append(name)
                     matched = True
             if matched:
-                prefixes.remove(prefix)
+                prefixes.pop(prefix)
         # Add names with one of the remaining prefixes to test set
         for prefix in deepcopy(prefixes):
             matched = False
-            for name in self.item_names:
+            for name in item_names:
                 if name.startswith(prefix):
-                    valid_item_names.add(name)
+                    valid_item_names.append(name)
                     matched = True
             if matched:
-                prefixes.remove(prefix)
+                prefixes.pop(prefix)
         for prefix in deepcopy(prefixes):
             matched = False
-            for name in self.item_names:
+            for name in item_names:
                 if name.split(':')[-1].startswith(prefix):
-                    valid_item_names.add(name)
+                    valid_item_names.append(name)
                     matched = True
             if matched:
-                prefixes.remove(prefix)
+                prefixes.pop(prefix)
 
         if len(prefixes) != 0:
             warnings.warn(
-                f'The following rules in test_prefixes have no matching names in the dataset: {sorted(prefixes)}',
+                f'The following rules in test_prefixes have no matching names in the dataset: {prefixes}',
                 category=UserWarning
             )
             warnings.filterwarnings('default')
 
-        valid_item_names = sorted(list(valid_item_names))
         assert len(valid_item_names) > 0, 'Validation set is empty!'
-        train_item_names = [x for x in self.item_names if x not in set(valid_item_names)]
+        train_item_names = [x for x in item_names if x not in set(valid_item_names)]
         assert len(train_item_names) > 0, 'Training set is empty!'
 
         return train_item_names, valid_item_names
@@ -169,7 +169,7 @@ class BaseBinarizer:
         for ds_id, spk_id, data_dir in zip(range(len(self.raw_data_dirs)), self.spk_ids, self.raw_data_dirs):
             self.load_meta_data(pathlib.Path(data_dir), ds_id=ds_id, spk_id=spk_id)
         self.item_names = sorted(list(self.items.keys()))
-        self._train_item_names, self._valid_item_names = self.split_train_valid_set()
+        self._train_item_names, self._valid_item_names = self.split_train_valid_set(self.item_names)
 
         if self.binarization_args['shuffle']:
             random.seed(hparams['seed'])
@@ -249,9 +249,9 @@ class BaseBinarizer:
     def process_dataset(self, prefix, num_workers=0, apply_augmentation=False):
         args = []
         builder = IndexedDatasetBuilder(self.binary_data_dir, prefix=prefix, allowed_attr=self.data_attrs)
-        lengths = []
-        total_sec = 0
-        total_raw_sec = 0
+        total_sec = {k: 0.0 for k in self.spk_map}
+        total_raw_sec = {k: 0.0 for k in self.spk_map}
+        extra_info = {'name': {}, 'spk_ids': {}, 'spk': {}, 'lengths': {}}
 
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
@@ -259,19 +259,35 @@ class BaseBinarizer:
         aug_map = self.arrange_data_augmentation(self.meta_data_iterator(prefix)) if apply_augmentation else {}
 
         def postprocess(_item):
-            nonlocal total_sec, total_raw_sec
+            nonlocal total_sec, total_raw_sec, extra_info
             if _item is None:
                 return
-            builder.add_item(_item)
-            lengths.append(_item['length'])
-            total_sec += _item['seconds']
-            total_raw_sec += _item['seconds']
+            item_no = builder.add_item(_item)
+            for k, v in _item.items():
+                if isinstance(v, np.ndarray):
+                    if k not in extra_info:
+                        extra_info[k] = {}
+                    extra_info[k][item_no] = v.shape[0]
+            extra_info['name'][item_no] = _item['name'].split(':', 1)[-1]
+            extra_info['spk_ids'][item_no] = _item['spk_id']
+            extra_info['spk'][item_no] = _item['spk']
+            extra_info['lengths'][item_no] = _item['length']
+            total_raw_sec[_item['spk']] += _item['seconds']
+            total_sec[_item['spk']] += _item['seconds']
 
             for task in aug_map.get(_item['name'], []):
                 aug_item = task['func'](_item, **task['kwargs'])
-                builder.add_item(aug_item)
-                lengths.append(aug_item['length'])
-                total_sec += aug_item['seconds']
+                aug_item_no = builder.add_item(aug_item)
+                for k, v in aug_item.items():
+                    if isinstance(v, np.ndarray):
+                        if k not in extra_info:
+                            extra_info[k] = {}
+                        extra_info[k][aug_item_no] = v.shape[0]
+                extra_info['name'][aug_item_no] = aug_item['name'].split(':', 1)[-1]
+                extra_info['spk_ids'][aug_item_no] = aug_item['spk_id']
+                extra_info['spk'][aug_item_no] = aug_item['spk']
+                extra_info['lengths'][aug_item_no] = aug_item['length']
+                total_sec[aug_item['spk']] += aug_item['seconds']
 
         try:
             if num_workers > 0:
@@ -286,21 +302,34 @@ class BaseBinarizer:
                 for a in tqdm(args):
                     item = self.process_item(*a)
                     postprocess(item)
+            for k in extra_info:
+                for item_no in range(len(args)):
+                    assert item_no in extra_info[k], f'Item numbering is not consecutive.'
+                extra_info[k] = list(map(lambda x: x[1], sorted(extra_info[k].items(), key=lambda x: x[0])))
         except KeyboardInterrupt:
             builder.finalize()
             raise
 
         builder.finalize()
-        with open(self.binary_data_dir / f'{prefix}.lengths', 'wb') as f:
+        if prefix == "train":
+            extra_info.pop("name")
+            extra_info.pop("spk")
+        with open(self.binary_data_dir / f"{prefix}.meta", "wb") as f:
             # noinspection PyTypeChecker
-            np.save(f, lengths)
-
+            pickle.dump(extra_info, f)
         if apply_augmentation:
-            print(f'| {prefix} total duration (before augmentation): {total_raw_sec:.2f}s')
+            print(f"| {prefix} total duration (before augmentation): {sum(total_raw_sec.values()):.2f}s")
+            for k, v in total_raw_sec.items():
+                print(f"|     {k}: {v:.2f}s")
             print(
-                f'| {prefix} total duration (after augmentation): {total_sec:.2f}s ({total_sec / total_raw_sec:.2f}x)')
+                f"| {prefix} total duration (after augmentation): {sum(total_sec.values()):.2f}s ({sum(total_sec.values()) / sum(total_raw_sec.values()):.2f}x)"
+            )
+            for k, v in total_sec.items():
+                print(f"|     {k}: {v:.2f}s")
         else:
-            print(f'| {prefix} total duration: {total_raw_sec:.2f}s')
+            print(f"| {prefix} total duration: {sum(total_raw_sec.values()):.2f}s")
+            for k, v in total_raw_sec.items():
+                print(f"|     {k}: {v:.2f}s")
 
     def arrange_data_augmentation(self, data_iterator):
         """
