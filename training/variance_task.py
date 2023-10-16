@@ -74,7 +74,6 @@ def random_retake_masks(b, t, device):
 
 class VarianceTask(BaseTask):
     def __init__(self):
-        super().__init__()
         self.dataset_cls = VarianceDataset
 
         self.use_spk_id = hparams['use_spk_id']
@@ -96,7 +95,7 @@ class VarianceTask(BaseTask):
             self.variance_prediction_list.append('breathiness')
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
-        self.build_losses_and_metrics()
+        super().__init__()
 
     def build_model(self):
         return DiffSingerVariance(

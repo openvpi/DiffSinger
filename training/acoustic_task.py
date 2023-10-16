@@ -61,7 +61,6 @@ class AcousticDataset(BaseDataset):
 
 class AcousticTask(BaseTask):
     def __init__(self):
-        super().__init__()
         self.dataset_cls = AcousticDataset
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
         if self.use_shallow_diffusion:
@@ -78,7 +77,7 @@ class AcousticTask(BaseTask):
             self.required_variances.append('energy')
         if hparams.get('use_breathiness_embed', False):
             self.required_variances.append('breathiness')
-        self.build_losses_and_metrics()
+        super().__init__()
 
     def build_model(self):
         return DiffSingerAcoustic(
@@ -156,8 +155,10 @@ class AcousticTask(BaseTask):
                             mel_out.aux_out[i], mel_out.diff_out[i],
                             sample['f0'][i]
                         )
-                    self.plot_mel(data_idx, sample['mel'][i], mel_out.aux_out[i], 'auxmel')
-                    self.plot_mel(data_idx, sample['mel'][i], mel_out.diff_out[i], 'diffmel')
+                    if mel_out.aux_out is not None:
+                        self.plot_mel(data_idx, sample['mel'][i], mel_out.aux_out[i], 'auxmel')
+                    if mel_out.diff_out is not None:
+                        self.plot_mel(data_idx, sample['mel'][i], mel_out.diff_out[i], 'diffmel')
         return losses, sample['size']
 
 
