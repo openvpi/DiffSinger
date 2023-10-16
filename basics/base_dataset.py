@@ -52,10 +52,7 @@ class BaseDataset(Dataset):
         return self.sizes[index]
 
     def collater(self, samples):
-        if samples:
-            return {
-                'size': len(samples),
-                'indices': torch.LongTensor([s['_idx'] for s in samples])
-            }
-        else:
-            return {'size': 0}
+        return {
+            'size': len(samples),
+            'indices': torch.LongTensor([s['_idx'] for s in samples])
+        }
