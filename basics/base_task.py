@@ -17,15 +17,13 @@ import torch.utils.data
 from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
-from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,
-    DsBatchSampler, DsEvalBatchSampler,
-    DsTensorBoardLogger,
+    DsBatchSampler, DsTensorBoardLogger,
     get_latest_checkpoint_path, get_strategy
 )
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
