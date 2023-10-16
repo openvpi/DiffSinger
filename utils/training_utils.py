@@ -76,7 +76,10 @@ class DsBatchSampler(Sampler):
                  num_replicas=None, rank=None,
                  required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
                  size_reversed=False, shuffle_sample=False, shuffle_batch=False,
-                 seed=0, drop_last=False) -> None:
+                 disallow_empty_batch=True, pad_batch_assignment=True, seed=0, drop_last=False) -> None:
+        if rank >= num_replicas or rank < 0:
+            raise ValueError(
+                f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]")
         self.dataset = dataset
         self.max_batch_frames = max_batch_frames
         self.max_batch_size = max_batch_size
@@ -89,6 +92,8 @@ class DsBatchSampler(Sampler):
         self.size_reversed = size_reversed
         self.shuffle_sample = shuffle_sample
         self.shuffle_batch = shuffle_batch
+        self.disallow_empty_batch = disallow_empty_batch
+        self.pad_batch_assignment = pad_batch_assignment
         self.seed = seed
         self.drop_last = drop_last
         self.epoch = 0
@@ -99,6 +104,7 @@ class DsBatchSampler(Sampler):
         if self.formed == self.epoch + self.seed:
             return
         rng = np.random.default_rng(self.seed + self.epoch)
+        # Create indices
         if self.shuffle_sample:
             if self.sub_indices is not None:
                 rng.shuffle(self.sub_indices)
@@ -117,6 +123,7 @@ class DsBatchSampler(Sampler):
         else:
             indices = self.sub_indices if self.sub_indices is not None else list(range(len(self.dataset)))
 
+        # Batching
         if self.batch_by_size:
             batches = utils.batch_by_size(
                 indices, self.dataset.num_frames,
@@ -125,36 +132,50 @@ class DsBatchSampler(Sampler):
             )
         else:
             batches = [indices[i:i + self.max_batch_size] for i in range(0, len(indices), self.max_batch_size)]
+        if len(batches) < self.num_replicas and self.disallow_empty_batch:
+            raise RuntimeError("There is not enough batch to assign to each node.")
 
+        # Either drop_last or separate the leftovers.
         floored_total_batch_count = (len(batches) // self.num_replicas) * self.num_replicas
         if self.drop_last and len(batches) > floored_total_batch_count:
             batches = batches[:floored_total_batch_count]
             leftovers = []
-        else:
+            if len(batches) == 0:
+                raise RuntimeError("There is no batch left after dropping the last batch.")
+        elif self.shuffle_batch:
             leftovers = (rng.permutation(len(batches) - floored_total_batch_count) + floored_total_batch_count).tolist()
+        else:
+            leftovers = list(range(floored_total_batch_count, len(batches)))
 
-        batch_assignment = rng.permuted(
-            np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0
-        )[self.rank].tolist()
+        # Initial batch assignment to current rank.
+        batch_assignment = np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose()
+        if self.shuffle_batch:
+            batch_assignment = rng.permuted(batch_assignment, axis=0)[self.rank].tolist()
+        else:
+            batch_assignment = batch_assignment[self.rank].tolist()
+
+        # Assign leftovers or pad the batch assignment.
         floored_batch_count = len(batch_assignment)
-        ceiled_batch_count = floored_batch_count + (1 if len(leftovers) > 0 else 0)
         if self.rank < len(leftovers):
             batch_assignment.append(leftovers[self.rank])
-        elif len(leftovers) > 0:
+            floored_batch_count += 1
+        elif len(leftovers) > 0 and self.pad_batch_assignment:
+            if not batch_assignment:
+                raise RuntimeError("Cannot pad empty batch assignment.")
             batch_assignment.append(batch_assignment[self.epoch % floored_batch_count])
-        if self.required_batch_count_multiple > 1 and ceiled_batch_count % self.required_batch_count_multiple != 0:
-            # batch_assignment = batch_assignment[:((floored_batch_count \
-            # // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
+        # Ensure the batch count is multiple of required_batch_count_multiple.
+        if self.required_batch_count_multiple > 1 and len(batch_assignment) % self.required_batch_count_multiple != 0:
             ceiled_batch_count = math.ceil(
-                ceiled_batch_count / self.required_batch_count_multiple) * self.required_batch_count_multiple
+                len(batch_assignment) / self.required_batch_count_multiple
+            ) * self.required_batch_count_multiple
             for i in range(ceiled_batch_count - len(batch_assignment)):
                 batch_assignment.append(
                     batch_assignment[(i + self.epoch * self.required_batch_count_multiple) % floored_batch_count])
 
-        self.batches = [deepcopy(batches[i]) for i in batch_assignment]
-
-        if self.shuffle_batch:
-            rng.shuffle(self.batches)
+        if batch_assignment:
+            self.batches = [deepcopy(batches[i]) for i in batch_assignment]
+        else:
+            self.batches = [[]]
         self.formed = self.epoch + self.seed
 
         del indices
@@ -175,26 +196,6 @@ class DsBatchSampler(Sampler):
         self.epoch = epoch
         self.__form_batches()
 
-
-class DsEvalBatchSampler(Sampler):
-    def __init__(self, dataset, batch_size, num_replicas=None, rank=None) -> None:
-        self.dataset = dataset
-
-        ceiled_count = math.ceil(len(dataset) / num_replicas) * num_replicas
-        indices = np.arange(0, ceiled_count)
-        indices[indices >= len(dataset)] = 0
-
-        indices = indices.reshape(-1, num_replicas).transpose()[rank].tolist()
-        self.batches = [
-            indices[i:i + batch_size]
-            for i in range(0, len(indices), batch_size)
-        ]
-
-    def __iter__(self):
-        return iter(self.batches)
-
-    def __len__(self):
-        return len(self.batches)
 
 
 # ==========PL related==========
