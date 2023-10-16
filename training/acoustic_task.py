@@ -14,7 +14,7 @@ from modules.losses.diff_loss import DiffusionNoiseLoss
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import get_vocoder_cls
 from utils.hparams import hparams
-from utils.plot import spec_to_figure, curve_to_figure
+from utils.plot import spec_to_figure
 
 matplotlib.use('Agg')
 
@@ -34,6 +34,8 @@ class AcousticDataset(BaseDataset):
 
     def collater(self, samples):
         batch = super().collater(samples)
+        if batch['size'] == 0:
+            return batch
 
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         f0 = utils.collate_nd([s['f0'] for s in samples], 0.0)
@@ -76,6 +78,7 @@ class AcousticTask(BaseTask):
             self.required_variances.append('energy')
         if hparams.get('use_breathiness_embed', False):
             self.required_variances.append('breathiness')
+        self.build_losses_and_metrics()
 
     def build_model(self):
         return DiffSingerAcoustic(
@@ -88,7 +91,9 @@ class AcousticTask(BaseTask):
         if self.use_shallow_diffusion:
             self.aux_mel_loss = build_aux_loss(self.shallow_args['aux_decoder_arch'])
             self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
+            self.register_validation_loss('aux_mel_loss')
         self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
+        self.register_validation_loss('mel_loss')
 
     def run_model(self, sample, infer=False):
         txt_tokens = sample['tokens']  # [B, T_ph]
@@ -140,57 +145,63 @@ class AcousticTask(BaseTask):
 
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, infer=False)
-
-        if batch_idx < hparams['num_valid_plots'] \
-                and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
+        if sample['size'] > 0 and min(sample['indices']) < hparams['num_valid_plots']:
             mel_out: ShallowDiffusionOutput = self.run_model(sample, infer=True)
-
-            if self.use_vocoder:
-                self.plot_wav(
-                    batch_idx, gt_mel=sample['mel'],
-                    aux_mel=mel_out.aux_out, diff_mel=mel_out.diff_out,
-                    f0=sample['f0']
-                )
-            if mel_out.aux_out is not None:
-                self.plot_mel(batch_idx, sample['mel'], mel_out.aux_out, name=f'auxmel_{batch_idx}')
-            if mel_out.diff_out is not None:
-                self.plot_mel(batch_idx, sample['mel'], mel_out.diff_out, name=f'diffmel_{batch_idx}')
-
+            for i in range(len(sample['indices'])):
+                data_idx = sample['indices'][i]
+                if data_idx < hparams['num_valid_plots']:
+                    if self.use_vocoder:
+                        self.plot_wav(
+                            data_idx, sample['mel'][i],
+                            mel_out.aux_out[i], mel_out.diff_out[i],
+                            sample['f0'][i]
+                        )
+                    self.plot_mel(data_idx, sample['mel'][i], mel_out.aux_out[i], 'auxmel')
+                    self.plot_mel(data_idx, sample['mel'][i], mel_out.diff_out[i], 'diffmel')
         return losses, sample['size']
+
 
     ############
     # validation plots
     ############
-    def plot_wav(self, batch_idx, gt_mel, aux_mel=None, diff_mel=None, f0=None):
-        gt_mel = gt_mel[0].cpu().numpy()
+    def plot_wav(self, data_idx, gt_mel, aux_mel, diff_mel, f0):
+        f0_len = self.valid_dataset.metadata['f0'][data_idx]
+        mel_len = self.valid_dataset.metadata['mel'][data_idx]
+        gt_mel = gt_mel[:mel_len].unsqueeze(0)
         if aux_mel is not None:
-            aux_mel = aux_mel[0].cpu().numpy()
+            aux_mel = aux_mel[:mel_len].unsqueeze(0)
         if diff_mel is not None:
-            diff_mel = diff_mel[0].cpu().numpy()
-        f0 = f0[0].cpu().numpy()
-        if batch_idx not in self.logged_gt_wav:
-            gt_wav = self.vocoder.spec2wav(gt_mel, f0=f0)
-            self.logger.experiment.add_audio(f'gt_{batch_idx}', gt_wav, sample_rate=hparams['audio_sample_rate'],
-                                             global_step=self.global_step)
-            self.logged_gt_wav.add(batch_idx)
+            diff_mel = diff_mel[:mel_len].unsqueeze(0)
+        f0 = f0[:f0_len].unsqueeze(0)
+        if data_idx not in self.logged_gt_wav:
+            gt_wav = self.vocoder.spec2wav_torch(gt_mel, f0=f0)
+            self.logger.all_rank_experiment.add_audio(
+                f'gt_{data_idx}', gt_wav,
+                sample_rate=hparams['audio_sample_rate'],
+                global_step=self.global_step
+            )
+            self.logged_gt_wav.add(data_idx)
         if aux_mel is not None:
-            aux_wav = self.vocoder.spec2wav(aux_mel, f0=f0)
-            self.logger.experiment.add_audio(f'aux_{batch_idx}', aux_wav, sample_rate=hparams['audio_sample_rate'],
-                                             global_step=self.global_step)
+            aux_wav = self.vocoder.spec2wav_torch(aux_mel, f0=f0)
+            self.logger.all_rank_experiment.add_audio(
+                f'aux_{data_idx}', aux_wav,
+                sample_rate=hparams['audio_sample_rate'],
+                global_step=self.global_step
+            )
         if diff_mel is not None:
-            diff_wav = self.vocoder.spec2wav(diff_mel, f0=f0)
-            self.logger.experiment.add_audio(f'diff_{batch_idx}', diff_wav, sample_rate=hparams['audio_sample_rate'],
-                                             global_step=self.global_step)
+            diff_wav = self.vocoder.spec2wav_torch(diff_mel, f0=f0)
+            self.logger.all_rank_experiment.add_audio(
+                f'diff_{data_idx}', diff_wav,
+                sample_rate=hparams['audio_sample_rate'],
+                global_step=self.global_step
+            )
 
-    def plot_mel(self, batch_idx, spec, spec_out, name=None):
-        name = f'mel_{batch_idx}' if name is None else name
+    def plot_mel(self, data_idx, gt_spec, out_spec, name_prefix='mel'):
         vmin = hparams['mel_vmin']
         vmax = hparams['mel_vmax']
-        spec_cat = torch.cat([(spec_out - spec).abs() + vmin, spec, spec_out], -1)
-        self.logger.experiment.add_figure(name, spec_to_figure(spec_cat[0], vmin, vmax), self.global_step)
-
-    def plot_curve(self, batch_idx, gt_curve, pred_curve, curve_name='curve'):
-        name = f'{curve_name}_{batch_idx}'
-        gt_curve = gt_curve[0].cpu().numpy()
-        pred_curve = pred_curve[0].cpu().numpy()
-        self.logger.experiment.add_figure(name, curve_to_figure(gt_curve, pred_curve), self.global_step)
+        mel_len = self.valid_dataset.metadata['mel'][data_idx]
+        spec_cat = torch.cat([(out_spec - gt_spec).abs() + vmin, gt_spec, out_spec], -1)
+        title_text = f"{self.valid_dataset.metadata['spk'][data_idx]} - {self.valid_dataset.metadata['name'][data_idx]}"
+        self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}',  spec_to_figure(
+            spec_cat[:mel_len], vmin, vmax, title_text
+        ), global_step=self.global_step)

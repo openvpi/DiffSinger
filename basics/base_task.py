@@ -81,18 +81,12 @@ class BaseTask(pl.LightningModule):
         self.valid_losses: Dict[str, Metric] = {
             'total_loss': MeanMetric()
         }
-        self.valid_metric_names = set()
+        self.valid_metrics: Dict[str, Metric] = {}
 
     ###########
     # Training, validation and testing
     ###########
     def setup(self, stage):
-        if hasattr(pl.accelerators, 'XLAAccelerator'):
-            self.use_tpu = isinstance(self.trainer.accelerator, pl.accelerators.XLAAccelerator)
-        elif hasattr(pl.accelerators, 'TPUAccelerator'):
-            self.use_tpu = isinstance(self.trainer.accelerator, pl.accelerators.TPUAccelerator)
-        else:
-            self.use_tpu = False
         self.phone_encoder = self.build_phone_encoder()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
@@ -104,7 +98,6 @@ class BaseTask(pl.LightningModule):
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
             self.load_finetune_ckpt(self.load_pre_train_model())
         self.print_arch()
-        self.build_losses_and_metrics()
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
@@ -199,10 +192,13 @@ class BaseTask(pl.LightningModule):
     def build_losses_and_metrics(self):
         raise NotImplementedError()
 
-    def register_metric(self, name: str, metric: Metric):
+    def register_validation_metric(self, name: str, metric: Metric):
         assert isinstance(metric, Metric)
-        setattr(self, name, metric)
-        self.valid_metric_names.add(name)
+        self.valid_metrics[name] = metric
+
+    def register_validation_loss(self, name: str, Aggregator: Metric = MeanMetric):
+        assert issubclass(Aggregator, Metric)
+        self.valid_losses[name] = Aggregator()
 
     def run_model(self, sample, infer=False):
         """
@@ -249,8 +245,10 @@ class BaseTask(pl.LightningModule):
             rank_zero_debug(f"Skip validation")
             return
         self._on_validation_start()
-        self.trainer.strategy.barrier()
         for metric in self.valid_losses.values():
+            metric.to(self.device)
+            metric.reset()
+        for metric in self.valid_metrics.values():
             metric.to(self.device)
             metric.reset()
 
@@ -271,18 +269,16 @@ class BaseTask(pl.LightningModule):
         """
         if self.skip_immediate_validation:
             rank_zero_debug(f"Skip validation {batch_idx}")
-            return {}
-        with torch.autocast(self.device.type, enabled=False):
-            losses, weight = self._validation_step(sample, batch_idx)
-        losses = {
-            'total_loss': sum(losses.values()),
-            **losses
-        }
-        for k, v in losses.items():
-            if k not in self.valid_losses:
-                self.valid_losses[k] = MeanMetric().to(self.device)
-            self.valid_losses[k].update(v, weight=weight)
-        return losses
+            return
+        if sample['size'] > 0:
+            with torch.autocast(self.device.type, enabled=False):
+                losses, weight = self._validation_step(sample, batch_idx)
+            losses = {
+                'total_loss': sum(losses.values()),
+                **losses
+            }
+            for k, v in losses.items():
+                self.valid_losses[k].update(v, weight=weight)
 
     def _on_validation_epoch_end(self):
         pass
@@ -294,11 +290,7 @@ class BaseTask(pl.LightningModule):
             return
         self._on_validation_epoch_end()
         loss_vals = {k: v.compute() for k, v in self.valid_losses.items()}
-        metric_vals = {k: getattr(self, k).compute() for k in self.valid_metric_names}
-        for metric in self.valid_losses.values():
-            metric.reset()
-        for metric_name in self.valid_metric_names:
-            getattr(self, metric_name).reset()
+        metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
         self.log('val_loss', loss_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
         self.logger.log_metrics({f'validation/{k}': v for k, v in loss_vals.items()}, step=self.global_step)
         self.logger.log_metrics({f'metrics/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
@@ -350,10 +342,10 @@ class BaseTask(pl.LightningModule):
             num_replicas=self.num_replicas,
             rank=self.global_rank,
             sort_by_similar_size=hparams['sort_by_len'],
-            size_reversed=False,
+            size_reversed=True,
             required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
-            shuffle_batch=False,
+            shuffle_batch=True,
             seed=hparams['seed']
         )
         return torch.utils.data.DataLoader(
@@ -367,11 +359,16 @@ class BaseTask(pl.LightningModule):
         )
 
     def val_dataloader(self):
-        sampler = DsEvalBatchSampler(
+        sampler = DsBatchSampler(
             self.valid_dataset,
-            batch_size=self.val_batch_size,
+            max_batch_frames=self.max_val_batch_frames,
+            max_batch_size=self.max_val_batch_size,
             num_replicas=self.num_replicas,
-            rank=self.global_rank
+            rank=self.global_rank,
+            shuffle_sample=False,
+            shuffle_batch=False,
+            disallow_empty_batch=False,
+            pad_batch_assignment=False
         )
         return torch.utils.data.DataLoader(
             self.valid_dataset,

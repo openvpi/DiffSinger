@@ -1,7 +1,7 @@
 import os
 import pickle
 
-import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from utils.hparams import hparams
@@ -38,7 +38,7 @@ class BaseDataset(Dataset):
             self.indexed_ds = self._indexed_ds
 
     def __getitem__(self, index):
-        return self.indexed_ds[index]
+        return {'_idx': index, **self.indexed_ds[index]}
 
     def __len__(self):
         return len(self.sizes)
@@ -52,6 +52,10 @@ class BaseDataset(Dataset):
         return self.sizes[index]
 
     def collater(self, samples):
-        return {
-            'size': len(samples)
-        }
+        if samples:
+            return {
+                'size': len(samples),
+                'indices': torch.LongTensor([s['_idx'] for s in samples])
+            }
+        else:
+            return {'size': 0}
