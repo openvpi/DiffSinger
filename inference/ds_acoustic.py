@@ -32,6 +32,8 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 self.variances_to_embed.add('energy')
             if hparams.get('use_breathiness_embed', False):
                 self.variances_to_embed.add('breathiness')
+            if hparams.get('use_tension_embed', False):
+                self.variances_to_embed.add('tension')
 
             self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
             if hparams['use_spk_id']:
@@ -160,6 +162,8 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             v_name: sample.get(v_name)
             for v_name in self.variances_to_embed
         }
+        # variances['tension'] = torch.sigmoid(torch.logit(variances['tension']) - 2)
+        variances['tension'] /= 4
         if hparams['use_spk_id']:
             spk_mix_id = sample['spk_mix_id']
             spk_mix_value = sample['spk_mix_value']

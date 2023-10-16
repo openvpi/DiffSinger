@@ -25,7 +25,8 @@ from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
-    get_breathiness_pyworld
+    get_breathiness_pyworld,
+    get_tension_base_harmonic_logit,
 )
 from utils.hparams import hparams
 
@@ -38,21 +39,24 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'f0',
     'energy',
     'breathiness',
+    'tension',
     'key_shift',
-    'speed'
+    'speed',
 ]
 
 pitch_extractor: BasePE = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
+tension_smooth: SinusoidalSmoothingConv1d = None
 
 
 class AcousticBinarizer(BaseBinarizer):
     def __init__(self):
         super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
-        self.need_energy = hparams.get('use_energy_embed', False)
-        self.need_breathiness = hparams.get('use_breathiness_embed', False)
+        self.need_energy = hparams['use_energy_embed']
+        self.need_breathiness = hparams['use_breathiness_embed']
+        self.need_tension = hparams['use_tension_embed']
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
@@ -150,6 +154,25 @@ class AcousticBinarizer(BaseBinarizer):
             breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
 
             processed_input['breathiness'] = breathiness.cpu().numpy()
+
+        if self.need_tension:
+            # get ground truth tension or falsetto
+            tension = get_tension_base_harmonic_logit(
+                dec_waveform, None, None, length=length
+            )
+
+            global tension_smooth
+            if tension_smooth is None:
+                tension_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['tension_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0]
+            if tension.isnan().any():
+                print('Error:', item_name)
+                print(tension)
+                return None
+
+            processed_input['tension'] = tension.cpu().numpy()
 
         if hparams.get('use_key_shift_embed', False):
             processed_input['key_shift'] = 0.

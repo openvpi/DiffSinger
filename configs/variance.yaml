@@ -40,6 +40,7 @@ predict_dur: true
 predict_pitch: true
 predict_energy: false
 predict_breathiness: false
+predict_tension: false
 
 dur_prediction_args:
   arch: fs2
@@ -77,6 +78,9 @@ energy_smooth_width: 0.12
 breathiness_db_min: -96.0
 breathiness_db_max: -20.0
 breathiness_smooth_width: 0.12
+tension_logit_min: -10.0
+tension_logit_max: 10.0
+tension_smooth_width: 0.12
 
 variances_prediction_args:
   total_repeat_bins: 48

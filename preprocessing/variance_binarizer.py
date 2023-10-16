@@ -18,7 +18,8 @@ from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
-    get_breathiness_pyworld
+    get_breathiness_pyworld,
+    get_tension_base_harmonic_logit
 )
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
@@ -43,6 +44,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'uv',  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
     'energy',  # frame-level RMS (dB), float32[T_s,]
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
+    'tension',  # tension, float32[T_s,]
 ]
 DS_INDEX_SEP = '#'
 
@@ -52,6 +54,7 @@ pitch_extractor: BasePE = None
 midi_smooth: SinusoidalSmoothingConv1d = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
+tension_smooth: SinusoidalSmoothingConv1d = None
 
 
 class VarianceBinarizer(BaseBinarizer):
@@ -71,7 +74,8 @@ class VarianceBinarizer(BaseBinarizer):
 
         predict_energy = hparams['predict_energy']
         predict_breathiness = hparams['predict_breathiness']
-        self.predict_variances = predict_energy or predict_breathiness
+        predict_tension = hparams['predict_tension']
+        self.predict_variances = predict_energy or predict_breathiness or predict_tension
         self.lr = LengthRegulator().to(self.device)
         self.prefer_ds = self.binarization_args['prefer_ds']
         self.cached_ds = {}
@@ -407,6 +411,37 @@ class VarianceBinarizer(BaseBinarizer):
                 breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['breathiness'] = breathiness
+
+        # Below: extract tension
+        if hparams['predict_tension']:
+            tension = None
+            tension_from_wav = False
+            if self.prefer_ds:
+                tension_seq = self.load_attr_from_ds(ds_id, name, 'tension', idx=ds_seg_idx)
+                if tension_seq is not None:
+                    tension = resample_align_curve(
+                        np.array(tension_seq.split(), np.float32),
+                        original_timestep=float(self.load_attr_from_ds(
+                            ds_id, name, 'tension_timestep', idx=ds_seg_idx
+                        )),
+                        target_timestep=self.timestep,
+                        align_length=length
+                    )
+            if tension is None:
+                tension = get_tension_base_harmonic_logit(
+                    dec_waveform, None, None, length=length
+                )
+                tension_from_wav = True
+
+            if tension_from_wav:
+                global tension_smooth
+                if tension_smooth is None:
+                    tension_smooth = SinusoidalSmoothingConv1d(
+                        round(hparams['tension_smooth_width'] / self.timestep)
+                    ).eval().to(self.device)
+                tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0].cpu().numpy()
+
+            processed_input['tension'] = tension
 
         return processed_input
 
