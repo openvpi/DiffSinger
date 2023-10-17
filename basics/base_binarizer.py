@@ -136,16 +136,17 @@ class BaseBinarizer:
 
         if len(prefixes) != 0:
             warnings.warn(
-                f'The following rules in test_prefixes have no matching names in the dataset: {prefixes}',
+                f'The following rules in test_prefixes have no matching names in the dataset: {", ".join(prefixes.keys())}',
                 category=UserWarning
             )
             warnings.filterwarnings('default')
 
+        valid_item_names = list(valid_item_names.keys())
         assert len(valid_item_names) > 0, 'Validation set is empty!'
         train_item_names = [x for x in item_names if x not in set(valid_item_names)]
         assert len(train_item_names) > 0, 'Training set is empty!'
 
-        return train_item_names, list(valid_item_names)
+        return train_item_names, valid_item_names
 
     @property
     def train_item_names(self):
