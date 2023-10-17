@@ -219,7 +219,7 @@ class BaseTask(pl.LightningModule):
         total_loss = sum(losses.values())
         return total_loss, {**losses, 'batch_size': float(sample['size'])}
 
-    def training_step(self, sample, batch_idx, optimizer_idx=-1):
+    def training_step(self, sample, batch_idx):
         total_loss, log_outputs = self._training_step(sample)
 
         # logs to progress bar
@@ -241,7 +241,7 @@ class BaseTask(pl.LightningModule):
 
     def on_validation_start(self):
         if self.skip_immediate_validation:
-            rank_zero_debug(f"Skip validation")
+            rank_zero_debug("Skip validation")
             return
         self._on_validation_start()
         for metric in self.valid_losses.values():
@@ -267,7 +267,7 @@ class BaseTask(pl.LightningModule):
         :param batch_idx:
         """
         if self.skip_immediate_validation:
-            rank_zero_debug(f"Skip validation {batch_idx}")
+            rank_zero_debug("Skip validation")
             return
         if sample['size'] > 0:
             with torch.autocast(self.device.type, enabled=False):
