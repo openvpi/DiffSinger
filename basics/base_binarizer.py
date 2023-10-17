@@ -100,19 +100,19 @@ class BaseBinarizer:
         Split the dataset into training set and validation set.
         :return: train_item_names, valid_item_names
         """
-        prefixes = {str(pr): None for pr in hparams['test_prefixes']}
-        valid_item_names = []
+        prefixes = {str(pr): 1 for pr in hparams['test_prefixes']}
+        valid_item_names = {}
         # Add prefixes that specified speaker index and matches exactly item name to test set
         for prefix in deepcopy(prefixes):
             if prefix in item_names:
-                valid_item_names.append(prefix)
+                valid_item_names[prefix] = 1
                 prefixes.pop(prefix)
         # Add prefixes that exactly matches item name without speaker id to test set
         for prefix in deepcopy(prefixes):
             matched = False
             for name in item_names:
                 if name.split(':')[-1] == prefix:
-                    valid_item_names.append(name)
+                    valid_item_names[name] = 1
                     matched = True
             if matched:
                 prefixes.pop(prefix)
@@ -121,7 +121,7 @@ class BaseBinarizer:
             matched = False
             for name in item_names:
                 if name.startswith(prefix):
-                    valid_item_names.append(name)
+                    valid_item_names[name] = 1
                     matched = True
             if matched:
                 prefixes.pop(prefix)
@@ -129,7 +129,7 @@ class BaseBinarizer:
             matched = False
             for name in item_names:
                 if name.split(':')[-1].startswith(prefix):
-                    valid_item_names.append(name)
+                    valid_item_names[name] = 1
                     matched = True
             if matched:
                 prefixes.pop(prefix)
@@ -145,7 +145,7 @@ class BaseBinarizer:
         train_item_names = [x for x in item_names if x not in set(valid_item_names)]
         assert len(train_item_names) > 0, 'Training set is empty!'
 
-        return train_item_names, valid_item_names
+        return train_item_names, list(valid_item_names)
 
     @property
     def train_item_names(self):
