@@ -153,7 +153,8 @@ class AcousticTask(BaseTask):
                     if self.use_vocoder:
                         self.plot_wav(
                             data_idx, sample['mel'][i],
-                            mel_out.aux_out[i], mel_out.diff_out[i],
+                            mel_out.aux_out[i] if mel_out.aux_out is not None else None,
+                            mel_out.diff_out[i],
                             sample['f0'][i]
                         )
                     if mel_out.aux_out is not None:
