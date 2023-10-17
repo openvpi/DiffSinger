@@ -61,6 +61,7 @@ class AcousticDataset(BaseDataset):
 
 class AcousticTask(BaseTask):
     def __init__(self):
+        super().__init__()
         self.dataset_cls = AcousticDataset
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
         if self.use_shallow_diffusion:
@@ -77,9 +78,9 @@ class AcousticTask(BaseTask):
             self.required_variances.append('energy')
         if hparams.get('use_breathiness_embed', False):
             self.required_variances.append('breathiness')
-        super().__init__()
+        super()._finish_init()
 
-    def build_model(self):
+    def _build_model(self):
         return DiffSingerAcoustic(
             vocab_size=len(self.phone_encoder),
             out_dims=hparams['audio_num_mel_bins']

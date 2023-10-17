@@ -59,7 +59,6 @@ class BaseTask(pl.LightningModule):
     """
 
     def __init__(self, *args, **kwargs):
-        # dataset configs
         super().__init__(*args, **kwargs)
         self.max_batch_frames = hparams['max_batch_frames']
         self.max_batch_size = hparams['max_batch_size']
@@ -70,24 +69,16 @@ class BaseTask(pl.LightningModule):
         if self.max_val_batch_size == -1:
             hparams['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
 
-        self.phone_encoder = self.build_phone_encoder()
-        self.model = self.build_model()
-        # utils.load_warp(self)
-        self.unfreeze_all_params()
-        if hparams['freezing_enabled']:
-            self.freeze_params()
-        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
-            self.load_finetune_ckpt(self.load_pre_train_model())
-        self.print_arch()
-
         self.training_sampler = None
+        self.model = None
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
 
-        self.valid_losses: Dict[str, Metric] = {
-            'total_loss': MeanMetric()
-        }
+        self.valid_losses: Dict[str, Metric] = {}
         self.valid_metrics: Dict[str, Metric] = {}
+
+    def _finish_init(self):
+        self.register_validation_loss('total_loss')
         self.build_losses_and_metrics()
 
     ###########
@@ -96,6 +87,8 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+        self.phone_encoder = self.build_phone_encoder()
+        self.build_model()
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
@@ -178,8 +171,18 @@ class BaseTask(pl.LightningModule):
         phone_list = build_phoneme_list()
         return TokenTextEncoder(vocab_list=phone_list)
 
-    def build_model(self):
+    def _build_model(self):
         raise NotImplementedError()
+
+    def build_model(self):
+        self.model = self._build_model()
+        # utils.load_warp(self)
+        self.unfreeze_all_params()
+        if hparams['freezing_enabled']:
+            self.freeze_params()
+        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
+            self.load_finetune_ckpt(self.load_pre_train_model())
+        self.print_arch()
 
     @rank_zero_only
     def print_arch(self):
