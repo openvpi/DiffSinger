@@ -39,9 +39,7 @@ class DioPE(BasePE):
             f0 = np.pad(f0, (0, length - f0.size))
         f0 = f0[:length]
         uv = f0 == 0
-
-        uv = f0 == 0
-
+        
         if interp_uv:
             f0, uv = interp_f0(f0, uv)
         return f0, uv
