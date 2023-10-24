@@ -652,7 +652,7 @@ not recommended
 
 #### type
 
-string
+str
 
 #### default
 
@@ -2505,6 +2505,14 @@ int
 #### default
 
 1
+
+### pl_trainer_strategy
+
+Arguments of Lightning Strategy. Values will be used as keyword arguments when constructing the Strategy object.
+
+#### type
+
+dict
 
 ### pl_trainer_strategy.name
 

@@ -122,7 +122,7 @@ class VarianceBinarizer(BaseBinarizer):
                 temp_dict = {
                     'ds_idx': item_idx,
                     'spk_id': spk_id,
-                    'spk': self.speakers[ds_id],
+                    'spk_name': self.speakers[ds_id],
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
                     'ph_seq': require('ph_seq').split(),
                     'ph_dur': [float(x) for x in require('ph_dur').split()]
@@ -233,7 +233,7 @@ class VarianceBinarizer(BaseBinarizer):
             'name': item_name,
             'wav_fn': meta_data['wav_fn'],
             'spk_id': meta_data['spk_id'],
-            'spk': meta_data['spk'],
+            'spk_name': meta_data['spk_name'],
             'seconds': seconds,
             'length': length,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64)

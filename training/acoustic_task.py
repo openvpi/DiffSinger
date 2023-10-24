@@ -204,7 +204,7 @@ class AcousticTask(BaseTask):
         vmax = hparams['mel_vmax']
         mel_len = self.valid_dataset.metadata['mel'][data_idx]
         spec_cat = torch.cat([(out_spec - gt_spec).abs() + vmin, gt_spec, out_spec], -1)
-        title_text = f"{self.valid_dataset.metadata['spk'][data_idx]} - {self.valid_dataset.metadata['name'][data_idx]}"
+        title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
         self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}',  spec_to_figure(
             spec_cat[:mel_len], vmin, vmax, title_text
         ), global_step=self.global_step)

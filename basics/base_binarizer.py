@@ -252,7 +252,7 @@ class BaseBinarizer:
         builder = IndexedDatasetBuilder(self.binary_data_dir, prefix=prefix, allowed_attr=self.data_attrs)
         total_sec = {k: 0.0 for k in self.spk_map}
         total_raw_sec = {k: 0.0 for k in self.spk_map}
-        extra_info = {'name': {}, 'spk_ids': {}, 'spk': {}, 'lengths': {}}
+        extra_info = {'names': {}, 'spk_ids': {}, 'spk_names': {}, 'lengths': {}}
 
         for item_name, meta_data in self.meta_data_iterator(prefix):
             args.append([item_name, meta_data, self.binarization_args])
@@ -269,12 +269,12 @@ class BaseBinarizer:
                     if k not in extra_info:
                         extra_info[k] = {}
                     extra_info[k][item_no] = v.shape[0]
-            extra_info['name'][item_no] = _item['name'].split(':', 1)[-1]
+            extra_info['names'][item_no] = _item['name'].split(':', 1)[-1]
             extra_info['spk_ids'][item_no] = _item['spk_id']
-            extra_info['spk'][item_no] = _item['spk']
+            extra_info['spk_names'][item_no] = _item['spk_name']
             extra_info['lengths'][item_no] = _item['length']
-            total_raw_sec[_item['spk']] += _item['seconds']
-            total_sec[_item['spk']] += _item['seconds']
+            total_raw_sec[_item['spk_name']] += _item['seconds']
+            total_sec[_item['spk_name']] += _item['seconds']
 
             for task in aug_map.get(_item['name'], []):
                 aug_item = task['func'](_item, **task['kwargs'])
@@ -284,11 +284,11 @@ class BaseBinarizer:
                         if k not in extra_info:
                             extra_info[k] = {}
                         extra_info[k][aug_item_no] = v.shape[0]
-                extra_info['name'][aug_item_no] = aug_item['name'].split(':', 1)[-1]
+                extra_info['names'][aug_item_no] = aug_item['name'].split(':', 1)[-1]
                 extra_info['spk_ids'][aug_item_no] = aug_item['spk_id']
-                extra_info['spk'][aug_item_no] = aug_item['spk']
+                extra_info['spk_names'][aug_item_no] = aug_item['spk_name']
                 extra_info['lengths'][aug_item_no] = aug_item['length']
-                total_sec[aug_item['spk']] += aug_item['seconds']
+                total_sec[aug_item['spk_name']] += aug_item['seconds']
 
         try:
             if num_workers > 0:
@@ -313,8 +313,8 @@ class BaseBinarizer:
 
         builder.finalize()
         if prefix == "train":
-            extra_info.pop("name")
-            extra_info.pop("spk")
+            extra_info.pop("names")
+            extra_info.pop("spk_names")
         with open(self.binary_data_dir / f"{prefix}.meta", "wb") as f:
             # noinspection PyTypeChecker
             pickle.dump(extra_info, f)

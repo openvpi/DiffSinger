@@ -64,7 +64,7 @@ class AcousticBinarizer(BaseBinarizer):
                         'ph_seq': utterance_label['ph_seq'].split(),
                         'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
                         'spk_id': spk_id,
-                        'spk': self.speakers[ds_id],
+                        'spk_name': self.speakers[ds_id],
                     }
                     assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                         f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
@@ -90,7 +90,7 @@ class AcousticBinarizer(BaseBinarizer):
             'name': item_name,
             'wav_fn': meta_data['wav_fn'],
             'spk_id': meta_data['spk_id'],
-            'spk': meta_data['spk'],
+            'spk_name': meta_data['spk_name'],
             'seconds': seconds,
             'length': length,
             'mel': mel,
