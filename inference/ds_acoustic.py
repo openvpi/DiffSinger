@@ -163,7 +163,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             for v_name in self.variances_to_embed
         }
         # variances['tension'] = torch.sigmoid(torch.logit(variances['tension']) - 2)
-        variances['tension'] /= 4
+        # variances['tension'] /= 4
         if hparams['use_spk_id']:
             spk_mix_id = sample['spk_mix_id']
             spk_mix_value = sample['spk_mix_value']

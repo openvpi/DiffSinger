@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Dict
 
 import librosa
 import numpy as np
@@ -86,9 +86,10 @@ class DeconstructedWaveform:
         self._sp = None
         self._ap = None
         # final components
-        self._full_harmonics = None
+        self._harmonic_part: np.ndarray = None
         self._base_harmonic = None
-        self._aperiodic_part = None
+        self._aperiodic_part: np.ndarray = None
+        self._harmonics: Dict[int, np.ndarray] = {}
 
     @property
     def hop_size(self):
@@ -123,24 +124,46 @@ class DeconstructedWaveform:
         self._sp = pw.cheaptrick(x, f0, t, samplerate, fft_size=fft_size)  # extract smoothed spectrogram
         self._ap = pw.d4c(x, f0, t, samplerate, fft_size=fft_size)  # extract aperiodicity
 
-    @property
-    def full_harmonics(self) -> np.ndarray:
-        if self._full_harmonics is not None:
-            return self._full_harmonics
+    def harmonic(self) -> np.ndarray:
+        """
+        Extract the full harmonic part from the waveform.
+        :return: full_harmonics float32[T]
+        """
+        if self._harmonic_part is not None:
+            return self._harmonic_part
         if self._sp is None or self._ap is None:
             self._world_extraction()
-        self._full_harmonics = pw.synthesize(
+        self._harmonic_part = pw.synthesize(
             self._f0_world,
             np.clip(self._sp * (1 - self._ap * self._ap), a_min=1e-16, a_max=None),  # clip to avoid zeros
             np.zeros_like(self._ap),
             self._samplerate, frame_period=self._time_step * 1000
         ).astype(np.float32)  # synthesize the harmonic part using the parameters
-        return self._full_harmonics
+        return self._harmonic_part
 
-    @property
-    def base_harmonic(self) -> np.ndarray:
-        if self._base_harmonic is not None:
-            return self._base_harmonic
+    def aperiodic(self) -> np.ndarray:
+        """
+        Extract the aperiodic part from the waveform.
+        :return: aperiodic_part float32[T]
+        """
+        if self._aperiodic_part is not None:
+            return self._aperiodic_part
+        if self._sp is None or self._ap is None:
+            self._world_extraction()
+        self._aperiodic_part = pw.synthesize(
+            self._f0_world, self._sp * self._ap * self._ap, np.ones_like(self._ap),
+            self._samplerate, frame_period=self._time_step * 1000
+        ).astype(np.float32)  # synthesize the aperiodic part using the parameters
+        return self._aperiodic_part
+
+    def kth_harmonic(self, k: int) -> np.ndarray:
+        """
+        Extract the Kth harmonic (starting from 0) from the waveform.
+        :param k: a non-negative integer
+        :return: kth_harmonic float32[T]
+        """
+        if k in self._harmonics:
+            return self._harmonics[k]
 
         hop_size = self._hop_size
         win_size = self._win_size
@@ -148,10 +171,10 @@ class DeconstructedWaveform:
         half_width = self._half_width
         device = self._device
 
-        waveform = torch.from_numpy(self.full_harmonics).unsqueeze(0).to(device)  # [B, n_samples]
+        waveform = torch.from_numpy(self.harmonic()).unsqueeze(0).to(device)  # [B, n_samples]
         n_samples = waveform.shape[1]
         pad_size = (int(n_samples // hop_size) - len(self._f0) + 1) // 2
-        f0 = self._f0[pad_size:]
+        f0 = self._f0[pad_size:] * (k + 1)
         f0, _ = interp_f0(f0, uv=f0 == 0)
         f0 = torch.from_numpy(f0).to(device)[None, :, None]  # [B, n_frames, 1]
         n_f0_frames = f0.shape[1]
@@ -181,7 +204,7 @@ class DeconstructedWaveform:
         if n_f0_frames < n_spec_frames:
             idx_mask = F.pad(idx_mask, [0, 0, 0, n_spec_frames - n_f0_frames])
         spec = spec * idx_mask[:, :n_spec_frames, :]
-        self._base_harmonic = torch.istft(
+        self._harmonics[k] = torch.istft(
             spec.permute(0, 2, 1),
             n_fft=win_size,
             win_length=win_size,
@@ -190,19 +213,14 @@ class DeconstructedWaveform:
             center=True,
             length=n_samples
         ).squeeze(0).cpu().numpy()
-        return self._base_harmonic
 
-    @property
-    def aperiodic_part(self) -> np.ndarray:
-        if self._aperiodic_part is not None:
-            return self._aperiodic_part
-        if self._sp is None or self._ap is None:
-            self._world_extraction()
-        self._aperiodic_part = pw.synthesize(
-            self._f0_world, self._sp * self._ap * self._ap, np.ones_like(self._ap),
-            self._samplerate, frame_period=self._time_step * 1000
-        ).astype(np.float32)  # synthesize the aperiodic part using the parameters
-        return self._aperiodic_part
+        return self._harmonics[k]
+
+    def base_harmonic(self) -> np.ndarray:
+        """
+        Equivalent to `kth_harmonic(0)`.
+        """
+        return self.kth_harmonic(0)
 
 
 def get_energy_librosa(waveform, length, *, hop_size, win_size, domain='db'):
@@ -249,7 +267,7 @@ def get_breathiness_pyworld(
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
-    waveform_ap = waveform.aperiodic_part
+    waveform_ap = waveform.aperiodic()
     breathiness = get_energy_librosa(
         waveform_ap, length=length,
         hop_size=waveform.hop_size, win_size=waveform.win_size
@@ -278,8 +296,8 @@ def get_tension_base_harmonic_db(
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
-    waveform_h = waveform.full_harmonics
-    waveform_base_h = waveform.base_harmonic
+    waveform_h = waveform.harmonic()
+    waveform_base_h = waveform.base_harmonic()
     energy_h = get_energy_librosa(
         waveform_h, length,
         hop_size=waveform.hop_size, win_size=waveform.win_size,
@@ -313,8 +331,8 @@ def get_tension_base_harmonic_ratio(
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
-    waveform_h = waveform.full_harmonics
-    waveform_base_h = waveform.base_harmonic
+    waveform_h = waveform.harmonic()
+    waveform_base_h = waveform.base_harmonic()
     energy_no_base = get_energy_librosa(
         waveform_h - waveform_base_h, length,
         hop_size=waveform.hop_size, win_size=waveform.win_size,
@@ -350,8 +368,8 @@ def get_tension_base_harmonic_logit(
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
-    waveform_h = waveform.full_harmonics
-    waveform_base_h = waveform.base_harmonic
+    waveform_h = waveform.harmonic()
+    waveform_base_h = waveform.base_harmonic()
     energy_no_base = get_energy_librosa(
         waveform_h - waveform_base_h, length,
         hop_size=waveform.hop_size, win_size=waveform.win_size,
