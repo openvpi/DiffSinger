@@ -320,17 +320,21 @@ class BaseBinarizer:
             pickle.dump(extra_info, f)
         if apply_augmentation:
             print(f"| {prefix} total duration (before augmentation): {sum(total_raw_sec.values()):.2f}s")
-            for k, v in total_raw_sec.items():
-                print(f"|     {k}: {v:.2f}s")
             print(
-                f"| {prefix} total duration (after augmentation): {sum(total_sec.values()):.2f}s ({sum(total_sec.values()) / sum(total_raw_sec.values()):.2f}x)"
+                f"| {prefix} respective duration (before augmentation): "
+                + ', '.join(f'{k}={v:.2f}s' for k, v in total_raw_sec.items())
             )
-            for k, v in total_sec.items():
-                print(f"|     {k}: {v:.2f}s")
+            print(
+                f"| {prefix} total duration (after augmentation): "
+                f"{sum(total_sec.values()):.2f}s ({sum(total_sec.values()) / sum(total_raw_sec.values()):.2f}x)"
+            )
+            print(
+                f"| {prefix} respective duration (after augmentation): "
+                + ', '.join(f'{k}={v:.2f}s' for k, v in total_sec.items())
+            )
         else:
             print(f"| {prefix} total duration: {sum(total_raw_sec.values()):.2f}s")
-            for k, v in total_raw_sec.items():
-                print(f"|     {k}: {v:.2f}s")
+            print(f"| {prefix} respective duration: " + ', '.join(f'{k}={v:.2f}s' for k, v in total_raw_sec.items()))
 
     def arrange_data_augmentation(self, data_iterator):
         """
