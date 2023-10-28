@@ -70,9 +70,11 @@ class BaseTask(pl.LightningModule):
             hparams['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
 
         self.training_sampler = None
-        self.model = None
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
+
+        self.phone_encoder = self.build_phone_encoder()
+        self.build_model()
 
         self.valid_losses: Dict[str, Metric] = {}
         self.valid_metrics: Dict[str, Metric] = {}
@@ -87,8 +89,6 @@ class BaseTask(pl.LightningModule):
     def setup(self, stage):
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
-        self.phone_encoder = self.build_phone_encoder()
-        self.build_model()
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
@@ -374,7 +374,8 @@ class BaseTask(pl.LightningModule):
             collate_fn=self.valid_dataset.collater,
             batch_sampler=sampler,
             num_workers=hparams['ds_workers'],
-            prefetch_factor=hparams['dataloader_prefetch_factor']
+            prefetch_factor=hparams['dataloader_prefetch_factor'],
+            persistent_workers=True
         )
 
     def test_dataloader(self):

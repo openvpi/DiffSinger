@@ -1848,7 +1848,7 @@ training
 
 #### customizability
 
-reserved
+normal
 
 #### type
 
@@ -1872,7 +1872,7 @@ training
 
 #### customizability
 
-reserved
+normal
 
 #### type
 
