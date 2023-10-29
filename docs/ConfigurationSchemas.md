@@ -898,7 +898,7 @@ Controls how often to log within training steps. Equivalent to `log_every_n_step
 
 ### lr_scheduler_args
 
-Arguments of learning rate scheduler. Keys will be used as keyword arguments of the `__init__()` method of [lr_scheduler_args.scheduler_cls](#lr_scheduler_args.scheduler_cls).
+Arguments of learning rate scheduler. Keys will be used as keyword arguments of the `__init__()` method of [lr_scheduler_args.scheduler_cls](#lr_scheduler_argsscheduler_cls).
 
 <table><tbody>
 <tr><td align="center"><b>type</b></td><td>dict</td>
@@ -1112,7 +1112,7 @@ Number of validation plots in each validation. Plots will be chosen from the sta
 
 ### optimizer_args
 
-Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__()` method of [optimizer_args.optimizer_cls](#optimizer_args.optimizer_cls).
+Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__()` method of [optimizer_args.optimizer_cls](#optimizer_argsoptimizer_cls).
 
 <table><tbody>
 <tr><td align="center"><b>type</b></td><td>dict</td>
