@@ -85,7 +85,7 @@ Whether to apply fixed pitch shifting augmentation.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
-<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_args.random_pitch_shifting.enabled">augmentation_args.random_pitch_shifting.enabled</a> is set to true.</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_argsrandom_pitch_shiftingenabled">augmentation_args.random_pitch_shifting.enabled</a> is set to true.</td>
 </tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting.scale
@@ -130,7 +130,7 @@ Whether to apply random pitch shifting augmentation.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
-<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_args.fixed_pitch_shifting.enabled">augmentation_args.fixed_pitch_shifting.enabled</a> is set to true.</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_argsfixed_pitch_shiftingenabled">augmentation_args.fixed_pitch_shifting.enabled</a> is set to true.</td>
 </tbody></table>
 
 ### augmentation_args.random_pitch_shifting.range
