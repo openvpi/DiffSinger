@@ -85,7 +85,7 @@ Whether to apply fixed pitch shifting augmentation.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
-<tr><td align="center"><b>constraints</b></td><td>Must be false if [augmentation_args.random_pitch_shifting.enabled](#augmentation_args.random_pitch_shifting.enabled) is set to true.</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_args.random_pitch_shifting.enabled">augmentation_args.random_pitch_shifting.enabled</a> is set to true.</td>
 </tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting.scale
@@ -130,7 +130,7 @@ Whether to apply random pitch shifting augmentation.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
-<tr><td align="center"><b>constraints</b></td><td>Must be false if [augmentation_args.fixed_pitch_shifting.enabled](#augmentation_args.fixed_pitch_shifting.enabled) is set to true.</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_args.fixed_pitch_shifting.enabled">augmentation_args.fixed_pitch_shifting.enabled</a> is set to true.</td>
 </tbody></table>
 
 ### augmentation_args.random_pitch_shifting.range
@@ -1279,7 +1279,7 @@ Type of Lightning trainer hardware accelerator.
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
 <tr><td align="center"><b>default</b></td><td>auto</td>
-<tr><td align="center"><b>constraints</b></td><td>See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator) for available values.</td>
+<tr><td align="center"><b>constraints</b></td><td>See <a href="https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator">Accelerator — PyTorch Lightning 2.X.X documentation</a> for available values.</td>
 </tbody></table>
 
 ### pl_trainer_devices
@@ -1306,7 +1306,7 @@ The computation precision of training.
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
 <tr><td align="center"><b>default</b></td><td>32-true</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at <a href="https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api">Trainer — PyTorch Lightning 2.X.X documentation</a>.</td>
 </tbody></table>
 
 ### pl_trainer_num_nodes
@@ -1349,7 +1349,7 @@ Diffusion sampling speed-up ratio. 1 means no speeding up.
 <tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
 <tr><td align="center"><b>default</b></td><td>10</td>
-<tr><td align="center"><b>constraints</b></td><td>Must be a factor of [K_step](#K_step).</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be a factor of <a href="#K_step">K_step</a>.</td>
 </tbody></table>
 
 ### predict_breathiness
