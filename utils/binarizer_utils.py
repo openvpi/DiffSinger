@@ -370,8 +370,8 @@ def get_tension_base_harmonic_logit(
         )
     waveform_h = waveform.harmonic()
     waveform_base_h = waveform.base_harmonic()
-    energy_no_base = get_energy_librosa(
-        waveform_h - waveform_base_h, length,
+    energy_base_h = get_energy_librosa(
+        waveform_base_h, length,
         hop_size=waveform.hop_size, win_size=waveform.win_size,
         domain='amplitude'
     )
@@ -380,7 +380,7 @@ def get_tension_base_harmonic_logit(
         hop_size=waveform.hop_size, win_size=waveform.win_size,
         domain='amplitude'
     )
-    tension = energy_no_base / (energy_h + 1e-4)
+    tension = np.sqrt(np.clip(energy_h ** 2 - energy_base_h ** 2, a_min=0, a_max=None)) / (energy_h + 1e-4)
     tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
     return np.log(tension / (1 - tension))
 
