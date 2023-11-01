@@ -7,9 +7,10 @@ from typing import Dict
 import lightning.pytorch as pl
 import numpy as np
 import torch
+from lightning.fabric.loggers.tensorboard import _TENSORBOARD_AVAILABLE
 from lightning.pytorch.callbacks import ModelCheckpoint, TQDMProgressBar
-from lightning.pytorch.strategies import DDPStrategy
-from lightning.pytorch.utilities.rank_zero import rank_zero_info
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.utilities.rank_zero import rank_zero_info, rank_zero_only
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data.distributed import Sampler
 
@@ -74,7 +75,11 @@ class DsBatchSampler(Sampler):
     def __init__(self, dataset, max_batch_frames, max_batch_size, sub_indices=None,
                  num_replicas=None, rank=None,
                  required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
-                 shuffle_sample=False, shuffle_batch=False, seed=0, drop_last=False) -> None:
+                 size_reversed=False, shuffle_sample=False, shuffle_batch=False,
+                 disallow_empty_batch=True, pad_batch_assignment=True, seed=0, drop_last=False) -> None:
+        if rank >= num_replicas or rank < 0:
+            raise ValueError(
+                f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]")
         self.dataset = dataset
         self.max_batch_frames = max_batch_frames
         self.max_batch_size = max_batch_size
@@ -84,8 +89,11 @@ class DsBatchSampler(Sampler):
         self.required_batch_count_multiple = required_batch_count_multiple
         self.batch_by_size = batch_by_size
         self.sort_by_similar_size = sort_by_similar_size
+        self.size_reversed = size_reversed
         self.shuffle_sample = shuffle_sample
         self.shuffle_batch = shuffle_batch
+        self.disallow_empty_batch = disallow_empty_batch
+        self.pad_batch_assignment = pad_batch_assignment
         self.seed = seed
         self.drop_last = drop_last
         self.epoch = 0
@@ -96,6 +104,7 @@ class DsBatchSampler(Sampler):
         if self.formed == self.epoch + self.seed:
             return
         rng = np.random.default_rng(self.seed + self.epoch)
+        # Create indices
         if self.shuffle_sample:
             if self.sub_indices is not None:
                 rng.shuffle(self.sub_indices)
@@ -104,16 +113,17 @@ class DsBatchSampler(Sampler):
                 indices = rng.permutation(len(self.dataset))
 
             if self.sort_by_similar_size:
-                grid = int(hparams.get('sampler_frame_count_grid', 200))
+                grid = int(hparams.get('sampler_frame_count_grid', 6))
                 assert grid > 0
-                sizes = (np.round(np.array(self.dataset._sizes)[indices] / grid) * grid).clip(grid, None).astype(
-                    np.int64)
+                sizes = (np.round(np.array(self.dataset.sizes)[indices] / grid) * grid).clip(grid, None)
+                sizes *= (-1 if self.size_reversed else 1)
                 indices = indices[np.argsort(sizes, kind='mergesort')]
 
             indices = indices.tolist()
         else:
             indices = self.sub_indices if self.sub_indices is not None else list(range(len(self.dataset)))
 
+        # Batching
         if self.batch_by_size:
             batches = utils.batch_by_size(
                 indices, self.dataset.num_frames,
@@ -122,36 +132,51 @@ class DsBatchSampler(Sampler):
             )
         else:
             batches = [indices[i:i + self.max_batch_size] for i in range(0, len(indices), self.max_batch_size)]
+        if len(batches) < self.num_replicas and self.disallow_empty_batch:
+            raise RuntimeError("There is not enough batch to assign to each node.")
 
+        # Either drop_last or separate the leftovers.
         floored_total_batch_count = (len(batches) // self.num_replicas) * self.num_replicas
         if self.drop_last and len(batches) > floored_total_batch_count:
             batches = batches[:floored_total_batch_count]
             leftovers = []
-        else:
+            if len(batches) == 0:
+                raise RuntimeError("There is no batch left after dropping the last batch.")
+        elif self.shuffle_batch:
             leftovers = (rng.permutation(len(batches) - floored_total_batch_count) + floored_total_batch_count).tolist()
+        else:
+            leftovers = list(range(floored_total_batch_count, len(batches)))
 
-        batch_assignment = rng.permuted(
-            np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose(), axis=0
-        )[self.rank].tolist()
+        # Initial batch assignment to current rank.
+        batch_assignment = np.arange(floored_total_batch_count).reshape(-1, self.num_replicas).transpose()
+        if self.shuffle_batch:
+            batch_assignment = rng.permuted(batch_assignment, axis=0)[self.rank].tolist()
+        else:
+            batch_assignment = batch_assignment[self.rank].tolist()
+
+        # Assign leftovers or pad the batch assignment.
         floored_batch_count = len(batch_assignment)
-        ceiled_batch_count = floored_batch_count + (1 if len(leftovers) > 0 else 0)
         if self.rank < len(leftovers):
             batch_assignment.append(leftovers[self.rank])
-        elif len(leftovers) > 0:
+            floored_batch_count += 1
+        elif len(leftovers) > 0 and self.pad_batch_assignment:
+            if not batch_assignment:
+                raise RuntimeError("Cannot pad empty batch assignment.")
             batch_assignment.append(batch_assignment[self.epoch % floored_batch_count])
-        if self.required_batch_count_multiple > 1 and ceiled_batch_count % self.required_batch_count_multiple != 0:
-            # batch_assignment = batch_assignment[:((floored_batch_count \
-            # // self.required_batch_count_multiple) * self.required_batch_count_multiple)]
+        # Ensure the batch count is multiple of required_batch_count_multiple.
+        if self.required_batch_count_multiple > 1 and len(batch_assignment) % self.required_batch_count_multiple != 0:
             ceiled_batch_count = math.ceil(
-                ceiled_batch_count / self.required_batch_count_multiple) * self.required_batch_count_multiple
+                len(batch_assignment) / self.required_batch_count_multiple
+            ) * self.required_batch_count_multiple
             for i in range(ceiled_batch_count - len(batch_assignment)):
                 batch_assignment.append(
                     batch_assignment[(i + self.epoch * self.required_batch_count_multiple) % floored_batch_count])
 
-        self.batches = [deepcopy(batches[i]) for i in batch_assignment]
-
-        if self.shuffle_batch:
-            rng.shuffle(self.batches)
+        if batch_assignment:
+            self.batches = [deepcopy(batches[i]) for i in batch_assignment]
+        else:
+            self.batches = [[]]
+        self.formed = self.epoch + self.seed
 
         del indices
         del batches
@@ -169,39 +194,8 @@ class DsBatchSampler(Sampler):
 
     def set_epoch(self, epoch):
         self.epoch = epoch
+        self.__form_batches()
 
-
-class DsEvalBatchSampler(Sampler):
-    def __init__(self, dataset, max_batch_frames, max_batch_size, rank=None, batch_by_size=True) -> None:
-        self.dataset = dataset
-        self.max_batch_frames = max_batch_frames
-        self.max_batch_size = max_batch_size
-        self.rank = rank
-        self.batch_by_size = batch_by_size
-        self.batches = None
-        self.batch_size = max_batch_size
-        self.drop_last = False
-
-        if self.rank == 0:
-            indices = list(range(len(self.dataset)))
-            if self.batch_by_size:
-                self.batches = utils.batch_by_size(
-                    indices, self.dataset.num_frames,
-                    max_batch_frames=self.max_batch_frames, max_batch_size=self.max_batch_size
-                )
-            else:
-                self.batches = [
-                    indices[i:i + self.max_batch_size]
-                    for i in range(0, len(indices), self.max_batch_size)
-                ]
-        else:
-            self.batches = [[0]]
-
-    def __iter__(self):
-        return iter(self.batches)
-
-    def __len__(self):
-        return len(self.batches)
 
 
 # ==========PL related==========
@@ -331,73 +325,50 @@ class DsTQDMProgressBar(TQDMProgressBar):
         return items
 
 
-def get_strategy(accelerator, devices, num_nodes, strategy, backend):
-    if accelerator != 'auto' and accelerator != 'gpu':
-        return strategy
+class DsTensorBoardLogger(TensorBoardLogger):
+    @property
+    def all_rank_experiment(self):
+        if rank_zero_only.rank == 0:
+            return self.experiment
+        if hasattr(self, "_all_rank_experiment") and self._all_rank_experiment is not None:
+            return self._all_rank_experiment
 
-    from lightning.fabric.utilities.imports import _IS_INTERACTIVE
-    from lightning.pytorch.accelerators import AcceleratorRegistry
-    from lightning.pytorch.accelerators.cuda import CUDAAccelerator
-    from lightning.pytorch.accelerators.hpu import HPUAccelerator
-    from lightning.pytorch.accelerators.ipu import IPUAccelerator
-    from lightning.pytorch.accelerators.mps import MPSAccelerator
-    from lightning.pytorch.accelerators.tpu import TPUAccelerator
-    from lightning.pytorch.utilities.exceptions import MisconfigurationException
+        assert rank_zero_only.rank != 0
+        if self.root_dir:
+            self._fs.makedirs(self.root_dir, exist_ok=True)
 
-    def _choose_auto_accelerator():
-        if TPUAccelerator.is_available():
-            return "tpu"
-        if IPUAccelerator.is_available():
-            return "ipu"
-        if HPUAccelerator.is_available():
-            return "hpu"
-        if MPSAccelerator.is_available():
-            return "mps"
-        if CUDAAccelerator.is_available():
-            return "cuda"
-        return "cpu"
-
-    def _choose_gpu_accelerator_backend():
-        if MPSAccelerator.is_available():
-            return "mps"
-        if CUDAAccelerator.is_available():
-            return "cuda"
-        raise MisconfigurationException("No supported gpu backend found!")
-
-    if accelerator == "auto":
-        _accelerator_flag = _choose_auto_accelerator()
-    elif accelerator == "gpu":
-        _accelerator_flag = _choose_gpu_accelerator_backend()
-    else:
-        return strategy
-
-    if _accelerator_flag != "mps" and _accelerator_flag != "cuda":
-        return strategy
-
-    _num_nodes_flag = int(num_nodes) if num_nodes is not None else 1
-    _devices_flag = devices
-
-    accelerator = AcceleratorRegistry.get(_accelerator_flag)
-    accelerator_cls = accelerator.__class__
-
-    if _devices_flag == "auto":
-        _devices_flag = accelerator.auto_device_count()
-
-    _devices_flag = accelerator_cls.parse_devices(_devices_flag)
-    _parallel_devices = accelerator_cls.get_parallel_devices(_devices_flag)
-
-    def get_ddp_strategy(_backend):
-        if _backend == 'gloo':
-            return DDPStrategy(process_group_backend='gloo', find_unused_parameters=False)
-        elif _backend == 'nccl' or _backend == 'nccl_no_p2p':
-            return DDPStrategy(process_group_backend='nccl', find_unused_parameters=False)
+        if _TENSORBOARD_AVAILABLE:
+            from torch.utils.tensorboard import SummaryWriter
         else:
-            raise ValueError(f'backend {_backend} is not valid.')
+            from tensorboardX import SummaryWriter  # type: ignore[no-redef]
 
-    if _num_nodes_flag > 1:
-        return get_ddp_strategy(backend)
-    if len(_parallel_devices) <= 1:
-        return strategy
-    if len(_parallel_devices) > 1 and _IS_INTERACTIVE:
-        return strategy
-    return get_ddp_strategy(backend)
+        self._all_rank_experiment = SummaryWriter(log_dir=self.log_dir, **self._kwargs)
+        return self._all_rank_experiment
+
+    def finalize(self, status: str) -> None:
+        if rank_zero_only.rank == 0:
+            super().finalize(status)
+        elif hasattr(self, "_all_rank_experiment") and self._all_rank_experiment is not None:
+            self.all_rank_experiment.flush()
+            self.all_rank_experiment.close()
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        if "_all_rank_experiment" in state:
+            del state["_all_rank_experiment"]
+        return state
+
+
+def get_strategy(strategy):
+    if strategy['name'] == 'auto':
+        return 'auto'
+
+    from lightning.pytorch.strategies import StrategyRegistry
+    if strategy['name'] not in StrategyRegistry:
+        available_names = ", ".join(sorted(StrategyRegistry.keys())) or "none"
+        raise ValueError(f"Invalid strategy name {strategy['name']}. Available names: {available_names}")
+
+    data = StrategyRegistry[strategy['name']]
+    params = data['init_params']
+    params.update({k: v for k, v in strategy.items() if k != 'name'})
+    return data['strategy'](**utils.filter_kwargs(params, data['strategy']))

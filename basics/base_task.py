@@ -17,14 +17,13 @@ import torch.utils.data
 from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor
-from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
 from utils.hparams import hparams
 from utils.training_utils import (
     DsModelCheckpoint, DsTQDMProgressBar,
-    DsBatchSampler, DsEvalBatchSampler,
+    DsBatchSampler, DsTensorBoardLogger,
     get_latest_checkpoint_path, get_strategy
 )
 from utils.phoneme_utils import locate_dictionary, build_phoneme_list
@@ -60,9 +59,7 @@ class BaseTask(pl.LightningModule):
     """
 
     def __init__(self, *args, **kwargs):
-        # dataset configs
         super().__init__(*args, **kwargs)
-        self.dataset_cls = None
         self.max_batch_frames = hparams['max_batch_frames']
         self.max_batch_size = hparams['max_batch_size']
         self.max_val_batch_frames = hparams['max_val_batch_frames']
@@ -73,31 +70,26 @@ class BaseTask(pl.LightningModule):
             hparams['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
 
         self.training_sampler = None
-        self.model = None
         self.skip_immediate_validation = False
         self.skip_immediate_ckpt_save = False
 
-        self.valid_losses: Dict[str, Metric] = {
-            'total_loss': MeanMetric()
-        }
-        self.valid_metric_names = set()
+        self.phone_encoder = self.build_phone_encoder()
+        self.build_model()
+
+        self.valid_losses: Dict[str, Metric] = {}
+        self.valid_metrics: Dict[str, Metric] = {}
+
+    def _finish_init(self):
+        self.register_validation_loss('total_loss')
+        self.build_losses_and_metrics()
 
     ###########
     # Training, validation and testing
     ###########
     def setup(self, stage):
-        self.phone_encoder = self.build_phone_encoder()
-        self.model = self.build_model()
-        # utils.load_warp(self)
-        self.unfreeze_all_params()
-        if hparams['freezing_enabled']:
-            self.freeze_params()
-        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
-            self.load_finetune_ckpt(self.load_pre_train_model())
-        self.print_arch()
-        self.build_losses_and_metrics()
         self.train_dataset = self.dataset_cls(hparams['train_set_name'])
         self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+        self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
         key_list = []
@@ -123,7 +115,6 @@ class BaseTask(pl.LightningModule):
     def load_finetune_ckpt(
             self, state_dict
     ) -> None:
-
         adapt_shapes = hparams['finetune_strict_shapes']
         if not adapt_shapes:
             cur_model_state_dict = self.state_dict()
@@ -139,7 +130,6 @@ class BaseTask(pl.LightningModule):
         self.load_state_dict(state_dict, strict=False)
 
     def load_pre_train_model(self):
-
         pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
         blacklist = hparams.get('finetune_ignored_params')
         # whitelist=hparams.get('pre_train_whitelist')
@@ -181,8 +171,18 @@ class BaseTask(pl.LightningModule):
         phone_list = build_phoneme_list()
         return TokenTextEncoder(vocab_list=phone_list)
 
-    def build_model(self):
+    def _build_model(self):
         raise NotImplementedError()
+
+    def build_model(self):
+        self.model = self._build_model()
+        # utils.load_warp(self)
+        self.unfreeze_all_params()
+        if hparams['freezing_enabled']:
+            self.freeze_params()
+        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
+            self.load_finetune_ckpt(self.load_pre_train_model())
+        self.print_arch()
 
     @rank_zero_only
     def print_arch(self):
@@ -191,10 +191,13 @@ class BaseTask(pl.LightningModule):
     def build_losses_and_metrics(self):
         raise NotImplementedError()
 
-    def register_metric(self, name: str, metric: Metric):
+    def register_validation_metric(self, name: str, metric: Metric):
         assert isinstance(metric, Metric)
-        setattr(self, name, metric)
-        self.valid_metric_names.add(name)
+        self.valid_metrics[name] = metric
+
+    def register_validation_loss(self, name: str, Aggregator: Metric = MeanMetric):
+        assert issubclass(Aggregator, Metric)
+        self.valid_losses[name] = Aggregator()
 
     def run_model(self, sample, infer=False):
         """
@@ -216,7 +219,7 @@ class BaseTask(pl.LightningModule):
         total_loss = sum(losses.values())
         return total_loss, {**losses, 'batch_size': float(sample['size'])}
 
-    def training_step(self, sample, batch_idx, optimizer_idx=-1):
+    def training_step(self, sample, batch_idx):
         total_loss, log_outputs = self._training_step(sample)
 
         # logs to progress bar
@@ -237,8 +240,14 @@ class BaseTask(pl.LightningModule):
         pass
 
     def on_validation_start(self):
+        if self.skip_immediate_validation:
+            rank_zero_debug("Skip validation")
+            return
         self._on_validation_start()
         for metric in self.valid_losses.values():
+            metric.to(self.device)
+            metric.reset()
+        for metric in self.valid_metrics.values():
             metric.to(self.device)
             metric.reset()
 
@@ -258,34 +267,32 @@ class BaseTask(pl.LightningModule):
         :param batch_idx:
         """
         if self.skip_immediate_validation:
-            rank_zero_debug(f"Skip validation {batch_idx}")
-            return {}
-        with torch.autocast(self.device.type, enabled=False):
-            losses, weight = self._validation_step(sample, batch_idx)
-        losses = {
-            'total_loss': sum(losses.values()),
-            **losses
-        }
-        for k, v in losses.items():
-            if k not in self.valid_losses:
-                self.valid_losses[k] = MeanMetric().to(self.device)
-            self.valid_losses[k].update(v, weight=weight)
-        return losses
+            rank_zero_debug("Skip validation")
+            return
+        if sample['size'] > 0:
+            with torch.autocast(self.device.type, enabled=False):
+                losses, weight = self._validation_step(sample, batch_idx)
+            losses = {
+                'total_loss': sum(losses.values()),
+                **losses
+            }
+            for k, v in losses.items():
+                self.valid_losses[k].update(v, weight=weight)
+
+    def _on_validation_epoch_end(self):
+        pass
 
     def on_validation_epoch_end(self):
         if self.skip_immediate_validation:
             self.skip_immediate_validation = False
             self.skip_immediate_ckpt_save = True
             return
+        self._on_validation_epoch_end()
         loss_vals = {k: v.compute() for k, v in self.valid_losses.items()}
+        metric_vals = {k: v.compute() for k, v in self.valid_metrics.items()}
         self.log('val_loss', loss_vals['total_loss'], on_epoch=True, prog_bar=True, logger=False, sync_dist=True)
         self.logger.log_metrics({f'validation/{k}': v for k, v in loss_vals.items()}, step=self.global_step)
-        for metric in self.valid_losses.values():
-            metric.reset()
-        metric_vals = {k: getattr(self, k).compute() for k in self.valid_metric_names}
         self.logger.log_metrics({f'metrics/{k}': v for k, v in metric_vals.items()}, step=self.global_step)
-        for metric_name in self.valid_metric_names:
-            getattr(self, metric_name).reset()
 
     # noinspection PyMethodMayBeStatic
     def build_scheduler(self, optimizer):
@@ -331,36 +338,45 @@ class BaseTask(pl.LightningModule):
             self.train_dataset,
             max_batch_frames=self.max_batch_frames,
             max_batch_size=self.max_batch_size,
-            num_replicas=(self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1),
-            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
+            num_replicas=self.num_replicas,
+            rank=self.global_rank,
             sort_by_similar_size=hparams['sort_by_len'],
+            size_reversed=True,
             required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
-            shuffle_batch=False,
+            shuffle_batch=True,
             seed=hparams['seed']
         )
-        return torch.utils.data.DataLoader(self.train_dataset,
-                                           collate_fn=self.train_dataset.collater,
-                                           batch_sampler=self.training_sampler,
-                                           num_workers=hparams['ds_workers'],
-                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
-                                           pin_memory=True,
-                                           persistent_workers=True)
+        return torch.utils.data.DataLoader(
+            self.train_dataset,
+            collate_fn=self.train_dataset.collater,
+            batch_sampler=self.training_sampler,
+            num_workers=hparams['ds_workers'],
+            prefetch_factor=hparams['dataloader_prefetch_factor'],
+            pin_memory=True,
+            persistent_workers=True
+        )
 
     def val_dataloader(self):
-        sampler = DsEvalBatchSampler(
+        sampler = DsBatchSampler(
             self.valid_dataset,
             max_batch_frames=self.max_val_batch_frames,
             max_batch_size=self.max_val_batch_size,
-            rank=(self.trainer.distributed_sampler_kwargs or {}).get('rank', 0),
-            batch_by_size=False
+            num_replicas=self.num_replicas,
+            rank=self.global_rank,
+            shuffle_sample=False,
+            shuffle_batch=False,
+            disallow_empty_batch=False,
+            pad_batch_assignment=False
         )
-        return torch.utils.data.DataLoader(self.valid_dataset,
-                                           collate_fn=self.valid_dataset.collater,
-                                           batch_sampler=sampler,
-                                           num_workers=hparams['ds_workers'],
-                                           prefetch_factor=hparams['dataloader_prefetch_factor'],
-                                           shuffle=False)
+        return torch.utils.data.DataLoader(
+            self.valid_dataset,
+            collate_fn=self.valid_dataset.collater,
+            batch_sampler=sampler,
+            num_workers=hparams['ds_workers'],
+            prefetch_factor=hparams['dataloader_prefetch_factor'],
+            persistent_workers=True
+        )
 
     def test_dataloader(self):
         return self.val_dataloader()
@@ -392,13 +408,7 @@ class BaseTask(pl.LightningModule):
             accelerator=hparams['pl_trainer_accelerator'],
             devices=hparams['pl_trainer_devices'],
             num_nodes=hparams['pl_trainer_num_nodes'],
-            strategy=get_strategy(
-                accelerator=hparams['pl_trainer_accelerator'],
-                devices=hparams['pl_trainer_devices'],
-                num_nodes=hparams['pl_trainer_num_nodes'],
-                strategy=hparams['pl_trainer_strategy'],
-                backend=hparams['ddp_backend']
-            ),
+            strategy=get_strategy(hparams['pl_trainer_strategy']),
             precision=hparams['pl_trainer_precision'],
             callbacks=[
                 DsModelCheckpoint(
@@ -417,10 +427,10 @@ class BaseTask(pl.LightningModule):
                 # LearningRateMonitor(logging_interval='step'),
                 DsTQDMProgressBar(),
             ],
-            logger=TensorBoardLogger(
+            logger=DsTensorBoardLogger(
                 save_dir=str(work_dir),
                 name='lightning_logs',
-                version='lastest'
+                version='latest'
             ),
             gradient_clip_val=hparams['clip_grad_norm'],
             val_check_interval=hparams['val_check_interval'] * hparams['accumulate_grad_batches'],

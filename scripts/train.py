@@ -13,7 +13,7 @@ os.environ['TORCH_CUDNN_V8_API_ENABLED'] = '1'  # Prevent unacceptable slowdowns
 from utils.hparams import set_hparams, hparams
 
 set_hparams()
-if hparams['ddp_backend'] == 'nccl_no_p2p':
+if not hparams['nccl_p2p']:
     print("Disabling NCCL P2P")
     os.environ['NCCL_P2P_DISABLE'] = '1'
 

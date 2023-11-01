@@ -107,51 +107,51 @@ class VarianceBinarizer(BaseBinarizer):
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
 
-        for utterance_label in csv.DictReader(
-                open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8')
-        ):
-            utterance_label: dict
-            item_name = utterance_label['name']
-            item_idx = int(item_name.rsplit(DS_INDEX_SEP, maxsplit=1)[-1]) if DS_INDEX_SEP in item_name else 0
+        with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf8') as f:
+            for utterance_label in csv.DictReader(f):
+                utterance_label: dict
+                item_name = utterance_label['name']
+                item_idx = int(item_name.rsplit(DS_INDEX_SEP, maxsplit=1)[-1]) if DS_INDEX_SEP in item_name else 0
 
-            def require(attr):
-                if self.prefer_ds:
-                    value = self.load_attr_from_ds(ds_id, item_name, attr, item_idx)
-                else:
-                    value = None
-                if value is None:
-                    value = utterance_label.get(attr)
-                if value is None:
-                    raise ValueError(f'Missing required attribute {attr} of item \'{item_name}\'.')
-                return value
+                def require(attr):
+                    if self.prefer_ds:
+                        value = self.load_attr_from_ds(ds_id, item_name, attr, item_idx)
+                    else:
+                        value = None
+                    if value is None:
+                        value = utterance_label.get(attr)
+                    if value is None:
+                        raise ValueError(f'Missing required attribute {attr} of item \'{item_name}\'.')
+                    return value
 
-            temp_dict = {
-                'ds_idx': item_idx,
-                'spk_id': spk_id,
-                'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
-                'ph_seq': require('ph_seq').split(),
-                'ph_dur': [float(x) for x in require('ph_dur').split()]
-            }
+                temp_dict = {
+                    'ds_idx': item_idx,
+                    'spk_id': spk_id,
+                    'spk_name': self.speakers[ds_id],
+                    'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
+                    'ph_seq': require('ph_seq').split(),
+                    'ph_dur': [float(x) for x in require('ph_dur').split()]
+                }
 
-            assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
-                f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+                assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                    f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
 
-            if hparams['predict_dur']:
-                temp_dict['ph_num'] = [int(x) for x in require('ph_num').split()]
-                assert len(temp_dict['ph_seq']) == sum(temp_dict['ph_num']), \
-                    f'Sum of ph_num does not equal length of ph_seq in \'{item_name}\'.'
+                if hparams['predict_dur']:
+                    temp_dict['ph_num'] = [int(x) for x in require('ph_num').split()]
+                    assert len(temp_dict['ph_seq']) == sum(temp_dict['ph_num']), \
+                        f'Sum of ph_num does not equal length of ph_seq in \'{item_name}\'.'
 
-            if hparams['predict_pitch']:
-                temp_dict['note_seq'] = require('note_seq').split()
-                temp_dict['note_dur'] = [float(x) for x in require('note_dur').split()]
-                assert len(temp_dict['note_seq']) == len(temp_dict['note_dur']), \
-                    f'Lengths of note_seq and note_dur mismatch in \'{item_name}\'.'
-                assert any([note != 'rest' for note in temp_dict['note_seq']]), \
-                    f'All notes are rest in \'{item_name}\'.'
-                if hparams['use_glide_embed']:
-                    temp_dict['note_glide'] = require('note_glide').split()
+                if hparams['predict_pitch']:
+                    temp_dict['note_seq'] = require('note_seq').split()
+                    temp_dict['note_dur'] = [float(x) for x in require('note_dur').split()]
+                    assert len(temp_dict['note_seq']) == len(temp_dict['note_dur']), \
+                        f'Lengths of note_seq and note_dur mismatch in \'{item_name}\'.'
+                    assert any([note != 'rest' for note in temp_dict['note_seq']]), \
+                        f'All notes are rest in \'{item_name}\'.'
+                    if hparams['use_glide_embed']:
+                        temp_dict['note_glide'] = require('note_glide').split()
 
-            meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
         self.items.update(meta_data_dict)
 
@@ -238,6 +238,7 @@ class VarianceBinarizer(BaseBinarizer):
             'name': item_name,
             'wav_fn': meta_data['wav_fn'],
             'spk_id': meta_data['spk_id'],
+            'spk_name': meta_data['spk_name'],
             'seconds': seconds,
             'length': length,
             'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64)

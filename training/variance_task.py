@@ -20,8 +20,8 @@ matplotlib.use('Agg')
 
 
 class VarianceDataset(BaseDataset):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, prefix, preload=False):
+        super(VarianceDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         need_energy = hparams['predict_energy']
         need_breathiness = hparams['predict_breathiness']
         need_tension = hparams['predict_tension']
@@ -29,6 +29,8 @@ class VarianceDataset(BaseDataset):
 
     def collater(self, samples):
         batch = super().collater(samples)
+        if batch['size'] == 0:
+            return batch
 
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         ph_dur = utils.collate_nd([s['ph_dur'] for s in samples], 0)
@@ -100,8 +102,9 @@ class VarianceTask(BaseTask):
             self.variance_prediction_list.append('tension')
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
+        super()._finish_init()
 
-    def build_model(self):
+    def _build_model(self):
         return DiffSingerVariance(
             vocab_size=len(self.phone_encoder),
         )
@@ -117,17 +120,20 @@ class VarianceTask(BaseTask):
                 lambda_wdur=dur_hparams['lambda_wdur_loss'],
                 lambda_sdur=dur_hparams['lambda_sdur_loss']
             )
-            self.register_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))
-            self.register_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
+            self.register_validation_loss('dur_loss')
+            self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))
+            self.register_validation_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
         if self.predict_pitch:
             self.pitch_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
-            self.register_metric('pitch_acc', RawCurveAccuracy(tolerance=0.5))
+            self.register_validation_loss('pitch_loss')
+            self.register_validation_metric('pitch_acc', RawCurveAccuracy(tolerance=0.5))
         if self.predict_variances:
             self.var_loss = DiffusionNoiseLoss(
                 loss_type=hparams['diff_loss_type'],
             )
+            self.register_validation_loss('var_loss')
 
     def run_model(self, sample, infer=False):
         spk_ids = sample['spk_ids'] if self.use_spk_id else None  # [B,]
@@ -198,74 +204,83 @@ class VarianceTask(BaseTask):
 
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, infer=False)
-
-        if batch_idx < hparams['num_valid_plots'] \
-                and (self.trainer.distributed_sampler_kwargs or {}).get('rank', 0) == 0:
-            dur_pred, pitch_pred, variances_pred = self.run_model(sample, infer=True)
-            if dur_pred is not None:
-                tokens = sample['tokens']
-                dur_gt = sample['ph_dur']
-                ph2word = sample['ph2word']
-                mask = tokens != 0
-                self.rhythm_corr.update(
-                    pdur_pred=dur_pred, pdur_target=dur_gt, ph2word=ph2word, mask=mask
-                )
-                self.ph_dur_acc.update(
-                    pdur_pred=dur_pred, pdur_target=dur_gt, ph2word=ph2word, mask=mask
-                )
-                self.plot_dur(batch_idx, dur_gt, dur_pred, txt=tokens)
-            if pitch_pred is not None:
-                pred_pitch = sample['base_pitch'] + pitch_pred
-                gt_pitch = sample['pitch']
-                mask = (sample['mel2ph'] > 0) & ~sample['uv']
-                self.pitch_acc.update(pred=pred_pitch, target=gt_pitch, mask=mask)
-                self.plot_pitch(
-                    batch_idx,
-                    gt_pitch=gt_pitch,
-                    pred_pitch=pred_pitch,
-                    note_midi=sample['note_midi'],
-                    note_dur=sample['note_dur'],
-                    note_rest=sample['note_rest']
-                )
-            for name in self.variance_prediction_list:
-                variance = sample[name]
-                variance_pred = variances_pred[name]
-                self.plot_curve(
-                    batch_idx,
-                    gt_curve=variance,
-                    pred_curve=variance_pred,
-                    curve_name=name
-                )
-
+        if min(sample['indices']) < hparams['num_valid_plots']:
+            def sample_get(key, idx, abs_idx):
+                return sample[key][idx][:self.valid_dataset.metadata[key][abs_idx]].unsqueeze(0)
+            dur_preds, pitch_preds, variances_preds = self.run_model(sample, infer=True)
+            for i in range(len(sample['indices'])):
+                data_idx = sample['indices'][i]
+                if data_idx < hparams['num_valid_plots']:
+                    if dur_preds is not None:
+                        dur_len = self.valid_dataset.metadata['ph_dur'][data_idx]
+                        tokens = sample_get('tokens', i, data_idx)
+                        gt_dur = sample_get('ph_dur', i, data_idx)
+                        pred_dur = dur_preds[i][:dur_len].unsqueeze(0)
+                        ph2word = sample_get('ph2word', i, data_idx)
+                        mask = tokens != 0
+                        self.valid_metrics['rhythm_corr'].update(
+                            pdur_pred=pred_dur, pdur_target=gt_dur, ph2word=ph2word, mask=mask
+                        )
+                        self.valid_metrics['ph_dur_acc'].update(
+                            pdur_pred=pred_dur, pdur_target=gt_dur, ph2word=ph2word, mask=mask
+                        )
+                        self.plot_dur(data_idx, gt_dur, pred_dur, tokens)
+                    if pitch_preds is not None:
+                        pitch_len = self.valid_dataset.metadata['pitch'][data_idx]
+                        pred_pitch = sample_get('base_pitch', i, data_idx) + pitch_preds[i][:pitch_len].unsqueeze(0)
+                        gt_pitch = sample_get('pitch', i, data_idx)
+                        mask = (sample_get('mel2ph', i, data_idx) > 0) & ~sample_get('uv', i, data_idx)
+                        self.valid_metrics['pitch_acc'].update(pred=pred_pitch, target=gt_pitch, mask=mask)
+                        self.plot_pitch(
+                            data_idx,
+                            gt_pitch=gt_pitch,
+                            pred_pitch=pred_pitch,
+                            note_midi=sample_get('note_midi', i, data_idx),
+                            note_dur=sample_get('note_dur', i, data_idx),
+                            note_rest=sample_get('note_rest', i, data_idx)
+                        )
+                    for name in self.variance_prediction_list:
+                        variance_len = self.valid_dataset.metadata[name][data_idx]
+                        gt_variances = sample[name][i][:variance_len].unsqueeze(0)
+                        pred_variances = variances_preds[name][i][:variance_len].unsqueeze(0)
+                        self.plot_curve(
+                            data_idx,
+                            gt_curve=gt_variances,
+                            pred_curve=pred_variances,
+                            curve_name=name
+                        )
         return losses, sample['size']
+
 
     ############
     # validation plots
     ############
-    def plot_dur(self, batch_idx, gt_dur, pred_dur, txt=None):
-        name = f'dur_{batch_idx}'
+    def plot_dur(self, data_idx, gt_dur, pred_dur, txt=None):
         gt_dur = gt_dur[0].cpu().numpy()
         pred_dur = pred_dur[0].cpu().numpy()
         txt = self.phone_encoder.decode(txt[0].cpu().numpy()).split()
-        self.logger.experiment.add_figure(name, dur_to_figure(gt_dur, pred_dur, txt), self.global_step)
+        title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
+        self.logger.all_rank_experiment.add_figure(f'dur_{data_idx}', dur_to_figure(
+            gt_dur, pred_dur, txt, title_text
+        ), self.global_step)
 
-    def plot_pitch(self, batch_idx, gt_pitch, pred_pitch, note_midi, note_dur, note_rest):
-        name = f'pitch_{batch_idx}'
+    def plot_pitch(self, data_idx, gt_pitch, pred_pitch, note_midi, note_dur, note_rest):
         gt_pitch = gt_pitch[0].cpu().numpy()
         pred_pitch = pred_pitch[0].cpu().numpy()
         note_midi = note_midi[0].cpu().numpy()
         note_dur = note_dur[0].cpu().numpy()
         note_rest = note_rest[0].cpu().numpy()
-        self.logger.experiment.add_figure(name, pitch_note_to_figure(
-            gt_pitch, pred_pitch, note_midi, note_dur, note_rest
+        title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
+        self.logger.all_rank_experiment.add_figure(f'pitch_{data_idx}', pitch_note_to_figure(
+            gt_pitch, pred_pitch, note_midi, note_dur, note_rest, title_text
         ), self.global_step)
 
-    def plot_curve(self, batch_idx, gt_curve, pred_curve, base_curve=None, grid=None, curve_name='curve'):
-        name = f'{curve_name}_{batch_idx}'
+    def plot_curve(self, data_idx, gt_curve, pred_curve, base_curve=None, grid=None, curve_name='curve'):
         gt_curve = gt_curve[0].cpu().numpy()
         pred_curve = pred_curve[0].cpu().numpy()
         if base_curve is not None:
             base_curve = base_curve[0].cpu().numpy()
-        self.logger.experiment.add_figure(name, curve_to_figure(
-            gt_curve, pred_curve, base_curve, grid=grid
+        title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
+        self.logger.all_rank_experiment.add_figure(f'{curve_name}_{data_idx}', curve_to_figure(
+            gt_curve, pred_curve, base_curve, grid=grid, title=title_text
         ), self.global_step)
