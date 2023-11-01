@@ -1,6 +1,7 @@
 import os
+import pickle
 
-import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from utils.hparams import hparams
@@ -22,32 +23,36 @@ class BaseDataset(Dataset):
             the index function.
     """
 
-    def __init__(self, prefix):
+    def __init__(self, prefix, size_key='lengths', preload=False):
         super().__init__()
         self.prefix = prefix
         self.data_dir = hparams['binary_data_dir']
-        self.sizes = np.load(os.path.join(self.data_dir, f'{self.prefix}.lengths'))
-        self.indexed_ds = IndexedDataset(self.data_dir, self.prefix)
-
-    @property
-    def _sizes(self):
-        return self.sizes
+        with open(os.path.join(self.data_dir, f'{self.prefix}.meta'), 'rb') as f:
+            self.metadata = pickle.load(f)
+        self.sizes = self.metadata[size_key]
+        self._indexed_ds = IndexedDataset(self.data_dir, self.prefix)
+        if preload:
+            self.indexed_ds = [self._indexed_ds[i] for i in range(len(self._indexed_ds))]
+            del self._indexed_ds
+        else:
+            self.indexed_ds = self._indexed_ds
 
     def __getitem__(self, index):
-        return self.indexed_ds[index]
+        return {'_idx': index, **self.indexed_ds[index]}
 
     def __len__(self):
-        return len(self._sizes)
+        return len(self.sizes)
 
     def num_frames(self, index):
-        return self.size(index)
+        return self.sizes[index]
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
-        return self._sizes[index]
+        return self.sizes[index]
 
     def collater(self, samples):
         return {
-            'size': len(samples)
+            'size': len(samples),
+            'indices': torch.LongTensor([s['_idx'] for s in samples])
         }

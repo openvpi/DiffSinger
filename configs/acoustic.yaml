@@ -103,6 +103,7 @@ lr_scheduler_args:
   gamma: 0.5
 max_batch_frames: 80000
 max_batch_size: 48
+dataset_size_key: 'lengths'
 val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10

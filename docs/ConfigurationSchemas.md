@@ -27,257 +27,143 @@ Each configuration key (including nested keys) are described with a brief explan
 
 Indicates that gradients of how many training steps are accumulated before each `optimizer.step()` call. 1 means no gradient accumulation.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### audio_num_mel_bins
 
 Number of mel channels for feature extraction, diffusion sampling and waveform reconstruction.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn, preprocessing, inference
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-128
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>128</td>
+</tbody></table>
 
 ### audio_sample_rate
 
 Sampling rate of waveforms.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-44100
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>44100</td>
+</tbody></table>
 
 ### augmentation_args
 
 Arguments for data augmentation.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting
 
 Arguments for fixed pitch shifting augmentation.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting.enabled
 
 Whether to apply fixed pitch shifting augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-false
-
-#### constraints
-
-Must be false if [augmentation_args.random_pitch_shifting.enabled](#augmentation_args.random_pitch_shifting.enabled) is set to true.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_argsrandom_pitch_shiftingenabled">augmentation_args.random_pitch_shifting.enabled</a> is set to true.</td>
+</tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting.scale
 
 Scale ratio of each target in fixed pitch shifting augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-tuple
-
-#### default
-
-0.75
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>tuple</td>
+<tr><td align="center"><b>default</b></td><td>0.75</td>
+</tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting.targets
 
 Targets (in semitones) of fixed pitch shifting augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-not recommended
-
-#### type
-
-tuple
-
-#### default
-
-[-5.0, 5.0]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>tuple</td>
+<tr><td align="center"><b>default</b></td><td>[-5.0, 5.0]</td>
+</tbody></table>
 
 ### augmentation_args.random_pitch_shifting
 
 Arguments for random pitch shifting augmentation.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### augmentation_args.random_pitch_shifting.enabled
 
 Whether to apply random pitch shifting augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-false
-
-#### constraints
-
-Must be false if [augmentation_args.fixed_pitch_shifting.enabled](#augmentation_args.fixed_pitch_shifting.enabled) is set to true.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_argsfixed_pitch_shiftingenabled">augmentation_args.fixed_pitch_shifting.enabled</a> is set to true.</td>
+</tbody></table>
 
 ### augmentation_args.random_pitch_shifting.range
 
 Range of the random pitch shifting ( in semitones).
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-not recommended
-
-#### type
-
-tuple
-
-#### default
-
-[-5.0, 5.0]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>tuple</td>
+<tr><td align="center"><b>default</b></td><td>[-5.0, 5.0]</td>
+</tbody></table>
 
 ### augmentation_args.random_pitch_shifting.scale
 
 Scale ratio of the random pitch shifting augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### augmentation_args.random_time_stretching
 
 Arguments for random time stretching augmentation.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### augmentation_args.random_time_stretching.domain
 
@@ -286,401 +172,208 @@ The domain where random time stretching factors are uniformly distributed in.
 - If 'linear', stretching ratio $x$ will be uniformly distributed in $[V_{min}, V_{max}]$.
 - If 'log', $\ln{x}$ will be uniformly distributed in $[\ln{V_{min}}, \ln{V_{max}}]$.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-log
-
-#### constraint
-
-Choose from 'log', 'linear'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>log</td>
+<tr><td align="center"><b>constraint</b></td><td>Choose from 'log', 'linear'.</td>
+</tbody></table>
 
 ### augmentation_args.random_time_stretching.enabled
 
 Whether to apply random time stretching augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-false
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
 
 ### augmentation_args.random_time_stretching.range
 
 Range of random time stretching factors.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-not recommended
-
-#### type
-
-tuple
-
-#### default
-
-[0.5, 2]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>tuple</td>
+<tr><td align="center"><b>default</b></td><td>[0.5, 2]</td>
+</tbody></table>
 
 ### augmentation_args.random_time_stretching.scale
 
 Scale ratio of random time stretching augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### base_config
 
 Path(s) of other config files that the current config is based on and will override.
 
-#### scope
-
-others
-
-#### type
-
-Union[str, list]
+<table><tbody>
+<tr><td align="center"><b>scope</b></td><td>others</td>
+<tr><td align="center"><b>type</b></td><td>Union[str, list]</td>
+</tbody></table>
 
 ### binarization_args
 
 Arguments for binarizers.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### binarization_args.num_workers
 
 Number of worker subprocesses when running binarizers. More workers can speed up the preprocessing but will consume more memory. 0 means the main processing doing everything.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### binarization_args.prefer_ds
 
 Whether to prefer loading attributes and parameters from DS files.
 
-#### visibility
-
-variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-False
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>False</td>
+</tbody></table>
 
 ### binarization_args.shuffle
 
 Whether binarized dataset will be shuffled or not.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-bool
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### binarizer_cls
 
 Binarizer class name.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-str
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
 
 ### binary_data_dir
 
 Path to the binarized dataset.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing, training
-
-#### customizability
-
-required
-
-#### type
-
-str
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
 
 ### breathiness_db_max
 
 Maximum breathiness value in dB used for normalization to [-1, 1].
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
--20.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-20.0</td>
+</tbody></table>
 
 ### breathiness_db_min
 
 Minimum breathiness value in dB used for normalization to [-1, 1].
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-inference
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
--96.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-96.0</td>
+</tbody></table>
 
 ### breathiness_smooth_width
 
 Length of sinusoidal smoothing convolution kernel (in seconds) on extracted breathiness curve.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-0.12
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.12</td>
+</tbody></table>
 
 ### clip_grad_norm
 
 The value at which to clip gradients. Equivalent to `gradient_clip_val` in `lightning.pytorch.Trainer`.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### dataloader_prefetch_factor
 
 Number of batches loaded in advance by each `torch.utils.data.DataLoader` worker.
 
-#### visibility
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
-all
+### dataset_size_key
 
-#### scope
+The key that indexes the binarized metadata to be used as the `sizes` when batching by size
 
-training
-
-#### customizability
-
-normal
-
-#### type
-
-bool
-
-#### default
-
-true
-
-### ddp_backend
-
-The distributed training backend.
-
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-nccl
-
-#### constraints
-
-Choose from 'gloo', 'nccl', 'nccl_no_p2p'. Windows platforms may use 'gloo'; Linux platforms may use 'nccl'; if Linux ddp gets stuck, use 'nccl_no_p2p'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>lengths</td>
+</tbody></table>
 
 ### dictionary
 
 Path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-str
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
 
 ### diff_accelerator
 
@@ -691,333 +384,168 @@ Diffusion sampling acceleration method. The following method are currently avail
 - DPM-Solver++ adapted from [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://github.com/LuChengTHU/dpm-solver)
 - UniPC adapted from [UniPC: A Unified Predictor-Corrector Framework for Fast Sampling of Diffusion Models](https://github.com/wl-zhao/UniPC)
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-inference
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-dpm-solver
-
-#### constraints
-
-Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>dpm-solver</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'.</td>
+</tbody></table>
 
 ### diff_decoder_type
 
 Denoiser type of the DDPM.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-reserved
-
-#### type
-
-str
-
-#### default
-
-wavenet
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>wavenet</td>
+</tbody></table>
 
 ### diff_loss_type
 
 Loss type of the DDPM.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-l2
-
-#### constraints
-
-Choose from 'l1', 'l2'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>l2</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'l1', 'l2'.</td>
+</tbody></table>
 
 ### dilation_cycle_length
 
 Length k of the cycle $2^0, 2^1 ...., 2^k$ of convolution dilation factors through WaveNet residual blocks.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-int
-
-#### default
-
-4
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+</tbody></table>
 
 ### dropout
 
 Dropout rate in some FastSpeech2 modules.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-0.1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.1</td>
+</tbody></table>
 
 ### ds_workers
 
 Number of workers of `torch.utils.data.DataLoader`.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-4
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+</tbody></table>
 
 ### dur_prediction_args
 
 Arguments for phoneme duration prediction.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### dur_prediction_args.arch
 
 Architecture of duration predictor.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn
-
-#### customizability
-
-reserved
-
-#### type
-
-str
-
-#### default
-
-fs2
-
-#### constraints
-
-Choose from 'fs2'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>fs2</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2'.</td>
+</tbody></table>
 
 ### dur_prediction_args.dropout
 
 Dropout rate in duration predictor of FastSpeech2.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-0.1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.1</td>
+</tbody></table>
 
 ### dur_prediction_args.hidden_size
 
 Dimensions of hidden layers in duration predictor of FastSpeech2.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-512
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>512</td>
+</tbody></table>
 
 ### dur_prediction_args.kernel_size
 
 Kernel size of convolution layers of duration predictor of FastSpeech2.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-3
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>3</td>
+</tbody></table>
 
 ### dur_prediction_args.lambda_pdur_loss
 
 Coefficient of single phone duration loss when calculating joint duration loss.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-0.3
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.3</td>
+</tbody></table>
 
 ### dur_prediction_args.lambda_sdur_loss
 
 Coefficient of sentence duration loss when calculating joint duration loss.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-3.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>3.0</td>
+</tbody></table>
 
 ### dur_prediction_args.lambda_wdur_loss
 
 Coefficient of word duration loss when calculating joint duration loss.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### dur_prediction_args.log_offset
 
@@ -1027,197 +555,98 @@ D' = \ln{(D+d)}
 $$
 with the offset value $d$.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### dur_prediction_args.loss_type
 
 Underlying loss type of duration loss.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-mse
-
-#### constraints
-
-Choose from 'mse', 'huber'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>mse</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'mse', 'huber'.</td>
+</tbody></table>
 
 ### dur_prediction_args.num_layers
 
 Number of duration predictor layers.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-5
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>5</td>
+</tbody></table>
 
 ### enc_ffn_kernel_size
 
 Size of TransformerFFNLayer convolution kernel size in FastSpeech2 encoder.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-int
-
-#### default
-
-9
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>9</td>
+</tbody></table>
 
 ### enc_layers
 
 Number of FastSpeech2 encoder layers.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-4
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+</tbody></table>
 
 ### energy_db_max
 
 Maximum energy value in dB used for normalization to [-1, 1].
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
--12.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-12.0</td>
+</tbody></table>
 
 ### energy_db_min
 
 Minimum energy value in dB used for normalization to [-1, 1].
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
--96.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-96.0</td>
+</tbody></table>
 
 ### energy_smooth_width
 
 Length of sinusoidal smoothing convolution kernel (in seconds) on extracted energy curve.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-0.12
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.12</td>
+</tbody></table>
 
 ### f0_embed_type
 
@@ -1226,29 +655,14 @@ Map f0 to embedding using:
 - `torch.nn.Linear` if 'continuous'
 - `torch.nn.Embedding` if 'discrete'
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-continuous
-
-#### constraints
-
-Choose from 'continuous', 'discrete'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>continuous</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'continuous', 'discrete'.</td>
+</tbody></table>
 
 ### ffn_act
 
@@ -1258,753 +672,393 @@ Activation function of TransformerFFNLayer in FastSpeech2 encoder:
 - `torch.nn.GELU` if 'gelu'
 - `torch.nn.SiLU` if 'swish'
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-gelu
-
-#### constraints
-
-Choose from 'relu', 'gelu', 'swish'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>gelu</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'relu', 'gelu', 'swish'.</td>
+</tbody></table>
 
 ### ffn_padding
 
 Padding mode of TransformerFFNLayer convolution in FastSpeech2 encoder.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-SAME
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>SAME</td>
+</tbody></table>
 
 ### fft_size
 
 Fast Fourier Transforms parameter for mel extraction.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-2048
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>2048</td>
+</tbody></table>
 
 ### finetune_enabled
 
 Whether to finetune from a pretrained model.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-bool
-
-#### default
-
-False
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>False</td>
+</tbody></table>
 
 ### finetune_ckpt_path
 
 Path to the pretrained model for finetuning.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-null
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>null</td>
+</tbody></table>
 
 ### finetune_ignored_params
 
 Prefixes of parameter key names in the state dict of the pretrained model that need to be dropped before finetuning.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-list
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+</tbody></table>
 
 ### finetune_strict_shapes
 
 Whether to raise error if the tensor shapes of any parameter of the pretrained model and the target model mismatch. If set to `False`, parameters with mismatching shapes will be skipped.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-bool
-
-#### default
-
-True
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>True</td>
+</tbody></table>
 
 ### fmax
 
 Maximum frequency of mel extraction.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-16000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>16000</td>
+</tbody></table>
 
 ### freezing_enabled
 
 Whether enabling parameter freezing during training.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-bool
-
-#### default
-
-False
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>False</td>
+</tbody></table>
 
 ### frozen_params
 
 Parameter name prefixes to freeze during training.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-list
-
-#### default
-
-[]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+<tr><td align="center"><b>default</b></td><td>[]</td>
+</tbody></table>
 
 ### fmin
 
 Minimum frequency of mel extraction.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-40
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>40</td>
+</tbody></table>
 
 ### hidden_size
 
 Dimension of hidden layers of FastSpeech2, token and variance embeddings, and diffusion condition.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-256
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>256</td>
+</tbody></table>
 
 ### hop_size
 
 Hop size or step length (in number of waveform samples) of mel and feature extraction.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-512
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>512</td>
+</tbody></table>
 
 ### interp_uv
 
 Whether to apply linear interpolation to unvoiced parts in f0.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-boolean
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### lambda_dur_loss
 
 Coefficient of duration loss when calculating total loss of variance model.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### lambda_pitch_loss
 
 Coefficient of pitch loss when calculating total loss of variance model.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### lambda_var_loss
 
 Coefficient of variance loss (all variance parameters other than pitch, like energy, breathiness, etc.) when calculating total loss of variance model.
 
-#### visibility
-
-variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-1.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.0</td>
+</tbody></table>
 
 ### K_step
 
 Total number of diffusion steps.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-int
-
-#### default
-
-1000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1000</td>
+</tbody></table>
 
 ### log_interval
 
 Controls how often to log within training steps. Equivalent to `log_every_n_steps` in `lightning.pytorch.Trainer`.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-100
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>100</td>
+</tbody></table>
 
 ### lr_scheduler_args
 
-Arguments of learning rate scheduler. Keys will be used as keyword arguments of the `__init__()` method of [lr_scheduler_args.scheduler_cls](#lr_scheduler_args.scheduler_cls).
+Arguments of learning rate scheduler. Keys will be used as keyword arguments of the `__init__()` method of [lr_scheduler_args.scheduler_cls](#lr_scheduler_argsscheduler_cls).
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### lr_scheduler_args.scheduler_cls
 
 Learning rate scheduler class name.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-torch.optim.lr_scheduler.StepLR
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>torch.optim.lr_scheduler.StepLR</td>
+</tbody></table>
 
 ### max_batch_frames
 
 Maximum number of data frames in each training batch. Used to dynamically control the batch size.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-80000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>80000</td>
+</tbody></table>
 
 ### max_batch_size
 
 The maximum training batch size.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-48
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>48</td>
+</tbody></table>
 
 ### max_beta
 
 Max beta of the DDPM noise schedule.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn, inference
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-0.02
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.02</td>
+</tbody></table>
 
 ### max_updates
 
 Stop training after this number of steps. Equivalent to `max_steps` in `lightning.pytorch.Trainer`.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-320000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>320000</td>
+</tbody></table>
 
 ### max_val_batch_frames
 
 Maximum number of data frames in each validation batch.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-60000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>60000</td>
+</tbody></table>
 
 ### max_val_batch_size
 
 The maximum validation batch size.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### mel_vmax
 
 Maximum mel spectrogram heatmap value for TensorBoard plotting.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
-1.5
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>1.5</td>
+</tbody></table>
 
 ### mel_vmin
 
 Minimum mel spectrogram heatmap value for TensorBoard plotting.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-float
-
-#### default
-
--6.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-6.0</td>
+</tbody></table>
 
 ### midi_smooth_width
 
 Length of sinusoidal smoothing convolution kernel (in seconds) on the step function representing MIDI sequence for base pitch calculation.
 
-#### visibility
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.06</td>
+</tbody></table>
 
-variance
+### nccl_p2p
 
-#### scope
+Whether to enable P2P when using NCCL as the backend. Turn it to `false` if the training process is stuck upon beginning.
 
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-float
-
-#### default
-
-0.06
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### num_ckpt_keep
 
 Number of newest checkpoints kept during training.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-5
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>5</td>
+</tbody></table>
 
 ### num_heads
 
 The number of attention heads of `torch.nn.MultiheadAttention` in FastSpeech2 encoder.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-int
-
-#### default
-
-2
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>2</td>
+</tbody></table>
 
 ### num_pad_tokens
 
@@ -2012,401 +1066,221 @@ Number of padding phoneme indexes before all real tokens.
 
 Due to some historical reasons, old checkpoints may have 3 padding tokens called \<PAD\>, \<EOS\> and \<UNK\>. After refactoring, all padding tokens are called \<PAD\>, and only the first one (token == 0) will be used.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn, preprocess
-
-#### customizability
-
-not recommended
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocess</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### num_sanity_val_steps
 
 Number of sanity validation steps at the beginning.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### num_spk
 
 Maximum number of speakers in multi-speaker models.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-required
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### num_valid_plots
 
 Number of validation plots in each validation. Plots will be chosen from the start of the validation set.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-10
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>10</td>
+</tbody></table>
 
 ### optimizer_args
 
-Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__()` method of [optimizer_args.optimizer_cls](#optimizer_args.optimizer_cls).
+Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__()` method of [optimizer_args.optimizer_cls](#optimizer_argsoptimizer_cls).
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### optimizer_args.optimizer_cls
 
 Optimizer class name
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-str
-
-#### default
-
-torch.optim.AdamW
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>torch.optim.AdamW</td>
+</tbody></table>
 
 ### pe
 
 Pitch extractor type.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-parselmouth
-
-#### constraints
-
-Choose from 'parselmouth'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>parselmouth</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'parselmouth'.</td>
+</tbody></table>
 
 ### pe_ckpt
 
 Checkpoint or model path of NN-based pitch extractor.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-normal
-
-#### type
-
-str
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
 
 ### permanent_ckpt_interval
 
 The interval (in number of training steps) of permanent checkpoints. Permanent checkpoints will not be removed even if they are not the newest ones.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### type
-
-int
-
-#### default
-
-40000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>40000</td>
+</tbody></table>
 
 ### permanent_ckpt_start
 
 Checkpoints will be marked as permanent every [permanent_ckpt_interval](#permanent_ckpt_interval) training steps after this number of training steps.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### type
-
-int
-
-#### default
-
-120000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>120000</td>
+</tbody></table>
 
 ### pitch_prediction_args
 
 Arguments for pitch prediction.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### pitch_prediction_args.dilation_cycle_length
 
 Equivalent to [dilation_cycle_length](#dilation_cycle_length) but only for the PitchDiffusion model.
 
-#### visibility
-
-variance
-
-#### default
-
-5
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>default</b></td><td>5</td>
+</tbody></table>
 
 ### pitch_prediction_args.pitd_clip_max
 
 Maximum clipping value (in semitones) of pitch delta between actual pitch and base pitch.
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### type
-
-float
-
-#### default
-
-12.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>12.0</td>
+</tbody></table>
 
 ### pitch_prediction_args.pitd_clip_min
 
 Minimum clipping value (in semitones) of pitch delta between actual pitch and base pitch.
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### type
-
-float
-
-#### default
-
--12.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-12.0</td>
+</tbody></table>
 
 ### pitch_prediction_args.pitd_norm_max
 
 Maximum pitch delta value in semitones used for normalization to [-1, 1].
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
-8.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>8.0</td>
+</tbody></table>
 
 ### pitch_prediction_args.pitd_norm_min
 
 Minimum pitch delta value in semitones used for normalization to [-1, 1].
 
-#### visibility
-
-variance
-
-#### scope
-
-inference
-
-#### customizability
-
-recommended
-
-#### type
-
-float
-
-#### default
-
--8.0
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-8.0</td>
+</tbody></table>
 
 ### pitch_prediction_args.repeat_bins
 
 Number of repeating bins in PitchDiffusion.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-64
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>64</td>
+</tbody></table>
 
 ### pitch_prediction_args.residual_channels
 
 Equivalent to [residual_channels](#residual_channels) but only for PitchDiffusion.
 
-#### visibility
-
-variance
-
-#### default
-
-256
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>default</b></td><td>256</td>
+</tbody></table>
 
 ### pitch_prediction_args.residual_layers
 
 Equivalent to [residual_layers](#residual_layers) but only for PitchDiffusion.
 
-#### visibility
-
-variance
-
-#### default
-
-20
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>default</b></td><td>20</td>
+</tbody></table>
 
 ### pl_trainer_accelerator
 
 Type of Lightning trainer hardware accelerator.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-auto
-
-#### constraints
-
-See [Accelerator — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator) for available values.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>auto</td>
+<tr><td align="center"><b>constraints</b></td><td>See <a href="https://lightning.ai/docs/pytorch/stable/extensions/accelerator.html?highlight=accelerator">Accelerator — PyTorch Lightning 2.X.X documentation</a> for available values.</td>
+</tbody></table>
 
 ### pl_trainer_devices
 
@@ -2414,309 +1288,164 @@ To determine on which device(s) model should be trained.
 
 'auto' will utilize all visible devices defined with the `CUDA_VISIBLE_DEVICES` environment variable, or utilize all available devices if that variable is not set. Otherwise, it behaves like `CUDA_VISIBLE_DEVICES` which can filter out visible devices.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-auto
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>auto</td>
+</tbody></table>
 
 ### pl_trainer_precision
 
 The computation precision of training.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-32-true
-
-#### constraints
-
-Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at [Trainer — PyTorch Lightning 2.X.X documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api).
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>32-true</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at <a href="https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api">Trainer — PyTorch Lightning 2.X.X documentation</a>.</td>
+</tbody></table>
 
 ### pl_trainer_num_nodes
 
 Number of nodes in the training cluster of Lightning trainer.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-1
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
 
 ### pl_trainer_strategy
 
-Strategies of the Lightning trainer behavior.
+Arguments of Lightning Strategy. Values will be used as keyword arguments when constructing the Strategy object.
 
-#### visibility
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
-all
+### pl_trainer_strategy.name
 
-#### scope
+Strategy name for the Lightning trainer.
 
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-str
-
-#### default
-
-auto
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>auto</td>
+</tbody></table>
 
 ### pndm_speedup
 
 Diffusion sampling speed-up ratio. 1 means no speeding up.
 
-#### visibility
-
-acoustic, variance
-
-#### type
-
-int
-
-#### default
-
-10
-
-#### constraints
-
-Must be a factor of [K_step](#K_step).
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>10</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be a factor of <a href="#K_step">K_step</a>.</td>
+</tbody></table>
 
 ### predict_breathiness
 
 Whether to enable breathiness prediction.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn, preprocessing, training, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-false
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
 
 ### predict_dur
 
 Whether to enable phoneme duration prediction.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn, preprocessing, training, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### predict_energy
 
 Whether to enable energy prediction.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn, preprocessing, training, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-false
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
 
 ### predict_pitch
 
 Whether to enable pitch prediction.
 
-#### visibility
-
-variance
-
-#### scope
-
-nn, preprocessing, training, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### raw_data_dir
 
 Path(s) to the raw dataset including wave files, transcriptions, etc.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-required
-
-#### type
-
-str, List[str]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>str, List[str]</td>
+</tbody></table>
 
 ### rel_pos
 
 Whether to use relative positional encoding in FastSpeech2 module.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-boolean
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### residual_channels
 
 Number of dilated convolution channels in residual blocks in WaveNet.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-512
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>512</td>
+</tbody></table>
 
 ### residual_layers
 
 Number of residual blocks in WaveNet.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-20
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>20</td>
+</tbody></table>
 
 ### sampler_frame_count_grid
 
@@ -2728,237 +1457,120 @@ $$
 
 Training performance on some datasets may be very sensitive to this value. Change it to 1 (completely sorted by length without shuffling) to get the best performance in theory.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-6
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>6</td>
+</tbody></table>
 
 ### save_codes
 
 Files in these folders will be backed up every time a training starts.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-list
-
-#### default
-
-[configs, modules, training, utils]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+<tr><td align="center"><b>default</b></td><td>[configs, modules, training, utils]</td>
+</tbody></table>
 
 ### schedule_type
 
 The diffusion schedule type.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-str
-
-#### default
-
-linear
-
-#### constraints
-
-Choose from 'linear', 'cosine'.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>linear</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'linear', 'cosine'.</td>
+</tbody></table>
 
 ### seed
 
 The global random seed used to shuffle data, initializing model weights, etc.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing, training
-
-#### customizability
-
-normal
-
-#### type
-
-int
-
-#### default
-
-1234
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1234</td>
+</tbody></table>
 
 ### sort_by_len
 
 Whether to apply the _sorting by similar length_ algorithm described in [sampler_frame_count_grid](#sampler_frame_count_grid). Turning off this option may slow down training because sorting by length can better utilize the computing resources.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-training
-
-#### customizability
-
-not recommended
-
-#### type
-
-bool
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### speakers
 
 The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-required
-
-#### type
-
-list
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+</tbody></table>
 
 ### spk_ids
 
 The IDs of speakers in a multi-speaker model. If an empty list is given, speaker IDs will be automatically generated as $0,1,2,...,N_{spk}-1$. IDs can be duplicate or discontinuous.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-required
-
-#### type
-
-List[int]
-
-#### default
-
-[]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>List[int]</td>
+<tr><td align="center"><b>default</b></td><td>[]</td>
+</tbody></table>
 
 ### spec_min
 
 Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-inference
-
-#### customizability
-
-not recommended
-
-#### type
-
-List[float]
-
-#### default
-
-[-5.0]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>List[float]</td>
+<tr><td align="center"><b>default</b></td><td>[-5.0]</td>
+</tbody></table>
 
 ### spec_max
 
 Maximum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different maximum values.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-inference
-
-#### customizability
-
-not recommended
-
-#### type
-
-List[float]
-
-#### default
-
-[0.0]
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>List[float]</td>
+<tr><td align="center"><b>default</b></td><td>[0.0]</td>
+</tbody></table>
 
 ### task_cls
 
 Task trainer class name.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-reserved
-
-#### type
-
-str
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
 
 ### test_prefixes
 
@@ -2969,21 +1581,12 @@ List of data item names or name prefixes for the validation set. For each string
 
 For multi-speaker combined datasets, "ds_id:name_prefix" can be used to apply the rules above within data from a specific sub-dataset, where ds_id represents the dataset index.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-required
-
-#### type
-
-list
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+</tbody></table>
 
 ### timesteps
 
@@ -2993,378 +1596,201 @@ Equivalent to [K_step](#K_step).
 
 Name of the training set used in binary filenames, TensorBoard keys, etc.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing, training
-
-#### customizability
-
-reserved
-
-#### type
-
-str
-
-#### default
-
-train
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>train</td>
+</tbody></table>
 
 ### use_breathiness_embed
 
 Whether to accept and embed breathiness values into the model.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn, preprocessing, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-boolean
-
-#### default
-
-false
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
 
 ### use_energy_embed
 
 Whether to accept and embed energy values into the model.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn, preprocessing, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-boolean
-
-#### default
-
-false
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
 
 ### use_key_shift_embed
 
 Whether to embed key shifting values introduced by random pitch shifting augmentation.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-nn, preprocessing, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-boolean
-
-#### default
-
-false
-
-#### constraints
-
-Must be true if random pitch shifting is enabled.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be true if random pitch shifting is enabled.</td>
+</tbody></table>
 
 ### use_pos_embed
 
 Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn
-
-#### customizability
-
-not recommended
-
-#### type
-
-boolean
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### use_speed_embed
 
 Whether to embed speed values introduced by random time stretching augmentation.
 
-#### visibility
-
-acoustic
-
-#### type
-
-boolean
-
-#### default
-
-false
-
-#### constraints
-
-Must be true if random time stretching is enabled.
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be true if random time stretching is enabled.</td>
+</tbody></table>
 
 ### use_spk_id
 
 Whether embed the speaker id from a multi-speaker dataset.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-nn, preprocessing, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-bool
-
-#### default
-
-false
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
 
 ### val_check_interval
 
 Interval (in number of training steps) between validation checks.
 
-#### visibility
-
-all
-
-#### scope
-
-training
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-2000
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>2000</td>
+</tbody></table>
 
 ### val_with_vocoder
 
 Whether to load and use the vocoder to generate audio during validation. Validation audio will not be available if this option is disabled.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-training
-
-#### customizability
-
-normal
-
-#### type
-
-bool
-
-#### default
-
-true
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
 
 ### valid_set_name
 
 Name of the validation set used in binary filenames, TensorBoard keys, etc.
 
-#### visibility
-
-all
-
-#### scope
-
-preprocessing, training
-
-#### customizability
-
-reserved
-
-#### type
-
-str
-
-#### default
-
-valid
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>valid</td>
+</tbody></table>
 
 ### variances_prediction_args
 
 Arguments for prediction of variance parameters other than pitch, like energy, breathiness, etc.
 
-#### type
-
-dict
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
 
 ### variances_prediction_args.dilation_cycle_length
 
 Equivalent to [dilation_cycle_length](#dilation_cycle_length) but only for the MultiVarianceDiffusion model.
 
-#### visibility
-
-variance
-
-#### default
-
-4
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+</tbody></table>
 
 ### variances_prediction_args.total_repeat_bins
 
 Total number of repeating bins in MultiVarianceDiffusion. Repeating bins are distributed evenly to each variance parameter.
-#### visibility
 
-variance
-
-#### scope
-
-nn, inference
-
-#### customizability
-
-recommended
-
-#### type
-
-int
-
-#### default
-
-48
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>48</td>
+</tbody></table>
 
 ### variances_prediction_args.residual_channels
 
 Equivalent to [residual_channels](#residual_channels) but only for MultiVarianceDiffusion.
 
-#### visibility
-
-variance
-
-#### default
-
-192
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>default</b></td><td>192</td>
+</tbody></table>
 
 ### variances_prediction_args.residual_layers
 
 Equivalent to [residual_layers](#residual_layers) but only for MultiVarianceDiffusion.
 
-#### visibility
-
-variance
-
-#### default
-
-10
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>default</b></td><td>10</td>
+</tbody></table>
 
 ### vocoder
 
 The vocoder class name.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing, training, inference
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-NsfHifiGAN
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>NsfHifiGAN</td>
+</tbody></table>
 
 ### vocoder_ckpt
 
 Path of the vocoder model.
 
-#### visibility
-
-acoustic
-
-#### scope
-
-preprocessing, training, inference
-
-#### customizability
-
-normal
-
-#### type
-
-str
-
-#### default
-
-checkpoints/nsf_hifigan/model
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>checkpoints/nsf_hifigan/model</td>
+</tbody></table>
 
 ### win_size
 
 Window size for mel or feature extraction.
 
-#### visibility
-
-acoustic, variance
-
-#### scope
-
-preprocessing
-
-#### customizability
-
-reserved
-
-#### type
-
-int
-
-#### default
-
-2048
-
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>2048</td>
+</tbody></table>

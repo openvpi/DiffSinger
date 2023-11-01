@@ -4,16 +4,17 @@ import torch
 from matplotlib.ticker import MultipleLocator
 
 
-def spec_to_figure(spec, vmin=None, vmax=None):
+def spec_to_figure(spec, vmin=None, vmax=None, title=''):
     if isinstance(spec, torch.Tensor):
         spec = spec.cpu().numpy()
     fig = plt.figure(figsize=(12, 9))
     plt.pcolor(spec.T, vmin=vmin, vmax=vmax)
+    plt.title(title, fontsize=22)
     plt.tight_layout()
     return fig
 
 
-def dur_to_figure(dur_gt, dur_pred, txt):
+def dur_to_figure(dur_gt, dur_pred, txt, title=''):
     if isinstance(dur_gt, torch.Tensor):
         dur_gt = dur_gt.cpu().numpy()
     if isinstance(dur_pred, torch.Tensor):
@@ -35,12 +36,13 @@ def dur_to_figure(dur_gt, dur_pred, txt):
         plt.plot([dur_pred[i], dur_gt[i]], [12, 10], color='black', linewidth=2, linestyle=':')
     plt.yticks([])
     plt.xlim(0, max(dur_pred[-1], dur_gt[-1]))
-    fig.legend()
-    fig.tight_layout()
+    plt.legend()
+    plt.title(title, fontsize=22)
+    plt.tight_layout()
     return fig
 
 
-def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=None, note_rest=None):
+def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=None, note_rest=None, title=''):
     if isinstance(pitch_gt, torch.Tensor):
         pitch_gt = pitch_gt.cpu().numpy()
     if isinstance(pitch_pred, torch.Tensor):
@@ -51,7 +53,8 @@ def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=Non
         note_dur = note_dur.cpu().numpy()
     if isinstance(note_rest, torch.Tensor):
         note_rest = note_rest.cpu().numpy()
-    fig = plt.figure()
+    width = max(12, min(24, len(pitch_gt) // 200))
+    fig = plt.figure(figsize=(width, 8))
     if note_midi is not None and note_dur is not None:
         note_dur_acc = np.cumsum(note_dur)
         if note_rest is None:
@@ -73,18 +76,20 @@ def pitch_note_to_figure(pitch_gt, pitch_pred=None, note_midi=None, note_dur=Non
     plt.gca().yaxis.set_major_locator(MultipleLocator(1))
     plt.grid(axis='y')
     plt.legend()
+    plt.title(title, fontsize=22)
     plt.tight_layout()
     return fig
 
 
-def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
+def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None, title=''):
     if isinstance(curve_gt, torch.Tensor):
         curve_gt = curve_gt.cpu().numpy()
     if isinstance(curve_pred, torch.Tensor):
         curve_pred = curve_pred.cpu().numpy()
     if isinstance(curve_base, torch.Tensor):
         curve_base = curve_base.cpu().numpy()
-    fig = plt.figure()
+    width = max(12, min(24, len(curve_gt) // 200))
+    fig = plt.figure(figsize=(width, 8))
     if curve_base is not None:
         plt.plot(curve_base, color='g', label='base')
     plt.plot(curve_gt, color='b', label='gt')
@@ -94,6 +99,7 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None):
         plt.gca().yaxis.set_major_locator(MultipleLocator(grid))
     plt.grid(axis='y')
     plt.legend()
+    plt.title(title, fontsize=22)
     plt.tight_layout()
     return fig
 

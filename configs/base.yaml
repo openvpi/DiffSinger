@@ -90,8 +90,11 @@ pl_trainer_accelerator: 'auto'
 pl_trainer_devices: 'auto'
 pl_trainer_precision: '32-true'
 pl_trainer_num_nodes: 1
-pl_trainer_strategy: 'auto'
-ddp_backend: 'nccl' # choose from 'gloo', 'nccl', 'nccl_no_p2p'
+pl_trainer_strategy: 
+  name: auto
+  process_group_backend: nccl
+  find_unused_parameters: false
+nccl_p2p: true
 
 ###########
 # finetune
