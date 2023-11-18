@@ -92,6 +92,10 @@ class DeconstructedWaveform:
         self._harmonics: Dict[int, np.ndarray] = {}
 
     @property
+    def samplerate(self):
+        return self._samplerate
+
+    @property
     def hop_size(self):
         return self._hop_size
 
@@ -381,6 +385,48 @@ def get_tension_base_harmonic_logit(
         domain='amplitude'
     )
     tension = np.sqrt(np.clip(energy_h ** 2 - energy_base_h ** 2, a_min=0, a_max=None)) / (energy_h + 1e-4)
+    tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
+    return np.log(tension / (1 - tension))
+
+
+def get_tension_multi_harmonics_logit(
+        waveform: Union[np.ndarray, DeconstructedWaveform],
+        samplerate, f0, length,
+        *, hop_size=None, fft_size=None, win_size=None
+):
+    """
+    Definition of tension: Radio of the harmonic part to the base harmonic, in dB representation
+    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
+    :param samplerate: sampling rate
+    :param f0: reference f0
+    :param length: Expected number of frames
+    :param hop_size: Frame width, in number of samples
+    :param fft_size: Number of fft bins
+    :param win_size: Window size, in number of samples
+    :return: tension
+    """
+    if not isinstance(waveform, DeconstructedWaveform):
+        waveform = DeconstructedWaveform(
+            waveform=waveform, samplerate=samplerate, f0=f0,
+            hop_size=hop_size, fft_size=fft_size, win_size=win_size
+        )
+    waveform_h = waveform.harmonic()
+    harmonic_weights = [1, 0.5, 0.25, 0.125]
+    waveform_multi_h = sum(
+        waveform.kth_harmonic(k) * harmonic_weights[k]
+        for k in range(4)
+    )
+    energy_multi_h = get_energy_librosa(
+        waveform_multi_h, length,
+        hop_size=waveform.hop_size, win_size=waveform.win_size,
+        domain='amplitude'
+    )
+    energy_h = get_energy_librosa(
+        waveform_h, length,
+        hop_size=waveform.hop_size, win_size=waveform.win_size,
+        domain='amplitude'
+    )
+    tension = np.sqrt(np.clip(energy_h ** 2 - energy_multi_h ** 2, a_min=0, a_max=None)) / (energy_h + 1e-4)
     tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
     return np.log(tension / (1 - tension))
 

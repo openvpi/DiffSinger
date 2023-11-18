@@ -27,6 +27,7 @@ from utils.binarizer_utils import (
     get_energy_librosa,
     get_breathiness_pyworld,
     get_tension_base_harmonic_logit,
+    get_tension_multi_harmonics_logit,
 )
 from utils.hparams import hparams
 
