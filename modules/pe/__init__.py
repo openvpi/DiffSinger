@@ -14,7 +14,5 @@ def initialize_pe():
         return RMVPE(pe_ckpt)
     elif pe == 'harvest':
         return HarvestPE()
-    elif pe == 'dio':
-        return DioPE()
     else:
         raise ValueError(f" [x] Unknown f0 extractor: {pe}")

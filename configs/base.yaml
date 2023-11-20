@@ -77,7 +77,7 @@ valid_set_name: 'valid'
 pe: 'parselmouth'
 pe_ckpt: ''
 f0_min: 65
-f0_max: 1760
+f0_max: 800
 vocoder: ''
 vocoder_ckpt: ''
 num_valid_plots: 10
