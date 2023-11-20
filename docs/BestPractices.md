@@ -215,6 +215,12 @@ To use Harvest, simply include the following line in your configuration file:
 pe: harvest
 ```
 
+**Note:** It is also recommended to change the F0 detection range for Harvest with accordance to your dataset, as they are hard boundaries for this algorithm and the defaults might not suffice for most use cases. To change the F0 detection range, you may include or edit this part in the configuration file:
+```yaml
+f0_min: 65 # Minimum F0 to detect
+f0_max: 800 # Maximum F0 to detect
+```
+
 ## Performance tuning
 
 This section is about accelerating training and utilizing hardware.
