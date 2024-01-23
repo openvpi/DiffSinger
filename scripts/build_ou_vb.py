@@ -1,29 +1,19 @@
 import os
 import shutil
 import yaml
-import argparse
+import click
 
-def main():
-    parser = argparse.ArgumentParser(description="OpenUtau Voicebank Builder")
-    parser.add_argument("--acoustic_onnx_folder", required=True, help="Path to the folder containing acoustic ONNX files (required)")
-    parser.add_argument("--acoustic_config", required=True, help="Path to the config.yaml used for acoustic training (required)")
-    parser.add_argument("--variance_onnx_folder", required=True, help="Path to the folder containing variance ONNX files (required)")
-    parser.add_argument("--variance_config", required=True, help="Path to the config.yaml used for variance training (required)")
-    parser.add_argument("--dictionary_path", required=True, help="Path to the dictionary (required)")
-    parser.add_argument("--save_path", required=True, help="Voicebank saving directory (required)")
-    parser.add_argument("--name", default="my_diffsinger_voicebank", help="Character name, default: my_diffsinger_voicebank (optional)")
-    parser.add_argument("--vocoder_onnx_model", required=False, help="Path to the vocoder onnx file itself, not folder (optional)")
-    args = parser.parse_args()
+@click.command(help="OpenUtau voicebank builder.")
+@click.option("--acoustic_onnx_folder", required=True, help="Path to the folder containing acoustic ONNX files")
+@click.option("--acoustic_config", required=True, help="Path to the config.yaml used for acoustic training")
+@click.option("--variance_onnx_folder", required=True, help="Path to the folder containing variance ONNX files")
+@click.option("--variance_config", required=True, help="Path to the config.yaml used for variance training")
+@click.option("--dictionary_path", required=True, help="Path to the dictionary")
+@click.option("--save_path", required=True, help="Voicebank saving directory")
+@click.option("--name", default="my_diffsinger_voicebank", help="Character name, default: my_diffsinger_voicebank")
+@click.option("--vocoder_onnx_model", required=False, help="Path to the vocoder onnx file itself, not folder")
 
-    acoustic_onnx_folder = args.acoustic_onnx_folder
-    acoustic_config = args.acoustic_config
-    variance_onnx_folder = args.variance_onnx_folder
-    variance_config = args.variance_config
-    dictionary_path = args.dictionary_path
-    save_path = args.save_path
-    name = args.name
-    vocoder_onnx_model = args.vocoder_onnx_model
-
+def main(acoustic_onnx_folder, acoustic_config, variance_onnx_folder, variance_config, dictionary_path, save_path, name, vocoder_onnx_model):
     print("\nmaking dsmain directory and necessary files...")
     main_stuff = f"{save_path}/{name}"
     if not os.path.exists(main_stuff):
@@ -45,12 +35,7 @@ def main():
 
     with open(f"{main_stuff}/character.txt", "w") as file:
         file.write(f"name={name}\n")
-    #image, portrait, and portrait opacity can be manually edited
-    with open(f"{main_stuff}/character.yaml", "w") as file:
-        file.write("text_file_encoding: utf-8\n")
-        file.write("#image::\n")
-        file.write("#portrait:\n")
-        file.write("#portrait_opacity: 0.45\n")
+    with open(f"{main_stuff}/character.yaml", "w") as file: #create initial yaml
         file.write("default_phonemizer: OpenUtau.Core.DiffSinger.DiffSingerPhonemizer\n")
         file.write("singer_type: diffsinger\n")
 
@@ -76,6 +61,15 @@ def main():
         character_config["subbanks"] = subbanks
         with open(f"{main_stuff}/character.yaml", "w") as config:
             yaml.dump(character_config, config)
+
+    #image, portrait, and portrait opacity can be manually edited
+    with open(f"{main_stuff}/character.yaml", "a") as file:
+        file.write("\n")
+        file.write("text_file_encoding: utf-8\n")
+        file.write("\n")
+        file.write("image:\n")
+        file.write("portrait:\n")
+        file.write("portrait_opacity: 0.45\n")
 
     with open(f"{main_stuff}/dsconfig.yaml", "w") as file:
         file.write("phonemes: dsmain/phonemes.txt\n")
@@ -244,6 +238,8 @@ def main():
     print("done!")
 
     print("You can use your model in OpenUtau. Please edit any config if necessary")
+
+    pass
 
 if __name__ == "__main__":
     main()
