@@ -14,7 +14,7 @@ test_prefixes:
   - wav3
   - wav4
   - wav5
-dictionary: dictionaries/opencpop-extension.txt
+dictionary: dictionaries/opencpop-extension.yaml
 binary_data_dir: data/xxx/binary
 binarization_args:
   num_workers: 0

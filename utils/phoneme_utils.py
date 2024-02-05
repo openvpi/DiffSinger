@@ -36,6 +36,9 @@ def locate_dictionary():
     ckpt_dict_path = work_dir / config_dict_path.name
     if ckpt_dict_path.exists():
         return ckpt_dict_path
+    ckpt_dict_path = work_dir / 'dictionary.yaml'
+    if ckpt_dict_path.exists():
+        return ckpt_dict_path
     ckpt_dict_path = work_dir / 'dictionary.txt'
     if ckpt_dict_path.exists():
         return ckpt_dict_path
@@ -43,11 +46,11 @@ def locate_dictionary():
                             'Please specify the right dictionary in your config.')
 
 
-def _build_dict_and_list():
+def _build_dict_and_list(dictionary_path: pathlib.Path):
     global _dictionary, _phoneme_list
 
     _set = set()
-    with open(locate_dictionary(), 'r', encoding='utf8') as _df:
+    with open(dictionary_path, 'r', encoding='utf8') as _df:
         _lines = _df.readlines()
     for _line in _lines:
         _pinyin, _ph_str = _line.strip().split('\t')
@@ -70,12 +73,47 @@ def _initialize_consonants_and_vowels():
             _ALL_CONSONANTS_SET.add(_ph_list[0])
             _ALL_VOWELS_SET.add(_ph_list[1])
 
+def _load_txt_dictionary(dictionary_path: pathlib.Path):
+    _build_dict_and_list(dictionary_path)
+    _initialize_consonants_and_vowels()
+
+def _load_yaml_dictionary(dictionary_path: pathlib.Path):
+    """
+    load openutau-style yaml dictionary
+    """
+    global _dictionary, _phoneme_list
+    import yaml
+    with open(dictionary_path, 'r', encoding='utf8') as f:
+        _dict = yaml.safe_load(f)
+    _dictionary = {entry["grapheme"]:entry["phonemes"] for entry in _dict['entries']}
+    _phoneme_list = []
+    for symbol in sorted(_dict['symbols'], key=lambda x: x['symbol']):
+        _phoneme_list.append(symbol["symbol"])
+        if(symbol["symbol"] in ['AP', 'SP']):
+            continue
+        if(symbol["type"]=="vowel"):
+            _ALL_VOWELS_SET.add(symbol["symbol"])
+        else:
+            _ALL_CONSONANTS_SET.add(symbol["symbol"])
+    #validate
+    for k, v in _dictionary.items():
+        if not isinstance(v, list):
+            raise ValueError(f'Invalid entry for {k}: {v}')
+        for ph in v:
+            if ph not in _phoneme_list:
+                raise ValueError(f'Invalid phoneme {ph} in entry for {k}')
+
+def _load_dictionary():
+    dictionary_path = locate_dictionary()
+    if dictionary_path.suffix == '.yaml':
+        _load_yaml_dictionary(dictionary_path)
+    else:
+        _load_txt_dictionary(dictionary_path)
 
 def _initialize():
     global _initialized
     if not _initialized:
-        _build_dict_and_list()
-        _initialize_consonants_and_vowels()
+        _load_dictionary()
         _initialized = True
 
 
