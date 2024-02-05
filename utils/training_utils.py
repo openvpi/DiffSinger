@@ -258,12 +258,18 @@ class DsModelCheckpoint(ModelCheckpoint):
         filepath = (Path(self.dirpath) / Path(filepath).name).resolve()
         super()._save_checkpoint(trainer, str(filepath))
         if self._verbose:
-            relative_path = filepath.relative_to(Path('.').resolve())
+            relative_path = filepath
+            # Avoid using `is_relative_to` because Python 3.8 does not support this
+            if Path('.').resolve() in filepath.parents:
+                relative_path = filepath.relative_to(Path('.').resolve())
             rank_zero_info(f'Checkpoint {relative_path} saved.')
 
     def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str):
         filepath = (Path(self.dirpath) / Path(filepath).name).resolve()
-        relative_path = filepath.relative_to(Path('.').resolve())
+        relative_path = filepath
+        # Avoid using `is_relative_to` because Python 3.8 does not support this
+        if Path('.').resolve() in filepath.parents:
+            relative_path = filepath.relative_to(Path('.').resolve())
         search = re.search(r'steps_\d+', relative_path.stem)
         if search:
             step = int(search.group(0)[6:])

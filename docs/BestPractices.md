@@ -44,6 +44,22 @@ DS files are JSON files with _.ds_ suffix that contains phoneme sequence, phonem
 
 The current recommended way of using a model for production purposes is to use [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau). It can export DS files as well.
 
+### Other fundamental assets
+
+#### Vocoders
+
+A vocoder is a model that can reconstruct the audio waveform given the low-dimensional mel-spectrogram. The vocoder is the essential dependency if you want to train an acoustic model and hear the voice on the TensorBoard.
+
+The [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) provides a universal pre-trained NSF-HiFiGAN vocoder that can be used for starters of this repository. To use it, download the model (~50 MB size) from its releases and unzip it into the `checkpoints/` folder.
+
+The pre-trained vocoder can be fine-tuned on your target dataset. It is highly recommended to do so because fine-tuned vocoder can generate much better results on specific (seen) datasets while does not need much computing resources. See the [vocoder training and fine-tuning repository](https://github.com/openvpi/SingingVocoders) for detailed instructions. After you get the fine-tuned vocoder checkpoint, you can configure it by `vocoder_ckpt` key in your configuration file. The fine-tuned NSF-HiFiGAN vocoder checkpoints can be exported to ONNX format like other DiffSinger user models for further production purposes.
+
+Another unrecommended option: train a ultra-lightweight [DDSP vocoder](https://github.com/yxlllc/pc-ddsp) first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
+
+#### Pitch extractors
+
+RMVPE is the recommended pitch extractor of this repository, which is an NN-based algorithm and requires a pre-trained model. For more information about pitch extractors and how to configure them, see [pitch extraction](#pitch-extraction).
+
 ## Overview: training acoustic models
 
 An acoustic model takes low-level singing information as input, including (but not limited to) phoneme sequence, phoneme durations and F0 sequence. The only output of an acoustic model is the mel-spectrogram, which can be converted to waveform (the final audio) through the vocoder. Briefly speaking, an acoustic model takes in all features that are explicitly given, and produces the singing voice.
@@ -87,6 +103,8 @@ Functionalities of variance models are defined by their outputs. There are three
 - Duration Predictor: predicts the phoneme durations. See `predict_dur` in the configuration schemas.
 - Pitch Diffusion: predicts the pitch curve. See `predict_pitch` in the configuration schemas.
 - Multi-Variance Diffusion: jointly predicts other variance parameters. See `predict_energy` and `predict_breathiness` in the configuration schemas.
+
+There may be some mutual influence between the modules above when they are enabled together. See [mutual influence between variance modules](#mutual-influence-between-variance-modules) for more details.
 
 ## Using custom dictionaries
 
@@ -176,7 +194,37 @@ This means you only need one column in trancriptions.csv, the `name` column, to 
 
 Though not recommended, the binarizer will still try to load attributes from transcriptions.csv or extract parameters from recordings if there are no matching DS files. In this case the full name matching logic is applied (the same as the normal binarization process).
 
-## Pitch extractors
+## Mutual influence between variance modules
+
+In some recent experiments and researches, some mutual influence between the modules of variance models has been found. In practice, being aware of the influence and making use of it can improve accuracy and avoid instability of the model.
+
+### Influence on the duration predictor
+
+The duration predictor benefits from its downstream modules, like the pitch predictor and the variance predictor.
+
+The experiments were conducted on both manually refined datasets and automatically labeled datasets, and with pitch predictors driven by both base pitch and melody encoder. All the results have shown that when either of the pitch predictor and the variance predictor is enabled together with the duration predictor, its rhythm correctness and duration accuracy significantly outperforms those of a solely trained duration predictor.
+
+Possible reason for this difference can be the lack of information carried by pure phoneme duration sequences, which may not fully represent the phoneme features in the real world. With the help of frame-level feature predictors, the encoder learns more knowledge about the voice features related to the phoneme types and durations, thus making the duration predictor produce better results.
+
+### Influence on frame-level feature predictors
+
+Frame-level feature predictors, including the pitch predictor and the variance predictor, have better performance when trained without enabling the duration predictor.
+
+The experiments found that when the duration predictor is enabled, the pitch accuracy drops and the dynamics of variance parameters sometimes become unstable. And it has nothing to do with the gradients from the duration predictor, because applying a scale factor on the gradients does not make any difference even if the gradients are completely cut off.
+
+Possible reason for this phenomenon can be the lack of direct phoneme duration input. When the duration predictor is enabled, the model takes in word durations instead of phoneme durations; when there is no duration predictor together, the phoneme duration sequence is directly taken in and passed through the attention-based linguistic encoder. With direct modeling on the phoneme duration, the frame-level predictors can have a better understanding of the context, thus producing better results.
+
+Another set of experiments showed that there is no significant influence between the pitch predictor and the variance predictor. When they are enabled together without the duration predictor, both can converge well and produce satisfactory results. No conclusion can be drawn on this issue, and it can depend on the dataset.
+
+### Suggested procedures of training variance models
+
+According to the experiment results and the analysis above, the suggested procedures of training a set of variance models are listed below:
+
+1. Train the duration predictor together with the variance predictor, and discard the variance predictor part.
+2. Train the pitch predictor and the variance predictor separately or together.
+3. If interested, compare across different combinations in step 2 and choose the best.
+
+## Pitch extraction
 
 A pitch extractor estimates pitch (F0 sequence) from given recordings. F0 (fundamental frequency) is one of the most important components of singing voice that is needed by both acoustic models and variance models.
 
@@ -205,6 +253,108 @@ To enable RMVPE, download its pre-trained checkpoint from [here](https://github.
 pe: rmvpe
 pe_ckpt: checkpoints/rmvpe/model.pt
 ```
+
+### Harvest
+
+[Harvest](https://github.com/mmorise/World) (Harvest: A high-performance fundamental frequency estimator from speech signals) is the recommended pitch extractor from Masanori Morise's WORLD, a free software for high-quality speech analysis, manipulation and synthesis. It is a state-of-the-art algorithmic pitch estimator designed for speech, but has seen use in singing voice synthesis. It runs the slowest compared to the others, but provides very accurate F0 on clean and normal recordings compared to parselmouth.
+
+To use Harvest, simply include the following line in your configuration file:
+
+```yaml
+pe: harvest
+```
+
+**Note:** It is also recommended to change the F0 detection range for Harvest with accordance to your dataset, as they are hard boundaries for this algorithm and the defaults might not suffice for most use cases. To change the F0 detection range, you may include or edit this part in the configuration file:
+
+```yaml
+f0_min: 65  # Minimum F0 to detect
+f0_max: 800  # Maximum F0 to detect
+```
+
+## Shallow diffusion
+
+Shallow diffusion is a mechanism that can improve quality and save inference time for diffusion models that was first introduced in the original DiffSinger [paper](https://arxiv.org/abs/2105.02446). Instead of starting the diffusion process from purely gaussian noise as classic diffusion does, shallow diffusion adds a shallow gaussian noise on a low-quality results generated by a simple network (which is called the auxiliary decoder) to skip many unnecessary steps from the beginning. With the combination of shallow diffusion and sampling acceleration algorithms, we can get better results under the same inference speed as before, or achieve higher inference speed without quality deterioration.
+
+Currently, acoustic models in this repository support shallow diffusion. The main switch of shallow diffusion is `use_shallow_diffusion` in the configuration file, and most arguments of shallow diffusion can be adjusted under `shallow_diffusion_args`. See [Configuration Schemas](ConfigurationSchemas.md) for more details.
+
+### Train full shallow diffusion models from scratch
+
+To train a full shallow diffusion model from scratch, simply introduce the following settings in your configuration file:
+
+```yaml
+use_shallow_diffusion: true
+K_step: 400  # adjust according to your needs
+K_step_infer: 400  # should be <= K_step
+```
+
+Please note that when shallow diffusion is enabled, only the last $K$ diffusion steps will be trained. Unlike classic diffusion models which are trained on full steps, the limit of `K_step` can make the training more efficient. However, `K_step` should not be set too small because without enough diffusion depth (steps), the low-quality auxiliary decoder results cannot be well refined. 200 ~ 400 should be the proper range of `K_step`.
+
+The auxiliary decoder and the diffusion decoder shares the same linguistic encoder, which receives gradients from both the decoders. In some experiments, it was found that gradients from the auxiliary decoder will cause mismatching between the encoder and the diffusion decoder, resulting in the latter being unable to produce reasonable results. To prevent this case, a configuration item called `aux_decoder_grad` is introduced to apply a scale factor on the gradients from the auxiliary decoder during training. To adjust this factor, introduce the following in the configuration file:
+
+```yaml
+shallow_diffusion_args:
+  aux_decoder_grad: 0.1  # should not be too high
+```
+
+### Train auxiliary decoder and diffusion decoder separately
+
+Training a full shallow diffusion model can consume more memory because the auxiliary decoder is also in the training graph. In limited situations, the two decoders can be trained separately, i.e. train one decoder after another.
+
+**STEP 1: train the diffusion decoder**
+
+In the first stage, the linguistic encoder and the diffusion decoder is trained together, while the auxiliary decoder is left unchanged. Edit your configuration file like this:
+
+```yaml
+use_shallow_diffusion: true  # make sure the main option is turned on
+shallow_diffusion_args:
+  train_aux_decoder: false  # exclude the auxiliary decoder from the training graph
+  train_diffusion: true  # train diffusion decoder as normal
+  val_gt_start: true  # should be true because the auxiliary decoder is not trained yet
+```
+
+Start training until `max_updates` is reached, or until you get satisfactory results on the TensorBoard.
+
+**STEP 2: train the auxiliary decoder**
+
+In the second stage, the auxiliary decoder is trained besides the linguistic encoder and the diffusion decoder. Edit your configuration file like this:
+
+```yaml
+shallow_diffusion_args:
+  train_aux_decoder: true
+  train_diffusion: false  # exclude the diffusion decoder from the training graph
+lambda_aux_mel_loss: 1.0  # no more need to limit the auxiliary loss
+```
+
+Then you should freeze the encoder to prevent it from getting updates. This is because if the encoder changes, it no longer matches with the diffusion decoder, thus making the latter unable to produce correct results again. Edit your configuration file:
+
+```yaml
+freezing_enabled: true
+frozen_params:
+  - model.fs2  # the linguistic encoder
+```
+
+You should also manually reset your learning rate scheduler because this is a new training process for the auxiliary decoder. Possible ways are:
+
+1. Rename the latest checkpoint to `model_ckpt_steps_0.ckpt` and remove the other checkpoints from the directory.
+2. Increase the initial learning rate (if you use a scheduler that decreases the LR over training steps) so that the auxiliary decoder gets proper learning rate.
+
+Additionally, `max_updates` should be adjusted to ensure enough training steps for the auxiliary decoder.
+
+Once you finished the configurations above, you can resume the training. The auxiliary decoder normally does not need many steps to train, and you can stop training when you get stable results on the TensorBoard. Because this step is much more complicated than the previous step, it is recommended to run some inference to verify if the model is trained properly after everything is finished.
+
+### Add shallow diffusion to classic diffusion models
+
+Actually, all classic DDPMs have the ability to be "shallow". If you want to add shallow diffusion functionality to a former classic diffusion model, the only thing you need to do is to train an auxiliary decoder for it.
+
+Before you start, you should edit the configuration file to ensure that you use the same datasets, and that you do not remove or add any of the functionalities of the old model. Then you can configure the old checkpoint in your configuration file:
+
+```yaml
+finetune_enabled: true
+finetune_ckpt_path: xxx.ckpt  # path to your old checkpoint
+finetune_ignored_params: []  # do not ignore any parameters
+```
+
+Then you can follow the instructions in STEP 2 of the [previous section](#add-shallow-diffusion-to-classic-diffusion-models) to finish your training.
 
 ## Performance tuning
 
@@ -259,16 +409,18 @@ pl_trainer_devices: [0, 1, 2, 3]  # use the first 4 GPUs defined in CUDA_VISIBLE
 
 Please note that `max_batch_size` and `max_batch_frames` are values for **each** GPU.
 
-By default, the trainer uses NCCL as the DDP backend. If this gets stuck on your machine, try disabling P2P via
+By default, the trainer uses NCCL as the DDP backend. If this gets stuck on your machine, try disabling P2P first via
 
 ```yaml
-ddp_backend: nccl_no_p2p  # disable P2P in NCCL
+nccl_p2p: false  # disable P2P in NCCL
 ```
 
 Or if your machine does not support NCCL, you can switch to Gloo instead:
 
 ```yaml
-ddp_backend: gloo  # however, it has a lower performance than NCCL
+pl_trainer_strategy:
+  name: ddp                    # must manually choose a strategy instead of 'auto'
+  process_group_backend: gloo  # however, it has a lower performance than NCCL
 ```
 
 ### Gradient accumulation

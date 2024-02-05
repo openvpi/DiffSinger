@@ -20,9 +20,8 @@ class DiffSingerAcousticExporter(BaseExporter):
             device: Union[str, torch.device] = 'cpu',
             cache_dir: Path = None,
             ckpt_steps: int = None,
-            expose_gender: bool = False,
             freeze_gender: float = None,
-            expose_velocity: bool = False,
+            freeze_velocity: bool = False,
             export_spk: List[Tuple[str, Dict[str, float]]] = None,
             freeze_spk: Tuple[str, Dict[str, float]] = None
     ):
@@ -53,8 +52,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
 
         # Attributes for exporting
-        self.expose_gender = expose_gender
-        self.expose_velocity = expose_velocity
+        self.expose_gender = freeze_gender is None
+        self.expose_velocity = not freeze_velocity
         self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
             if hparams['use_spk_id'] else None
         self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \

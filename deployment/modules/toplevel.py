@@ -166,6 +166,8 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
         if self.use_melody_encoder:
+            if self.melody_encoder.use_glide_embed and note_glide is None:
+                note_glide = torch.LongTensor([[0]]).to(encoder_out.device)
             melody_encoder_out = self.melody_encoder(
                 note_midi, note_rest, note_dur,
                 glide=note_glide

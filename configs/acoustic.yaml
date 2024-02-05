@@ -31,16 +31,16 @@ augmentation_args:
   random_pitch_shifting:
     enabled: false
     range: [-5., 5.]
-    scale: 1.0
+    scale: 0.75
   fixed_pitch_shifting:
     enabled: false
     targets: [-5., 5.]
-    scale: 0.75
+    scale: 0.5
   random_time_stretching:
     enabled: false
     range: [0.5, 2.]
     domain: log  # or linear
-    scale: 1.0
+    scale: 0.75
 
 raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'
@@ -78,7 +78,7 @@ diff_loss_type: l2
 schedule_type: 'linear'
 
 # shallow diffusion
-use_shallow_diffusion: false
+use_shallow_diffusion: true
 K_step: 400
 K_step_infer: 400
 
@@ -99,20 +99,20 @@ lambda_aux_mel_loss: 0.2
 # train and eval
 num_sanity_val_steps: 1
 optimizer_args:
-  lr: 0.0004
+  lr: 0.0006
 lr_scheduler_args:
-  step_size: 50000
+  step_size: 30000
   gamma: 0.5
-max_batch_frames: 80000
-max_batch_size: 48
+max_batch_frames: 50000
+max_batch_size: 64
 dataset_size_key: 'lengths'
 val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
-max_updates: 320000
+max_updates: 200000
 num_ckpt_keep: 5
-permanent_ckpt_start: 200000
-permanent_ckpt_interval: 40000
+permanent_ckpt_start: 120000
+permanent_ckpt_interval: 20000
 
 
 finetune_enabled: false

@@ -71,12 +71,10 @@ def main():
 @click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
 @click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
-@click.option('--expose_gender', is_flag=True, show_default=True,
-              help='(for random pitch shifting) Expose gender control functionality.')
-@click.option('--freeze_gender', type=float, default=0., show_default=True, metavar='<value>',
+@click.option('--freeze_gender', type=float, metavar='<value>',
               help='(for random pitch shifting) Freeze gender value into the model.')
-@click.option('--expose_velocity', is_flag=True, show_default=True,
-              help='(for random time stretching) Expose velocity control functionality.')
+@click.option('--freeze_velocity', is_flag=True,
+              help='(for random time stretching) Freeze default velocity value into the model.')
 @click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
               help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
 @click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
@@ -85,16 +83,12 @@ def acoustic(
         exp: str,
         ckpt: int = None,
         out: str = None,
-        expose_gender: bool = False,
         freeze_gender: float = 0.,
-        expose_velocity: bool = False,
+        freeze_velocity: bool = False,
         export_spk: List[str] = None,
         freeze_spk: str = None
 ):
     # Validate arguments
-    if expose_gender and freeze_gender:
-        print('--expose_gender is exclusive to --freeze_gender.')
-        exit(-1)
     if export_spk and freeze_spk:
         print('--export_spk is exclusive to --freeze_spk.')
         exit(-1)
@@ -124,9 +118,8 @@ def acoustic(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
-        expose_gender=expose_gender,
         freeze_gender=freeze_gender,
-        expose_velocity=expose_velocity,
+        freeze_velocity=freeze_velocity,
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
@@ -140,8 +133,10 @@ def acoustic(
 @click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
 @click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
-@click.option('--expose_expr', is_flag=True, show_default=True,
-              help='Expose pitch expressiveness control functionality.')
+@click.option('--freeze_glide', is_flag=True,
+              help='Freeze default glide embedding into the model.')
+@click.option('--freeze_expr', is_flag=True,
+              help='Freeze default pitch expressiveness factor into the model.')
 @click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
               help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
 @click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
@@ -150,7 +145,8 @@ def variance(
         exp: str,
         ckpt: int = None,
         out: str = None,
-        expose_expr: bool = False,
+        freeze_glide: bool = False,
+        freeze_expr: bool = False,
         export_spk: List[str] = None,
         freeze_spk: str = None
 ):
@@ -180,7 +176,8 @@ def variance(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
-        expose_expr=expose_expr,
+        freeze_glide=freeze_glide,
+        freeze_expr=freeze_expr,
         export_spk=export_spk_mix,
         freeze_spk=freeze_spk_mix
     )
@@ -191,18 +188,30 @@ def variance(
 
 
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
-@click.option('--config', type=str, required=True, metavar='<path>', help='Specify a config path of the vocoder.')
+@click.option(
+    '--config', type=str, required=True, metavar='<file>',
+    help='Specify a configuration file for the vocoder.'
+)
+@click.option(
+    '--ckpt', type=str, required=False, metavar='<file>',
+    help='Specify a model path of the vocoder checkpoint.'
+)
 @click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
 @click.option('--name', type=str, required=False, metavar='<name>', default='nsf_hifigan', show_default=False,
               help='Specify filename (without suffix) of the target model file.')
 def nsf_hifigan(
         config: str,
+        ckpt: str = None,
         out: str = None,
         name: str = None
 ):
     # Check arguments
     if not Path(config).resolve().exists():
         raise FileNotFoundError(f'{config} is not a valid config path.')
+    if ckpt is not None:
+        ckpt = Path(ckpt).resolve()
+        if not ckpt.exists():
+            raise FileNotFoundError(f'{ckpt} is not a valid model path.')
     if out is None:
         out = root_dir / 'artifacts' / 'nsf_hifigan'
     else:
@@ -211,6 +220,10 @@ def nsf_hifigan(
 
     # Load configurations
     set_hparams(config)
+    if ckpt is None:
+        model_path = Path(hparams['vocoder_ckpt']).resolve()
+    else:
+        model_path = ckpt
 
     # Export artifacts
     from deployment.exporters import NSFHiFiGANExporter
@@ -218,7 +231,7 @@ def nsf_hifigan(
     exporter = NSFHiFiGANExporter(
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
-        model_path=Path(hparams['vocoder_ckpt']).resolve(),
+        model_path=model_path,
         model_name=name
     )
     try:

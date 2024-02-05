@@ -22,31 +22,31 @@ use_spk_id: false
 num_spk: 1
 use_energy_embed: false
 use_breathiness_embed: false
-use_key_shift_embed: false
-use_speed_embed: false
+use_key_shift_embed: true
+use_speed_embed: true
 
 augmentation_args:
   random_pitch_shifting:
-    enabled: false
+    enabled: true
     range: [-5., 5.]
-    scale: 1.0
+    scale: 0.75
   fixed_pitch_shifting:
     enabled: false
     targets: [-5., 5.]
-    scale: 0.75
+    scale: 0.5
   random_time_stretching:
-    enabled: false
+    enabled: true
     range: [0.5, 2.]
     domain: log  # or linear
-    scale: 1.0
+    scale: 0.75
 
 residual_channels: 512
 residual_layers: 20
 
 # shallow diffusion
-use_shallow_diffusion: false
-K_step: 400
-K_step_infer: 400
+use_shallow_diffusion: true
+K_step: 300
+K_step_infer: 300
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
@@ -61,20 +61,20 @@ shallow_diffusion_args:
 lambda_aux_mel_loss: 0.2
 
 optimizer_args:
-  lr: 0.0004
+  lr: 0.0006
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR
-  step_size: 50000
+  step_size: 30000
   gamma: 0.5
-max_batch_frames: 80000
-max_batch_size: 48
-max_updates: 320000
+max_batch_frames: 50000
+max_batch_size: 64
+max_updates: 200000
 
 num_valid_plots: 10
 val_with_vocoder: true
 val_check_interval: 2000
 num_ckpt_keep: 5
-permanent_ckpt_start: 200000
-permanent_ckpt_interval: 40000
+permanent_ckpt_start: 120000
+permanent_ckpt_interval: 20000
 pl_trainer_devices: 'auto'
-pl_trainer_precision: '32-true'
+pl_trainer_precision: '16-mixed'

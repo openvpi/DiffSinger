@@ -97,7 +97,7 @@ Scale ratio of each target in fixed pitch shifting augmentation.
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>tuple</td>
-<tr><td align="center"><b>default</b></td><td>0.75</td>
+<tr><td align="center"><b>default</b></td><td>0.5</td>
 </tbody></table>
 
 ### augmentation_args.fixed_pitch_shifting.targets
@@ -129,7 +129,7 @@ Whether to apply random pitch shifting augmentation.
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
 <tr><td align="center"><b>constraints</b></td><td>Must be false if <a href="#augmentation_argsfixed_pitch_shiftingenabled">augmentation_args.fixed_pitch_shifting.enabled</a> is set to true.</td>
 </tbody></table>
 
@@ -154,7 +154,7 @@ Scale ratio of the random pitch shifting augmentation.
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>1.0</td>
+<tr><td align="center"><b>default</b></td><td>0.75</td>
 </tbody></table>
 
 ### augmentation_args.random_time_stretching
@@ -190,7 +190,7 @@ Whether to apply random time stretching augmentation.
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
 ### augmentation_args.random_time_stretching.range
@@ -214,7 +214,7 @@ Scale ratio of random time stretching augmentation.
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>1.0</td>
+<tr><td align="center"><b>default</b></td><td>0.75</td>
 </tbody></table>
 
 ### base_config
@@ -664,6 +664,30 @@ Map f0 to embedding using:
 <tr><td align="center"><b>constraints</b></td><td>Choose from 'continuous', 'discrete'.</td>
 </tbody></table>
 
+### f0_max
+
+Maximum base frequency (F0) in Hz for pitch extraction.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1100</td>
+</tbody></table>
+
+### f0_min
+
+Minimum base frequency (F0) in Hz for pitch extraction.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>65</td>
+</tbody></table>
+
 ### ffn_act
 
 Activation function of TransformerFFNLayer in FastSpeech2 encoder:
@@ -764,6 +788,18 @@ Maximum frequency of mel extraction.
 <tr><td align="center"><b>default</b></td><td>16000</td>
 </tbody></table>
 
+### fmin
+
+Minimum frequency of mel extraction.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>40</td>
+</tbody></table>
+
 ### freezing_enabled
 
 Whether enabling parameter freezing during training.
@@ -788,21 +824,33 @@ Parameter name prefixes to freeze during training.
 <tr><td align="center"><b>default</b></td><td>[]</td>
 </tbody></table>
 
-### fmin
+### glide_embed_scale
 
-Minimum frequency of mel extraction.
+The scale factor to be multiplied on the glide embedding values for melody encoder.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>11.313708498984760</td>
+</tbody></table>
+
+### glide_types
+
+Type names of glide notes.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>reserved</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>40</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+<tr><td align="center"><b>default</b></td><td>[up, down]</td>
 </tbody></table>
 
 ### hidden_size
 
-Dimension of hidden layers of FastSpeech2, token and variance embeddings, and diffusion condition.
+Dimension of hidden layers of FastSpeech2, token and parameter embeddings, and diffusion condition.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
@@ -834,6 +882,18 @@ Whether to apply linear interpolation to unvoiced parts in f0.
 <tr><td align="center"><b>customizability</b></td><td>reserved</td>
 <tr><td align="center"><b>type</b></td><td>boolean</td>
 <tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
+### lambda_aux_mel_loss
+
+Coefficient of aux mel loss when calculating total loss of acoustic model with shallow diffusion.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.2</td>
 </tbody></table>
 
 ### lambda_dur_loss
@@ -874,14 +934,26 @@ Coefficient of variance loss (all variance parameters other than pitch, like ene
 
 ### K_step
 
-Total number of diffusion steps.
+Maximum number diffusion steps used by shallow diffusion.
 
 <table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>nn</td>
-<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>1000</td>
+<tr><td align="center"><b>default</b></td><td>400</td>
+</tbody></table>
+
+### K_step_infer
+
+Number of diffusion steps used during shallow diffusion inference. Normally set as same as [K_step](#K_step)
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>400</td>
 </tbody></table>
 
 ### log_interval
@@ -1012,6 +1084,14 @@ Minimum mel spectrogram heatmap value for TensorBoard plotting.
 <tr><td align="center"><b>default</b></td><td>-6.0</td>
 </tbody></table>
 
+### melody_encoder_args
+
+Arguments for melody encoder. Available sub-keys: `hidden_size`, `enc_layers`, `enc_ffn_kernel_size`, `ffn_padding`, `ffn_act`, `dropout`, `num_heads`, `use_pos_embed`, `rel_pos`. If either of the parameter does not exist in this configuration key, it inherits from the linguistic encoder.
+
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
+
 ### midi_smooth_width
 
 Length of sinusoidal smoothing convolution kernel (in seconds) on the step function representing MIDI sequence for base pitch calculation.
@@ -1140,7 +1220,7 @@ Pitch extractor type.
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
 <tr><td align="center"><b>default</b></td><td>parselmouth</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from 'parselmouth'.</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'parselmouth', 'rmvpe', 'harvest'.</td>
 </tbody></table>
 
 ### pe_ckpt
@@ -1305,8 +1385,8 @@ The computation precision of training.
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>32-true</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from '32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'. See more possible values at <a href="https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api">Trainer — PyTorch Lightning 2.X.X documentation</a>.</td>
+<tr><td align="center"><b>default</b></td><td>16-mixed</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from '32-true', 'bf16-mixed', '16-mixed'. See more possible values at <a href="https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api">Trainer — PyTorch Lightning 2.X.X documentation</a>.</td>
 </tbody></table>
 
 ### pl_trainer_num_nodes
@@ -1502,6 +1582,85 @@ The global random seed used to shuffle data, initializing model weights, etc.
 <tr><td align="center"><b>default</b></td><td>1234</td>
 </tbody></table>
 
+### shallow_diffusion_args
+
+Arguments for shallow_diffusion.
+
+<table><tbody>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
+
+### shallow_diffusion_args.aux_decoder_arch
+
+Architecture type of the auxiliary decoder.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>convnext</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'convnext'.</td>
+</tbody></table>
+
+### shallow_diffusion_args.aux_decoder_args
+
+Keyword arguments for dynamically constructing the auxiliary decoder.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>type</b></td><td>dict</td>
+</tbody></table>
+
+### shallow_diffusion_args.aux_decoder_grad
+
+Scale factor of the gradients from the auxiliary decoder to the encoder.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.1</td>
+</tbody></table>
+
+### shallow_diffusion_args.train_aux_decoder
+
+Whether to forward and backward the auxiliary decoder during training. If set to `false`, the auxiliary decoder hangs in the memory and does not get any updates.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
+### shallow_diffusion_args.train_diffusion
+
+Whether to forward and backward the diffusion decoder during training. If set to `false`, the diffusion decoder hangs in the memory and does not get any updates.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
+### shallow_diffusion_args.val_gt_start
+
+Whether to use the ground truth as `x_start` in the shallow diffusion validation process. If set to `true`, gaussian noise is added to the ground truth before shallow diffusion is performed; otherwise the noise is added to the output of the auxiliary decoder. This option is useful when the auxiliary decoder has not been trained yet.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
 ### sort_by_len
 
 Whether to apply the _sorting by similar length_ algorithm described in [sampler_frame_count_grid](#sampler_frame_count_grid). Turning off this option may slow down training because sorting by length can better utilize the computing resources.
@@ -1590,7 +1749,15 @@ For multi-speaker combined datasets, "ds_id:name_prefix" can be used to apply th
 
 ### timesteps
 
-Equivalent to [K_step](#K_step).
+Total number of diffusion steps.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1000</td>
+</tbody></table>
 
 ### train_set_name
 
@@ -1628,6 +1795,19 @@ Whether to accept and embed energy values into the model.
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### use_glide_embed
+
+Whether to accept and embed glide types in melody encoder.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Only take affects when melody encoder is enabled.</td>
+</tbody></table>
+
 ### use_key_shift_embed
 
 Whether to embed key shifting values introduced by random pitch shifting augmentation.
@@ -1639,6 +1819,18 @@ Whether to embed key shifting values introduced by random pitch shifting augment
 <tr><td align="center"><b>type</b></td><td>boolean</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
 <tr><td align="center"><b>constraints</b></td><td>Must be true if random pitch shifting is enabled.</td>
+</tbody></table>
+
+### use_melody_encoder
+
+Whether to enable melody encoder for the pitch predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
 ### use_pos_embed
@@ -1653,12 +1845,25 @@ Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
 <tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
+### use_shallow_diffusion
+
+Whether to use shallow diffusion.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
 ### use_speed_embed
 
 Whether to embed speed values introduced by random time stretching augmentation.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
 <tr><td align="center"><b>type</b></td><td>boolean</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
 <tr><td align="center"><b>constraints</b></td><td>Must be true if random time stretching is enabled.</td>

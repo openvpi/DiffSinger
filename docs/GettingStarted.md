@@ -14,14 +14,15 @@ DiffSinger requires Python 3.8 or later. We strongly recommend you create a virt
    pip install -r requirements.txt
    ```
 
-### Pretrained models
+### Materials and assets
 
-- **(Required)** Get the pretrained vocoder from the [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) and unzip it into `checkpoints/` folder, or train a ultra-lightweight [DDSP](https://github.com/yxlllc/pc-ddsp) vocoder first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
-- Get acoustic or variance models from [Releases](https://github.com/openvpi/DiffSinger/releases) or elsewhere and unzip them into the `checkpoints/` folder.
+Some essential materials and assets are needed before continuing with this repository. See [materials for training and using models](BestPractices.md#materials-for-training-and-using-models) for detailed instructions.
 
 ## Configuration
 
 Every model needs a configuration file to run preprocessing, training, inference and deployment. Templates of configurations files are in [configs/templates](../configs/templates). Please **copy** the templates to your own data directory before you edit them.
+
+Before you continue, it is highly recommended to read through [Best Practices](BestPractices.md), which is a more detailed tutorial on how to configure your experiments.
 
 For more details about configurable parameters, see [Configuration Schemas](ConfigurationSchemas.md).
 
@@ -58,6 +59,10 @@ Run the following command to start the TensorBoard:
 ```bash
 tensorboard --logdir checkpoints/
 ```
+
+> NOTICE
+> 
+> If you are training a model with multiple GPUs (DDP), please add `--reload_multifile=true` option when launching TensorBoard, otherwise it may not update properly.
 
 ## Inference
 
@@ -122,6 +127,20 @@ python scripts/export.py acoustic --help
 ```
 
 for more configurable options.
+
+To export an NSF-HiFiGAN vocoder checkpoint, run:
+
+```bash
+python scripts/export.py nsf-hifigan --config CONFIG --ckpt CKPT
+```
+
+where `CONFIG` is a configuration file that has configured the same mel parameters as the vocoder (can be configs/acoustic.yaml for most cases) and `CKPT` is the path of the checkpoint to be exported.
+
+For more configurable options, run
+
+```bash
+python scripts/export.py nsf-hifigan --help
+```
 
 ## Other utilities
 

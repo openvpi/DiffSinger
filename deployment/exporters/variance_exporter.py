@@ -20,7 +20,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             device: Union[str, torch.device] = 'cpu',
             cache_dir: Path = None,
             ckpt_steps: int = None,
-            expose_expr: bool = False,
+            freeze_glide: bool = False,
+            freeze_expr: bool = False,
             export_spk: List[Tuple[str, Dict[str, float]]] = None,
             freeze_spk: Tuple[str, Dict[str, float]] = None
     ):
@@ -59,7 +60,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             if self.model.predict_variances else None
 
         # Attributes for exporting
-        self.expose_expr = expose_expr
+        self.expose_expr = not freeze_expr
+        self.freeze_glide = freeze_glide
         self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
             if hparams['use_spk_id'] else None
         self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
@@ -254,7 +256,7 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         if self.model.predict_pitch:
             use_melody_encoder = hparams.get('use_melody_encoder', False)
-            use_glide_embed = use_melody_encoder and hparams['use_glide_embed']
+            use_glide_embed = use_melody_encoder and hparams['use_glide_embed'] and not self.freeze_glide
             # Prepare inputs for preprocessor of PitchDiffusion
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)

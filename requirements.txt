@@ -5,7 +5,7 @@
 click
 h5py
 librosa<0.10.0
-lightning~=2.0.0
+lightning~=2.1.0
 matplotlib
 MonkeyType==23.3.0
 numpy  # ==1.23.5
@@ -15,7 +15,7 @@ praat-parselmouth==0.4.3
 pyworld==0.3.4
 PyYAML
 resampy
-scipy
+scipy>=1.10.0
 tensorboard
 tensorboardX
 torchmetrics

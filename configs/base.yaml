@@ -1,5 +1,5 @@
 # task
-task_cls: ''
+task_cls: null
 seed: 1234
 save_codes:
   - configs
@@ -11,22 +11,17 @@ save_codes:
 # dataset
 #############
 sort_by_len: true
-raw_data_dir: ''
-binary_data_dir: ''
-binarizer_cls: ''
+raw_data_dir: null
+binary_data_dir: null
+binarizer_cls: null
 binarization_args:
   shuffle: false
   num_workers: 0
 
-audio_num_mel_bins: 128
 audio_sample_rate: 44100
-hop_size: 512  # For 22050Hz, 275 ~= 12.5 ms (0.0125 * sample_rate)
-win_size: 2048  # For 22050Hz, 1100 ~= 50 ms (If None, win_size: fft_size) (0.05 * sample_rate)
-fmin: 40  # Set this to 55 if your speaker is male! if female, 95 should help taking off noise. (To test depending on dataset. Pitch info: male~[65, 260], female~[100, 525])
-fmax: 16000  # To be increased/reduced depending on data.
+hop_size: 512
+win_size: 2048
 fft_size: 2048  # Extra window size is filled with 0 paddings to match this parameter
-mel_vmin: -6
-mel_vmax: 1.5
 sampler_frame_count_grid: 6
 ds_workers: 4
 dataloader_prefetch_factor: 2
@@ -76,8 +71,8 @@ train_set_name: 'train'
 valid_set_name: 'valid'
 pe: 'parselmouth'
 pe_ckpt: ''
-vocoder: ''
-vocoder_ckpt: ''
+f0_min: 65
+f0_max: 1100
 num_valid_plots: 10
 
 ###########
@@ -86,7 +81,7 @@ num_valid_plots: 10
 ###########
 pl_trainer_accelerator: 'auto'
 pl_trainer_devices: 'auto'
-pl_trainer_precision: '32-true'
+pl_trainer_precision: '16-mixed'
 pl_trainer_num_nodes: 1
 pl_trainer_strategy: 
   name: auto
@@ -97,12 +92,9 @@ nccl_p2p: true
 ###########
 # finetune
 ###########
-
 finetune_enabled: false
 finetune_ckpt_path: null
 finetune_ignored_params: []
-
-
 finetune_strict_shapes: true
 
 freezing_enabled: false

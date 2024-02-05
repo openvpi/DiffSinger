@@ -88,4 +88,4 @@ num_ckpt_keep: 5
 permanent_ckpt_start: 180000
 permanent_ckpt_interval: 10000
 pl_trainer_devices: 'auto'
-pl_trainer_precision: '32-true'
+pl_trainer_precision: '16-mixed'

@@ -108,7 +108,11 @@ class DeconstructedWaveform:
         return self._win_size
 
     def _world_extraction(self):
-        x = self._waveform.astype(np.double)
+        # Add a tiny noise to the signal to avoid NaN results of D4C in rare edge cases
+        # References:
+        #   - https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder/issues/50
+        #   - https://github.com/mmorise/World/issues/116
+        x = self._waveform.astype(np.double) + np.random.randn(*self._waveform.shape) * 1e-5
         samplerate = self._samplerate
         f0 = self._f0.astype(np.double)
 
