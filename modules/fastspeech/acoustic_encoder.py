@@ -8,7 +8,6 @@ from modules.commons.common_layers import (
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
-from utils.pitch_utils import f0_to_coarse
 from utils.text_encoder import PAD_INDEX
 
 
@@ -25,14 +24,7 @@ class FastSpeech2Acoustic(nn.Module):
             use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams['rel_pos']
         )
 
-        self.f0_embed_type = hparams.get('f0_embed_type', 'discrete')
-        if self.f0_embed_type == 'discrete':
-            self.pitch_embed = Embedding(300, hparams['hidden_size'], PAD_INDEX)
-        elif self.f0_embed_type == 'continuous':
-            self.pitch_embed = Linear(1, hparams['hidden_size'])
-        else:
-            raise ValueError('f0_embed_type must be \'discrete\' or \'continuous\'.')
-
+        self.pitch_embed = Linear(1, hparams['hidden_size'])
         self.variance_embed_list = []
         self.use_energy_embed = hparams.get('use_energy_embed', False)
         self.use_breathiness_embed = hparams.get('use_breathiness_embed', False)
@@ -100,12 +92,8 @@ class FastSpeech2Acoustic(nn.Module):
                 spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
             condition += spk_embed
 
-        if self.f0_embed_type == 'discrete':
-            pitch = f0_to_coarse(f0)
-            pitch_embed = self.pitch_embed(pitch)
-        else:
-            f0_mel = (1 + f0 / 700).log()
-            pitch_embed = self.pitch_embed(f0_mel[:, :, None])
+        f0_mel = (1 + f0 / 700).log()
+        pitch_embed = self.pitch_embed(f0_mel[:, :, None])
         condition += pitch_embed
 
         condition = self.forward_variance_embedding(

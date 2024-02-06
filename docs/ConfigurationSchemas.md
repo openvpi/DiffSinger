@@ -648,22 +648,6 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted ener
 <tr><td align="center"><b>default</b></td><td>0.12</td>
 </tbody></table>
 
-### f0_embed_type
-
-Map f0 to embedding using:
-
-- `torch.nn.Linear` if 'continuous'
-- `torch.nn.Embedding` if 'discrete'
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
-<tr><td align="center"><b>scope</b></td><td>nn</td>
-<tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>continuous</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from 'continuous', 'discrete'.</td>
-</tbody></table>
-
 ### f0_max
 
 Maximum base frequency (F0) in Hz for pitch extraction.

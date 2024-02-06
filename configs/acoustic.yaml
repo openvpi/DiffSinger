@@ -56,7 +56,6 @@ energy_smooth_width: 0.12
 breathiness_smooth_width: 0.12
 
 use_spk_id: false
-f0_embed_type: continuous
 use_energy_embed: false
 use_breathiness_embed: false
 use_key_shift_embed: false
