@@ -48,7 +48,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             ).cpu().numpy()
 
             f0, _ = self.pe.get_pitch(
-                wav, aug_item['length'], hparams, speed=speed, interp_uv=hparams['interp_uv']
+                wav, aug_item['length'], hparams, speed=speed, interp_uv=True
             )
             aug_item['f0'] = f0.astype(np.float32)
 

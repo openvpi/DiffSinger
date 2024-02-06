@@ -108,7 +108,7 @@ class AcousticBinarizer(BaseBinarizer):
         if pitch_extractor is None:
             pitch_extractor = initialize_pe()
         gt_f0, uv = pitch_extractor.get_pitch(
-            wav, length, hparams, interp_uv=hparams['interp_uv']
+            wav, length, hparams, interp_uv=True
         )
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')

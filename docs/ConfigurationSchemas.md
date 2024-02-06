@@ -856,18 +856,6 @@ Hop size or step length (in number of waveform samples) of mel and feature extra
 <tr><td align="center"><b>default</b></td><td>512</td>
 </tbody></table>
 
-### interp_uv
-
-Whether to apply linear interpolation to unvoiced parts in f0.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>reserved</td>
-<tr><td align="center"><b>type</b></td><td>boolean</td>
-<tr><td align="center"><b>default</b></td><td>true</td>
-</tbody></table>
-
 ### lambda_aux_mel_loss
 
 Coefficient of aux mel loss when calculating total loss of acoustic model with shallow diffusion.

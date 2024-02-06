@@ -51,7 +51,6 @@ spec_min: [-5]
 spec_max: [0]
 mel_vmin: -6. #-6.
 mel_vmax: 1.5
-interp_uv: true
 energy_smooth_width: 0.12
 breathiness_smooth_width: 0.12
 
