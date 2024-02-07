@@ -132,11 +132,7 @@ Once the coverage checks passed, a phoneme distribution summary will be saved in
 
 ![phoneme-distribution](resources/phoneme-distribution.jpg)
 
-During the binarization process, each phoneme will be assigned with a unique phoneme ID according the order of their names. By default, there are one padding index before all real phonemes IDs. You may edit the number of padding indices, but it is not recommended to do so:
-
-```yaml
-num_pad_tokens: 1
-```
+During the binarization process, each phoneme will be assigned with a unique phoneme ID according the order of their names. There are one padding index (marked as `<PAD`) before all real phonemes IDs.
 
 The dictionary used to binarize the dataset will be copied to the binary data directory by the binarizer, and will be copied again to the experiment directory by the trainer. When exported to ONNX, the dictionary and the phoneme sequence ordered by IDs will be saved to the artifact directory. You do not need to carry the original dictionary file for training and inference.
 

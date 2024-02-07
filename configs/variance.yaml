@@ -29,7 +29,6 @@ raw_data_dir: 'data/opencpop_variance/raw'
 binary_data_dir: 'data/opencpop_variance/binary'
 binarizer_cls: preprocessing.variance_binarizer.VarianceBinarizer
 dictionary: dictionaries/opencpop-extension.txt
-num_pad_tokens: 1
 
 use_spk_id: false
 

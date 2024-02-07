@@ -1096,20 +1096,6 @@ The number of attention heads of `torch.nn.MultiheadAttention` in FastSpeech2 en
 <tr><td align="center"><b>default</b></td><td>2</td>
 </tbody></table>
 
-### num_pad_tokens
-
-Number of padding phoneme indexes before all real tokens.
-
-Due to some historical reasons, old checkpoints may have 3 padding tokens called \<PAD\>, \<EOS\> and \<UNK\>. After refactoring, all padding tokens are called \<PAD\>, and only the first one (token == 0) will be used.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>nn, preprocess</td>
-<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>1</td>
-</tbody></table>
-
 ### num_sanity_val_steps
 
 Number of sanity validation steps at the beginning.
