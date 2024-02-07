@@ -1488,18 +1488,6 @@ The diffusion schedule type.
 <tr><td align="center"><b>constraints</b></td><td>Choose from 'linear', 'cosine'.</td>
 </tbody></table>
 
-### seed
-
-The global random seed used to shuffle data, initializing model weights, etc.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
-<tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>1234</td>
-</tbody></table>
-
 ### shallow_diffusion_args
 
 Arguments for shallow_diffusion.

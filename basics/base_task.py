@@ -342,8 +342,7 @@ class BaseTask(pl.LightningModule):
             size_reversed=True,
             required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
-            shuffle_batch=True,
-            seed=hparams['seed']
+            shuffle_batch=True
         )
         return torch.utils.data.DataLoader(
             self.train_dataset,
@@ -394,7 +393,6 @@ class BaseTask(pl.LightningModule):
 
     @classmethod
     def start(cls):
-        pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
 
         # if pre_train is not None:
