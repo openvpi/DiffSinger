@@ -165,22 +165,6 @@ Arguments for random time stretching augmentation.
 <tr><td align="center"><b>type</b></td><td>dict</td>
 </tbody></table>
 
-### augmentation_args.random_time_stretching.domain
-
-The domain where random time stretching factors are uniformly distributed in.
-
-- If 'linear', stretching ratio $x$ will be uniformly distributed in $[V_{min}, V_{max}]$.
-- If 'log', $\ln{x}$ will be uniformly distributed in $[\ln{V_{min}}, \ln{V_{max}}]$.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
-<tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>log</td>
-<tr><td align="center"><b>constraint</b></td><td>Choose from 'log', 'linear'.</td>
-</tbody></table>
-
 ### augmentation_args.random_time_stretching.enabled
 
 Whether to apply random time stretching augmentation.

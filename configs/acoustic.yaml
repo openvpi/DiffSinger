@@ -39,7 +39,6 @@ augmentation_args:
   random_time_stretching:
     enabled: false
     range: [0.5, 2.]
-    domain: log  # or linear
     scale: 0.75
 
 raw_data_dir: 'data/opencpop/raw'

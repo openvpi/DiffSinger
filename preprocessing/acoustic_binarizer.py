@@ -225,12 +225,10 @@ class AcousticBinarizer(BaseBinarizer):
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_time_stretching']
             speed_min, speed_max = aug_args['range']
-            domain = aug_args['domain']
             assert hparams.get('use_speed_embed', False), \
                 'Random time stretching augmentation requires use_speed_embed == True.'
             assert 0 < speed_min < 1 < speed_max, \
                 'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
-            assert domain in ['log', 'linear'], 'domain must be \'log\' or \'linear\'.'
 
             aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
@@ -241,13 +239,8 @@ class AcousticBinarizer(BaseBinarizer):
             aug_items = random.choices(all_item_names, k=k_from_raw) + random.choices(aug_list, k=k_from_aug + k_mutate)
 
             for aug_type, aug_item in zip(aug_types, aug_items):
-                if domain == 'log':
-                    # Uniform distribution in log domain
-                    speed = speed_min * (speed_max / speed_min) ** random.random()
-                else:
-                    # Uniform distribution in linear domain
-                    rand = random.uniform(-1, 1)
-                    speed = 1 + (speed_max - 1) * rand if rand >= 0 else 1 + (1 - speed_min) * rand
+                # Uniform distribution in log domain
+                speed = speed_min * (speed_max / speed_min) ** random.random()
                 if aug_type == 0:
                     aug_task = {
                         'name': aug_item,

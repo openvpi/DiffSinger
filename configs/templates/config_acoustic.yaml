@@ -37,7 +37,6 @@ augmentation_args:
   random_time_stretching:
     enabled: true
     range: [0.5, 2.]
-    domain: log  # or linear
     scale: 0.75
 
 residual_channels: 512
