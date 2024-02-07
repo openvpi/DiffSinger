@@ -673,18 +673,6 @@ Activation function of TransformerFFNLayer in FastSpeech2 encoder:
 <tr><td align="center"><b>constraints</b></td><td>Choose from 'relu', 'gelu', 'swish'.</td>
 </tbody></table>
 
-### ffn_padding
-
-Padding mode of TransformerFFNLayer convolution in FastSpeech2 encoder.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>nn</td>
-<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
-<tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>SAME</td>
-</tbody></table>
-
 ### fft_size
 
 Fast Fourier Transforms parameter for mel extraction.
@@ -1042,7 +1030,7 @@ Minimum mel spectrogram heatmap value for TensorBoard plotting.
 
 ### melody_encoder_args
 
-Arguments for melody encoder. Available sub-keys: `hidden_size`, `enc_layers`, `enc_ffn_kernel_size`, `ffn_padding`, `ffn_act`, `dropout`, `num_heads`, `use_pos_embed`, `rel_pos`. If either of the parameter does not exist in this configuration key, it inherits from the linguistic encoder.
+Arguments for melody encoder. Available sub-keys: `hidden_size`, `enc_layers`, `enc_ffn_kernel_size`, `ffn_act`, `dropout`, `num_heads`, `use_pos_embed`, `rel_pos`. If either of the parameter does not exist in this configuration key, it inherits from the linguistic encoder.
 
 <table><tbody>
 <tr><td align="center"><b>type</b></td><td>dict</td>

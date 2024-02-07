@@ -31,7 +31,6 @@ enc_layers: 4
 num_heads: 2
 enc_ffn_kernel_size: 9
 ffn_act: gelu
-ffn_padding: 'SAME'
 use_spk_id: false
 
 ###########

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer, BatchNorm1dTBC
+from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
 
 DEFAULT_MAX_SOURCE_POSITIONS = 2000
@@ -12,14 +12,13 @@ DEFAULT_MAX_TARGET_POSITIONS = 2000
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, kernel_size=None, padding='SAME', act='gelu', num_heads=2, norm='ln'):
+    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2):
         super().__init__()
         self.op = EncSALayer(
             hidden_size, num_heads, dropout=dropout,
             attention_dropout=0.0, relu_dropout=dropout,
             kernel_size=kernel_size,
-            padding=padding,
-            norm=norm, act=act
+            act=act
         )
 
     def forward(self, x, **kwargs):
@@ -63,7 +62,7 @@ class DurationPredictor(torch.nn.Module):
     """
 
     def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
-                 dropout_rate=0.1, offset=1.0, padding='SAME', dur_loss_type='mse'):
+                 dropout_rate=0.1, offset=1.0, dur_loss_type='mse'):
         """Initialize duration predictor module.
         Args:
             in_dims (int): Input dimension.
@@ -77,18 +76,14 @@ class DurationPredictor(torch.nn.Module):
         self.offset = offset
         self.conv = torch.nn.ModuleList()
         self.kernel_size = kernel_size
-        self.padding = padding
         for idx in range(n_layers):
             in_chans = in_dims if idx == 0 else n_chans
-            self.conv += [torch.nn.Sequential(
-                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
-                                       if padding == 'SAME'
-                                       else (kernel_size - 1, 0), 0),
-                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+            self.conv.append(torch.nn.Sequential(
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=kernel_size // 2),
                 torch.nn.ReLU(),
                 LayerNorm(n_chans, dim=1),
                 torch.nn.Dropout(dropout_rate)
-            )]
+            ))
 
         self.loss_type = dur_loss_type
         if self.loss_type in ['mse', 'huber']:
@@ -141,7 +136,7 @@ class DurationPredictor(torch.nn.Module):
 class VariancePredictor(torch.nn.Module):
     def __init__(self, vmin, vmax, in_dims,
                  n_layers=5, n_chans=512, kernel_size=5,
-                 dropout_rate=0.1, padding='SAME'):
+                 dropout_rate=0.1):
         """Initialize variance predictor module.
         Args:
             in_dims (int): Input dimension.
@@ -156,18 +151,14 @@ class VariancePredictor(torch.nn.Module):
         self.vmax = vmax
         self.conv = torch.nn.ModuleList()
         self.kernel_size = kernel_size
-        self.padding = padding
         for idx in range(n_layers):
             in_chans = in_dims if idx == 0 else n_chans
-            self.conv += [torch.nn.Sequential(
-                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
-                                       if padding == 'SAME'
-                                       else (kernel_size - 1, 0), 0),
-                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+            self.conv.append(torch.nn.Sequential(
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=kernel_size // 2),
                 torch.nn.ReLU(),
                 LayerNorm(n_chans, dim=1),
                 torch.nn.Dropout(dropout_rate)
-            )]
+            ))
         self.linear = torch.nn.Linear(n_chans, 1)
         self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
         self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
@@ -195,7 +186,7 @@ class VariancePredictor(torch.nn.Module):
 class PitchPredictor(torch.nn.Module):
     def __init__(self, vmin, vmax, num_bins, deviation,
                  in_dims, n_layers=5, n_chans=384, kernel_size=5,
-                 dropout_rate=0.1, padding='SAME'):
+                 dropout_rate=0.1):
         """Initialize pitch predictor module.
         Args:
             in_dims (int): Input dimension.
@@ -214,18 +205,14 @@ class PitchPredictor(torch.nn.Module):
         self.base_pitch_embed = torch.nn.Linear(1, in_dims)
         self.conv = torch.nn.ModuleList()
         self.kernel_size = kernel_size
-        self.padding = padding
         for idx in range(n_layers):
             in_chans = in_dims if idx == 0 else n_chans
-            self.conv += [torch.nn.Sequential(
-                torch.nn.ConstantPad1d(((kernel_size - 1) // 2, (kernel_size - 1) // 2)
-                                       if padding == 'SAME'
-                                       else (kernel_size - 1, 0), 0),
-                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=0),
+            self.conv.append(torch.nn.Sequential(
+                torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=kernel_size // 2),
                 torch.nn.ReLU(),
                 LayerNorm(n_chans, dim=1),
                 torch.nn.Dropout(dropout_rate)
-            )]
+            ))
         self.linear = torch.nn.Linear(n_chans, num_bins)
         self.embed_positions = SinusoidalPositionalEmbedding(in_dims, 0, init_size=4096)
         self.pos_embed_alpha = nn.Parameter(torch.Tensor([1]))
@@ -364,31 +351,23 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 
 class FastSpeech2Encoder(nn.Module):
     def __init__(self, embed_tokens, hidden_size, num_layers,
-                 ffn_kernel_size=9, ffn_padding='SAME', ffn_act='gelu',
-                 dropout=None, num_heads=2, use_last_norm=True, norm='ln',
-                 use_pos_embed=True, rel_pos=True):
+                 ffn_kernel_size=9, ffn_act='gelu',
+                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True):
         super().__init__()
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
         self.dropout = dropout
         self.use_pos_embed = use_pos_embed
-        self.use_last_norm = use_last_norm
 
         self.layers = nn.ModuleList([
             TransformerEncoderLayer(
                 self.hidden_size, self.dropout,
-                kernel_size=ffn_kernel_size, padding=ffn_padding, act=ffn_act,
+                kernel_size=ffn_kernel_size, act=ffn_act,
                 num_heads=num_heads
             )
             for _ in range(self.num_layers)
         ])
-        if self.use_last_norm:
-            if norm == 'ln':
-                self.layer_norm = nn.LayerNorm(embed_dim)
-            elif norm == 'bn':
-                self.layer_norm = BatchNorm1dTBC(embed_dim)
-        else:
-            self.layer_norm = None
+        self.layer_norm = nn.LayerNorm(embed_dim)
 
         self.embed_tokens = embed_tokens  # redundant, but have to persist for compatibility with old checkpoints
         self.embed_scale = math.sqrt(hidden_size)
@@ -438,8 +417,7 @@ class FastSpeech2Encoder(nn.Module):
         for layer in self.layers:
             x = layer(x, encoder_padding_mask=padding_mask, attn_mask=attn_mask) * nonpadding_mask_TB
             hiddens.append(x)
-        if self.use_last_norm:
-            x = self.layer_norm(x) * nonpadding_mask_TB
+        x = self.layer_norm(x) * nonpadding_mask_TB
         if return_hiddens:
             x = torch.stack(hiddens, 0)  # [L, T, B, C]
             x = x.transpose(1, 2)  # [L, B, T, C]
