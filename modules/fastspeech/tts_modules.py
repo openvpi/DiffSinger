@@ -79,6 +79,7 @@ class DurationPredictor(torch.nn.Module):
         for idx in range(n_layers):
             in_chans = in_dims if idx == 0 else n_chans
             self.conv.append(torch.nn.Sequential(
+                torch.nn.Identity(),  # this is a placeholder for ConstantPad1d which is now merged into Conv1d
                 torch.nn.Conv1d(in_chans, n_chans, kernel_size, stride=1, padding=kernel_size // 2),
                 torch.nn.ReLU(),
                 LayerNorm(n_chans, dim=1),
