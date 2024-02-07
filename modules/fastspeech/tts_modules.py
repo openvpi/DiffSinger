@@ -351,7 +351,7 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 
 
 class FastSpeech2Encoder(nn.Module):
-    def __init__(self, embed_tokens, hidden_size, num_layers,
+    def __init__(self, hidden_size, num_layers,
                  ffn_kernel_size=9, ffn_act='gelu',
                  dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True):
         super().__init__()
@@ -370,7 +370,6 @@ class FastSpeech2Encoder(nn.Module):
         ])
         self.layer_norm = nn.LayerNorm(embed_dim)
 
-        self.embed_tokens = embed_tokens  # redundant, but have to persist for compatibility with old checkpoints
         self.embed_scale = math.sqrt(hidden_size)
         self.padding_idx = 0
         self.rel_pos = rel_pos

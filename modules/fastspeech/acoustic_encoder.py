@@ -17,7 +17,7 @@ class FastSpeech2Acoustic(nn.Module):
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
-            self.txt_embed, hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
+            hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
             dropout=hparams['dropout'], num_heads=hparams['num_heads'],
             use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams['rel_pos']
