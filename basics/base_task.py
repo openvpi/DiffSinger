@@ -3,7 +3,6 @@ import os
 import pathlib
 import shutil
 import sys
-from datetime import datetime
 from typing import Dict
 
 import matplotlib
@@ -16,7 +15,6 @@ matplotlib.use('Agg')
 import torch.utils.data
 from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
@@ -451,14 +449,6 @@ class BaseTask(pl.LightningModule):
         if not hparams['infer']:  # train
             @rank_zero_only
             def train_payload_copy():
-                # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
-                copy_code = True  # backup code every time
-                if copy_code:
-                    code_dir = work_dir / 'codes' / datetime.now().strftime('%Y%m%d%H%M%S')
-                    code_dir.mkdir(exist_ok=True, parents=True)
-                    for c in hparams['save_codes']:
-                        shutil.copytree(c, code_dir / c, dirs_exist_ok=True)
-                    print(f'| Copied codes to {code_dir}.')
                 # Copy spk_map.json and dictionary.txt to work dir
                 binary_dir = pathlib.Path(hparams['binary_data_dir'])
                 spk_map = work_dir / 'spk_map.json'

@@ -1487,18 +1487,6 @@ Training performance on some datasets may be very sensitive to this value. Chang
 <tr><td align="center"><b>default</b></td><td>6</td>
 </tbody></table>
 
-### save_codes
-
-Files in these folders will be backed up every time a training starts.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>training</td>
-<tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>list</td>
-<tr><td align="center"><b>default</b></td><td>[configs, modules, training, utils]</td>
-</tbody></table>
-
 ### schedule_type
 
 The diffusion schedule type.

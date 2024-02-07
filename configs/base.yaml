@@ -1,11 +1,6 @@
 # task
 task_cls: null
 seed: 1234
-save_codes:
-  - configs
-  - modules
-  - training
-  - utils
 
 #############
 # dataset
