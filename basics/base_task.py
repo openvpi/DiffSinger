@@ -87,8 +87,8 @@ class BaseTask(pl.LightningModule):
     # Training, validation and testing
     ###########
     def setup(self, stage):
-        self.train_dataset = self.dataset_cls(hparams['train_set_name'])
-        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+        self.train_dataset = self.dataset_cls('train')
+        self.valid_dataset = self.dataset_cls('valid')
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:

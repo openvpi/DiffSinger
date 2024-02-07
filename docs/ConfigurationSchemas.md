@@ -1731,18 +1731,6 @@ Total number of diffusion steps.
 <tr><td align="center"><b>default</b></td><td>1000</td>
 </tbody></table>
 
-### train_set_name
-
-Name of the training set used in binary filenames, TensorBoard keys, etc.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
-<tr><td align="center"><b>customizability</b></td><td>reserved</td>
-<tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>train</td>
-</tbody></table>
-
 ### use_breathiness_embed
 
 Whether to accept and embed breathiness values into the model.
@@ -1875,18 +1863,6 @@ Whether to load and use the vocoder to generate audio during validation. Validat
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>true</td>
-</tbody></table>
-
-### valid_set_name
-
-Name of the validation set used in binary filenames, TensorBoard keys, etc.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing, training</td>
-<tr><td align="center"><b>customizability</b></td><td>reserved</td>
-<tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>valid</td>
 </tbody></table>
 
 ### variances_prediction_args
