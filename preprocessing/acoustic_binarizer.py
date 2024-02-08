@@ -55,27 +55,20 @@ class AcousticBinarizer(BaseBinarizer):
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
         meta_data_dict = {}
-        if (raw_data_dir / 'transcriptions.csv').exists():
-            with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8') as f:
-                for utterance_label in csv.DictReader(f):
-                    item_name = utterance_label['name']
-                    temp_dict = {
-                        'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
-                        'ph_seq': utterance_label['ph_seq'].split(),
-                        'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
-                        'spk_id': spk_id,
-                        'spk_name': self.speakers[ds_id],
-                    }
-                    assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
-                        f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
-                    meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
-        else:
-            raise FileNotFoundError(
-                f'transcriptions.csv not found in {raw_data_dir}. '
-                'If this is a dataset with the old transcription format, please consider '
-                'migrating it to the new format via the following command:\n'
-                'python scripts/migrate.py txt <INPUT_TXT>'
-            )
+        with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8') as f:
+            for utterance_label in csv.DictReader(f):
+                item_name = utterance_label['name']
+                temp_dict = {
+                    'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
+                    'ph_seq': utterance_label['ph_seq'].split(),
+                    'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
+                    'spk_id': spk_id,
+                    'spk_name': self.speakers[ds_id],
+                }
+                assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
+                    f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
+                meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
+
         self.items.update(meta_data_dict)
 
     @torch.no_grad()
