@@ -103,7 +103,7 @@ class DsBatchSampler(Sampler):
     def __form_batches(self):
         if self.formed == self.epoch + self.seed:
             return
-        rng = np.random.default_rng(self.seed + self.epoch)
+        rng = np.random.default_rng()
         # Create indices
         if self.shuffle_sample:
             if self.sub_indices is not None:
