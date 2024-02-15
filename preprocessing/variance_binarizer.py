@@ -14,13 +14,12 @@ from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from utils.binarizer_utils import (
-    DeconstructedWaveform,
+    DecomposedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness_pyworld,
-    get_tension_base_harmonic_logit,
-    get_tension_multi_harmonics_logit,
+    get_tension_base_harmonic,
 )
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
@@ -45,7 +44,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'uv',  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
     'energy',  # frame-level RMS (dB), float32[T_s,]
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
-    'tension',  # tension, float32[T_s,]
+    'tension',  # frame-level tension (logit), float32[T_s,]
 ]
 DS_INDEX_SEP = '#'
 
@@ -378,7 +377,7 @@ class VarianceBinarizer(BaseBinarizer):
             processed_input['energy'] = energy
 
         # create a DeconstructedWaveform object for further feature extraction
-        dec_waveform = DeconstructedWaveform(
+        dec_waveform = DecomposedWaveform(
             waveform, samplerate=hparams['audio_sample_rate'], f0=f0 * ~uv,
             hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
         ) if waveform is not None else None
@@ -430,8 +429,8 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if tension is None:
-                tension = get_tension_base_harmonic_logit(
-                    dec_waveform, None, None, length=length
+                tension = get_tension_base_harmonic(
+                    dec_waveform, None, None, length=length, domain='logit'
                 )
                 tension_from_wav = True
 

@@ -63,7 +63,7 @@ def get_pitch_parselmouth(
     return f0, uv
 
 
-class DeconstructedWaveform:
+class DecomposedWaveform:
     def __init__(
             self, waveform, samplerate, f0,  # basic parameters
             *,
@@ -87,7 +87,6 @@ class DeconstructedWaveform:
         self._ap = None
         # final components
         self._harmonic_part: np.ndarray = None
-        self._base_harmonic = None
         self._aperiodic_part: np.ndarray = None
         self._harmonics: Dict[int, np.ndarray] = {}
 
@@ -132,41 +131,9 @@ class DeconstructedWaveform:
         self._sp = pw.cheaptrick(x, f0, t, samplerate, fft_size=fft_size)  # extract smoothed spectrogram
         self._ap = pw.d4c(x, f0, t, samplerate, fft_size=fft_size)  # extract aperiodicity
 
-    def harmonic(self) -> np.ndarray:
+    def _kth_harmonic(self, k: int) -> np.ndarray:
         """
-        Extract the full harmonic part from the waveform.
-        :return: full_harmonics float32[T]
-        """
-        if self._harmonic_part is not None:
-            return self._harmonic_part
-        if self._sp is None or self._ap is None:
-            self._world_extraction()
-        self._harmonic_part = pw.synthesize(
-            self._f0_world,
-            np.clip(self._sp * (1 - self._ap * self._ap), a_min=1e-16, a_max=None),  # clip to avoid zeros
-            np.zeros_like(self._ap),
-            self._samplerate, frame_period=self._time_step * 1000
-        ).astype(np.float32)  # synthesize the harmonic part using the parameters
-        return self._harmonic_part
-
-    def aperiodic(self) -> np.ndarray:
-        """
-        Extract the aperiodic part from the waveform.
-        :return: aperiodic_part float32[T]
-        """
-        if self._aperiodic_part is not None:
-            return self._aperiodic_part
-        if self._sp is None or self._ap is None:
-            self._world_extraction()
-        self._aperiodic_part = pw.synthesize(
-            self._f0_world, self._sp * self._ap * self._ap, np.ones_like(self._ap),
-            self._samplerate, frame_period=self._time_step * 1000
-        ).astype(np.float32)  # synthesize the aperiodic part using the parameters
-        return self._aperiodic_part
-
-    def kth_harmonic(self, k: int) -> np.ndarray:
-        """
-        Extract the Kth harmonic (starting from 0) from the waveform.
+        Extract the Kth harmonic (starting from 0) from the waveform. Author: @yxlllc
         :param k: a non-negative integer
         :return: kth_harmonic float32[T]
         """
@@ -224,11 +191,40 @@ class DeconstructedWaveform:
 
         return self._harmonics[k]
 
-    def base_harmonic(self) -> np.ndarray:
+    def harmonic(self, k: int = None) -> np.ndarray:
         """
-        Equivalent to `kth_harmonic(0)`.
+        Extract the full harmonic part, or the Kth harmonic if `k` is not None, from the waveform.
+        :param k: an integer representing the harmonic index, starting from 0
+        :return: full_harmonics float32[T] or kth_harmonic float32[T]
         """
-        return self.kth_harmonic(0)
+        if k is not None:
+            return self._kth_harmonic(k)
+        if self._harmonic_part is not None:
+            return self._harmonic_part
+        if self._sp is None or self._ap is None:
+            self._world_extraction()
+        self._harmonic_part = pw.synthesize(
+            self._f0_world,
+            np.clip(self._sp * (1 - self._ap * self._ap), a_min=1e-16, a_max=None),  # clip to avoid zeros
+            np.zeros_like(self._ap),
+            self._samplerate, frame_period=self._time_step * 1000
+        ).astype(np.float32)  # synthesize the harmonic part using the parameters
+        return self._harmonic_part
+
+    def aperiodic(self) -> np.ndarray:
+        """
+        Extract the aperiodic part from the waveform.
+        :return: aperiodic_part float32[T]
+        """
+        if self._aperiodic_part is not None:
+            return self._aperiodic_part
+        if self._sp is None or self._ap is None:
+            self._world_extraction()
+        self._aperiodic_part = pw.synthesize(
+            self._f0_world, self._sp * self._ap * self._ap, np.ones_like(self._ap),
+            self._samplerate, frame_period=self._time_step * 1000
+        ).astype(np.float32)  # synthesize the aperiodic part using the parameters
+        return self._aperiodic_part
 
 
 def get_energy_librosa(waveform, length, *, hop_size, win_size, domain='db'):
@@ -255,7 +251,7 @@ def get_energy_librosa(waveform, length, *, hop_size, win_size, domain='db'):
 
 
 def get_breathiness_pyworld(
-        waveform: Union[np.ndarray, DeconstructedWaveform],
+        waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,
         *, hop_size=None, fft_size=None, win_size=None
 ):
@@ -270,8 +266,8 @@ def get_breathiness_pyworld(
     :param win_size: Window size, in number of samples
     :return: breathiness
     """
-    if not isinstance(waveform, DeconstructedWaveform):
-        waveform = DeconstructedWaveform(
+    if not isinstance(waveform, DecomposedWaveform):
+        waveform = DecomposedWaveform(
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
@@ -283,13 +279,15 @@ def get_breathiness_pyworld(
     return breathiness
 
 
-def get_tension_base_harmonic_db(
-        waveform: Union[np.ndarray, DeconstructedWaveform],
+def get_tension_base_harmonic(
+        waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,
-        *, hop_size=None, fft_size=None, win_size=None
+        *, hop_size=None, fft_size=None, win_size=None,
+        domain='logit'
 ):
     """
-    Definition of tension: Radio of the harmonic part to the base harmonic, in dB representation
+    Definition of tension: radio of the real harmonic part (harmonic part except the base harmonic)
+    to the full harmonic part.
     :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
     :param samplerate: sampling rate
     :param f0: reference f0
@@ -297,87 +295,17 @@ def get_tension_base_harmonic_db(
     :param hop_size: Frame width, in number of samples
     :param fft_size: Number of fft bins
     :param win_size: Window size, in number of samples
+    :param domain: The domain of the final ratio representation.
+     Can be 'ratio' (the raw ratio), 'db' (log decibel) or 'logit' (the reverse function of sigmoid)
     :return: tension
     """
-    if not isinstance(waveform, DeconstructedWaveform):
-        waveform = DeconstructedWaveform(
+    if not isinstance(waveform, DecomposedWaveform):
+        waveform = DecomposedWaveform(
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
     waveform_h = waveform.harmonic()
-    waveform_base_h = waveform.base_harmonic()
-    energy_h = get_energy_librosa(
-        waveform_h, length,
-        hop_size=waveform.hop_size, win_size=waveform.win_size,
-    )
-    energy_base_h = get_energy_librosa(
-        waveform_base_h, length,
-        hop_size=waveform.hop_size, win_size=waveform.win_size,
-    )
-    tension = energy_h - energy_base_h
-    return np.clip(tension, a_min=0, a_max=None)
-
-
-def get_tension_base_harmonic_ratio(
-        waveform: Union[np.ndarray, DeconstructedWaveform],
-        samplerate, f0, length,
-        *, hop_size=None, fft_size=None, win_size=None
-):
-    """
-    Definition of tension: Radio of the harmonic part to the base harmonic, in dB representation
-    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
-    :param samplerate: sampling rate
-    :param f0: reference f0
-    :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
-    :param fft_size: Number of fft bins
-    :param win_size: Window size, in number of samples
-    :return: tension
-    """
-    if not isinstance(waveform, DeconstructedWaveform):
-        waveform = DeconstructedWaveform(
-            waveform=waveform, samplerate=samplerate, f0=f0,
-            hop_size=hop_size, fft_size=fft_size, win_size=win_size
-        )
-    waveform_h = waveform.harmonic()
-    waveform_base_h = waveform.base_harmonic()
-    energy_no_base = get_energy_librosa(
-        waveform_h - waveform_base_h, length,
-        hop_size=waveform.hop_size, win_size=waveform.win_size,
-        domain='amplitude'
-    )
-    energy_h = get_energy_librosa(
-        waveform_h, length,
-        hop_size=waveform.hop_size, win_size=waveform.win_size,
-        domain='amplitude'
-    )
-    tension = energy_no_base / (energy_h + 1e-4)
-    return np.clip(tension, a_min=0., a_max=1.)
-
-
-def get_tension_base_harmonic_logit(
-        waveform: Union[np.ndarray, DeconstructedWaveform],
-        samplerate, f0, length,
-        *, hop_size=None, fft_size=None, win_size=None
-):
-    """
-    Definition of tension: Radio of the harmonic part to the base harmonic, in dB representation
-    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
-    :param samplerate: sampling rate
-    :param f0: reference f0
-    :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
-    :param fft_size: Number of fft bins
-    :param win_size: Window size, in number of samples
-    :return: tension
-    """
-    if not isinstance(waveform, DeconstructedWaveform):
-        waveform = DeconstructedWaveform(
-            waveform=waveform, samplerate=samplerate, f0=f0,
-            hop_size=hop_size, fft_size=fft_size, win_size=win_size
-        )
-    waveform_h = waveform.harmonic()
-    waveform_base_h = waveform.base_harmonic()
+    waveform_base_h = waveform.harmonic(0)
     energy_base_h = get_energy_librosa(
         waveform_base_h, length,
         hop_size=waveform.hop_size, win_size=waveform.win_size,
@@ -388,51 +316,16 @@ def get_tension_base_harmonic_logit(
         hop_size=waveform.hop_size, win_size=waveform.win_size,
         domain='amplitude'
     )
-    tension = np.sqrt(np.clip(energy_h ** 2 - energy_base_h ** 2, a_min=0, a_max=None)) / (energy_h + 1e-4)
-    tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
-    return np.log(tension / (1 - tension))
-
-
-def get_tension_multi_harmonics_logit(
-        waveform: Union[np.ndarray, DeconstructedWaveform],
-        samplerate, f0, length,
-        *, hop_size=None, fft_size=None, win_size=None
-):
-    """
-    Definition of tension: Radio of the harmonic part to the base harmonic, in dB representation
-    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
-    :param samplerate: sampling rate
-    :param f0: reference f0
-    :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
-    :param fft_size: Number of fft bins
-    :param win_size: Window size, in number of samples
-    :return: tension
-    """
-    if not isinstance(waveform, DeconstructedWaveform):
-        waveform = DeconstructedWaveform(
-            waveform=waveform, samplerate=samplerate, f0=f0,
-            hop_size=hop_size, fft_size=fft_size, win_size=win_size
-        )
-    waveform_h = waveform.harmonic()
-    harmonic_weights = [1, 0.5, 0.25, 0.125]
-    waveform_multi_h = sum(
-        waveform.kth_harmonic(k) * harmonic_weights[k]
-        for k in range(4)
-    )
-    energy_multi_h = get_energy_librosa(
-        waveform_multi_h, length,
-        hop_size=waveform.hop_size, win_size=waveform.win_size,
-        domain='amplitude'
-    )
-    energy_h = get_energy_librosa(
-        waveform_h, length,
-        hop_size=waveform.hop_size, win_size=waveform.win_size,
-        domain='amplitude'
-    )
-    tension = np.sqrt(np.clip(energy_h ** 2 - energy_multi_h ** 2, a_min=0, a_max=None)) / (energy_h + 1e-4)
-    tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
-    return np.log(tension / (1 - tension))
+    tension = np.sqrt(np.clip(energy_h ** 2 - energy_base_h ** 2, a_min=0, a_max=None)) / (energy_h + 1e-5)
+    if domain == 'ratio':
+        tension = np.clip(tension, a_min=0, a_max=1)
+    elif domain == 'db':
+        tension = np.clip(tension, a_min=1e-5, a_max=1)
+        tension = librosa.amplitude_to_db(tension)
+    elif domain == 'logit':
+        tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
+        tension = np.log(tension / (1 - tension))
+    return tension
 
 
 class SinusoidalSmoothingConv1d(torch.nn.Conv1d):

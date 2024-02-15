@@ -21,13 +21,12 @@ from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import (
-    DeconstructedWaveform,
+    DecomposedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness_pyworld,
-    get_tension_base_harmonic_logit,
-    get_tension_multi_harmonics_logit,
+    get_tension_base_harmonic,
 )
 from utils.hparams import hparams
 
@@ -137,7 +136,7 @@ class AcousticBinarizer(BaseBinarizer):
             processed_input['energy'] = energy.cpu().numpy()
 
         # create a DeconstructedWaveform object for further feature extraction
-        dec_waveform = DeconstructedWaveform(
+        dec_waveform = DecomposedWaveform(
             wav, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
             hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
         )
@@ -158,9 +157,9 @@ class AcousticBinarizer(BaseBinarizer):
             processed_input['breathiness'] = breathiness.cpu().numpy()
 
         if self.need_tension:
-            # get ground truth tension or falsetto
-            tension = get_tension_base_harmonic_logit(
-                dec_waveform, None, None, length=length
+            # get ground truth tension
+            tension = get_tension_base_harmonic(
+                dec_waveform, None, None, length=length, domain='logit'
             )
 
             global tension_smooth
