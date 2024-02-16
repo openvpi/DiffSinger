@@ -25,7 +25,7 @@ def get_mel2ph_torch(lr, durs, length, timestep, device='cpu'):
 
 def get_pitch_parselmouth(
         waveform, samplerate, length,
-        *, hop_size, f0_min=65, f0_max=800,
+        *, hop_size, f0_min=65, f0_max=1100,
         speed=1, interp_uv=False
 ):
     """
