@@ -27,6 +27,8 @@ class AcousticDataset(BaseDataset):
             self.required_variances['energy'] = 0.0
         if hparams['use_breathiness_embed']:
             self.required_variances['breathiness'] = 0.0
+        if hparams['use_voicing_embed']:
+            self.required_variances['voicing'] = 0.0
         if hparams['use_tension_embed']:
             self.required_variances['tension'] = 0.0
 
@@ -80,6 +82,8 @@ class AcousticTask(BaseTask):
             self.required_variances.append('energy')
         if hparams['use_breathiness_embed']:
             self.required_variances.append('breathiness')
+        if hparams['use_voicing_embed']:
+            self.required_variances.append('voicing')
         if hparams['use_tension_embed']:
             self.required_variances.append('tension')
         super()._finish_init()

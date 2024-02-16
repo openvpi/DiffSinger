@@ -22,6 +22,8 @@ use_spk_id: false
 num_spk: 1
 use_energy_embed: false
 use_breathiness_embed: false
+use_voicing_embed: false
+use_tension_embed: false
 use_key_shift_embed: true
 use_speed_embed: true
 

@@ -32,6 +32,8 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 self.variances_to_embed.add('energy')
             if hparams.get('use_breathiness_embed', False):
                 self.variances_to_embed.add('breathiness')
+            if hparams.get('use_voicing_embed', False):
+                self.variances_to_embed.add('voicing')
             if hparams.get('use_tension_embed', False):
                 self.variances_to_embed.add('tension')
 

@@ -19,17 +19,26 @@ binary_data_dir: data/xxx/binary
 binarization_args:
   num_workers: 0
 
-energy_db_min: -96.0
-energy_db_max: -12.0
-breathiness_db_min: -96.0
-breathiness_db_max: -20.0
-
 use_spk_id: false
 num_spk: 1
 predict_dur: true
 predict_pitch: true
 predict_energy: false
 predict_breathiness: false
+predict_voicing: false
+predict_tension: false
+
+energy_db_min: -96.0
+energy_db_max: -12.0
+
+breathiness_db_min: -96.0
+breathiness_db_max: -20.0
+
+voicing_db_min: -96.0
+voicing_db_max: -12.0
+
+tension_logit_min: -10.0
+tension_logit_max: 10.0
 
 hidden_size: 256
 dur_prediction_args:

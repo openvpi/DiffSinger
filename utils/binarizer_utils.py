@@ -279,6 +279,35 @@ def get_breathiness_pyworld(
     return breathiness
 
 
+def get_voicing_pyworld(
+        waveform: Union[np.ndarray, DecomposedWaveform],
+        samplerate, f0, length,
+        *, hop_size=None, fft_size=None, win_size=None
+):
+    """
+    Definition of voicing: RMS of the harmonic part, in dB representation
+    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
+    :param samplerate: sampling rate
+    :param f0: reference f0
+    :param length: Expected number of frames
+    :param hop_size: Frame width, in number of samples
+    :param fft_size: Number of fft bins
+    :param win_size: Window size, in number of samples
+    :return: voicing
+    """
+    if not isinstance(waveform, DecomposedWaveform):
+        waveform = DecomposedWaveform(
+            waveform=waveform, samplerate=samplerate, f0=f0,
+            hop_size=hop_size, fft_size=fft_size, win_size=win_size
+        )
+    waveform_sp = waveform.harmonic()
+    voicing = get_energy_librosa(
+        waveform_sp, length=length,
+        hop_size=waveform.hop_size, win_size=waveform.win_size
+    )
+    return voicing
+
+
 def get_tension_base_harmonic(
         waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,

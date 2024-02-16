@@ -26,6 +26,7 @@ from utils.binarizer_utils import (
     get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness_pyworld,
+    get_voicing_pyworld,
     get_tension_base_harmonic,
 )
 from utils.hparams import hparams
@@ -39,6 +40,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'f0',
     'energy',
     'breathiness',
+    'voicing',
     'tension',
     'key_shift',
     'speed',
@@ -47,6 +49,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
 pitch_extractor: BasePE = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
+voicing_smooth: SinusoidalSmoothingConv1d = None
 tension_smooth: SinusoidalSmoothingConv1d = None
 
 
@@ -56,6 +59,7 @@ class AcousticBinarizer(BaseBinarizer):
         self.lr = LengthRegulator()
         self.need_energy = hparams['use_energy_embed']
         self.need_breathiness = hparams['use_breathiness_embed']
+        self.need_voicing = hparams['use_voicing_embed']
         self.need_tension = hparams['use_tension_embed']
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
@@ -157,6 +161,21 @@ class AcousticBinarizer(BaseBinarizer):
             breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
 
             processed_input['breathiness'] = breathiness.cpu().numpy()
+
+        if self.need_voicing:
+            # get ground truth voicing
+            voicing = get_voicing_pyworld(
+                dec_waveform, None, None, length=length
+            )
+
+            global voicing_smooth
+            if voicing_smooth is None:
+                voicing_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['voicing_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            voicing = voicing_smooth(torch.from_numpy(voicing).to(self.device)[None])[0]
+
+            processed_input['voicing'] = voicing.cpu().numpy()
 
         if self.need_tension:
             # get ground truth tension

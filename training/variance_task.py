@@ -24,8 +24,9 @@ class VarianceDataset(BaseDataset):
         super(VarianceDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         need_energy = hparams['predict_energy']
         need_breathiness = hparams['predict_breathiness']
+        need_voicing = hparams['predict_voicing']
         need_tension = hparams['predict_tension']
-        self.predict_variances = need_energy or need_breathiness or need_tension
+        self.predict_variances = need_energy or need_breathiness or need_voicing or need_tension
 
     def collater(self, samples):
         batch = super().collater(samples)
@@ -60,6 +61,8 @@ class VarianceDataset(BaseDataset):
             batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
         if hparams['predict_breathiness']:
             batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0)
+        if hparams['predict_voicing']:
+            batch['voicing'] = utils.collate_nd([s['voicing'] for s in samples], 0)
         if hparams['predict_tension']:
             batch['tension'] = utils.collate_nd([s['tension'] for s in samples], 0)
 
@@ -92,12 +95,15 @@ class VarianceTask(BaseTask):
 
         predict_energy = hparams['predict_energy']
         predict_breathiness = hparams['predict_breathiness']
+        predict_voicing = hparams['predict_voicing']
         predict_tension = hparams['predict_tension']
         self.variance_prediction_list = []
         if predict_energy:
             self.variance_prediction_list.append('energy')
         if predict_breathiness:
             self.variance_prediction_list.append('breathiness')
+        if predict_voicing:
+            self.variance_prediction_list.append('voicing')
         if predict_tension:
             self.variance_prediction_list.append('tension')
         self.predict_variances = len(self.variance_prediction_list) > 0
@@ -153,6 +159,7 @@ class VarianceTask(BaseTask):
         pitch = sample.get('pitch')  # [B, T_s]
         energy = sample.get('energy')  # [B, T_s]
         breathiness = sample.get('breathiness')  # [B, T_s]
+        voicing = sample.get('voicing')  # [B, T_s]
         tension = sample.get('tension')  # [B, T_s]
 
         pitch_retake = variance_retake = None
@@ -175,7 +182,7 @@ class VarianceTask(BaseTask):
             note_midi=note_midi, note_rest=note_rest,
             note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
             base_pitch=base_pitch, pitch=pitch,
-            energy=energy, breathiness=breathiness, tension=tension,
+            energy=energy, breathiness=breathiness, voicing=voicing, tension=tension,
             pitch_retake=pitch_retake, variance_retake=variance_retake,
             spk_id=spk_ids, infer=infer
         )
