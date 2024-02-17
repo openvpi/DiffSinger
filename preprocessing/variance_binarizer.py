@@ -283,7 +283,7 @@ class VarianceBinarizer(BaseBinarizer):
             f0, uv = pitch_extractor.get_pitch(
                 waveform, samplerate=hparams['audio_sample_rate'], length=length,
                 hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
-                interp_uv=hparams['interp_uv']
+                interp_uv=True
             )
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
