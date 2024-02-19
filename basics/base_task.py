@@ -408,7 +408,13 @@ class BaseTask(pl.LightningModule):
             accelerator=hparams['pl_trainer_accelerator'],
             devices=hparams['pl_trainer_devices'],
             num_nodes=hparams['pl_trainer_num_nodes'],
-            strategy=get_strategy(hparams['pl_trainer_strategy']),
+            strategy=get_strategy(
+                hparams['pl_trainer_devices'],
+                hparams['pl_trainer_num_nodes'],
+                hparams['pl_trainer_accelerator'],
+                hparams['pl_trainer_strategy'],
+                hparams['pl_trainer_precision'],
+            ),
             precision=hparams['pl_trainer_precision'],
             callbacks=[
                 DsModelCheckpoint(
