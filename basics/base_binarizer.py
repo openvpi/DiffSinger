@@ -182,7 +182,8 @@ class BaseBinarizer:
         spk_map_fn = self.binary_data_dir / 'spk_map.json'
         with open(spk_map_fn, 'w', encoding='utf-8') as f:
             json.dump(self.spk_map, f)
-        shutil.copy(locate_dictionary(), self.binary_data_dir / 'dictionary.txt')
+        dictionary_path = locate_dictionary()
+        shutil.copy(dictionary_path, self.binary_data_dir / ('dictionary'+dictionary_path.suffix))
         self.check_coverage()
 
         # Process valid set and train set
