@@ -27,10 +27,16 @@ class FastSpeech2Acoustic(nn.Module):
         self.variance_embed_list = []
         self.use_energy_embed = hparams.get('use_energy_embed', False)
         self.use_breathiness_embed = hparams.get('use_breathiness_embed', False)
+        self.use_voicing_embed = hparams.get('use_voicing_embed', False)
+        self.use_tension_embed = hparams.get('use_tension_embed', False)
         if self.use_energy_embed:
             self.variance_embed_list.append('energy')
         if self.use_breathiness_embed:
             self.variance_embed_list.append('breathiness')
+        if self.use_voicing_embed:
+            self.variance_embed_list.append('voicing')
+        if self.use_tension_embed:
+            self.variance_embed_list.append('tension')
 
         self.use_variance_embeds = len(self.variance_embed_list) > 0
         if self.use_variance_embeds:

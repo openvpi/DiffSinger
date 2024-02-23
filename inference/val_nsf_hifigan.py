@@ -61,7 +61,10 @@ for filename in tqdm.tqdm(os.listdir(in_path)):
     if not filename.endswith('.wav'):
         continue
     wav, mel = vocoder.wav2spec(os.path.join(in_path, filename))
-    f0, _ = get_pitch_parselmouth(wav, len(mel), hparams)
+    f0, _ = get_pitch_parselmouth(
+        wav, samplerate=hparams['audio_sample_rate'], length=len(mel),
+        hop_size=hparams['hop_size']
+    )
 
     wav_out = vocoder.spec2wav(mel, f0=f0)
     save_wav(wav_out, os.path.join(out_path, filename), hparams['audio_sample_rate'])

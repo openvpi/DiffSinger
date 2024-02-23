@@ -15,7 +15,7 @@ test_prefixes: [
 ]
 
 vocoder: NsfHifiGAN
-vocoder_ckpt: checkpoints/nsf_hifigan/model
+vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
 audio_sample_rate: 44100
 audio_num_mel_bins: 128
 hop_size: 512            # Hop size.
@@ -51,10 +51,14 @@ mel_vmin: -6. #-6.
 mel_vmax: 1.5
 energy_smooth_width: 0.12
 breathiness_smooth_width: 0.12
+voicing_smooth_width: 0.12
+tension_smooth_width: 0.12
 
 use_spk_id: false
 use_energy_embed: false
 use_breathiness_embed: false
+use_voicing_embed: false
+use_tension_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 

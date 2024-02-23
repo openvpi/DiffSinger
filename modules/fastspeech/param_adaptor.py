@@ -5,7 +5,7 @@ import torch
 from modules.diffusion.ddpm import MultiVarianceDiffusion
 from utils.hparams import hparams
 
-VARIANCE_CHECKLIST = ['energy', 'breathiness']
+VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension']
 
 
 class ParameterAdaptorModule(torch.nn.Module):
@@ -14,10 +14,16 @@ class ParameterAdaptorModule(torch.nn.Module):
         self.variance_prediction_list = []
         self.predict_energy = hparams.get('predict_energy', False)
         self.predict_breathiness = hparams.get('predict_breathiness', False)
+        self.predict_voicing = hparams.get('predict_voicing', False)
+        self.predict_tension = hparams.get('predict_tension', False)
         if self.predict_energy:
             self.variance_prediction_list.append('energy')
         if self.predict_breathiness:
             self.variance_prediction_list.append('breathiness')
+        if self.predict_voicing:
+            self.variance_prediction_list.append('voicing')
+        if self.predict_tension:
+            self.variance_prediction_list.append('tension')
         self.predict_variances = len(self.variance_prediction_list) > 0
 
     def build_adaptor(self, cls=MultiVarianceDiffusion):
@@ -37,6 +43,23 @@ class ParameterAdaptorModule(torch.nn.Module):
                 hparams['breathiness_db_max']
             ))
             clamps.append((hparams['breathiness_db_min'], 0.))
+
+        if self.predict_voicing:
+            ranges.append((
+                hparams['voicing_db_min'],
+                hparams['voicing_db_max']
+            ))
+            clamps.append((hparams['voicing_db_min'], 0.))
+
+        if self.predict_tension:
+            ranges.append((
+                hparams['tension_logit_min'],
+                hparams['tension_logit_max']
+            ))
+            clamps.append((
+                hparams['tension_logit_min'],
+                hparams['tension_logit_max']
+            ))
 
         variances_hparams = hparams['variances_prediction_args']
         total_repeat_bins = variances_hparams['total_repeat_bins']

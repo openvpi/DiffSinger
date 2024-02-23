@@ -32,6 +32,10 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 self.variances_to_embed.add('energy')
             if hparams.get('use_breathiness_embed', False):
                 self.variances_to_embed.add('breathiness')
+            if hparams.get('use_voicing_embed', False):
+                self.variances_to_embed.add('voicing')
+            if hparams.get('use_tension_embed', False):
+                self.variances_to_embed.add('tension')
 
             self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
             if hparams['use_spk_id']:

@@ -52,13 +52,17 @@ class RMVPE(BasePE):
         f0 = self.decode(hidden, thred=thred, use_viterbi=use_viterbi)
         return f0
 
-    def get_pitch(self, waveform, length, hparams, interp_uv=False, speed=1):
-        f0 = self.infer_from_audio(waveform, sample_rate=hparams['audio_sample_rate'])
+    def get_pitch(
+            self, waveform, samplerate, length,
+            *, hop_size, f0_min=65, f0_max=1100,
+            speed=1, interp_uv=False
+    ):
+        f0 = self.infer_from_audio(waveform, sample_rate=samplerate)
         uv = f0 == 0
         f0, uv = interp_f0(f0, uv)
 
-        hop_size = int(np.round(hparams['hop_size'] * speed))
-        time_step = hop_size / hparams['audio_sample_rate']
+        hop_size = int(np.round(hop_size * speed))
+        time_step = hop_size / samplerate
         f0_res = resample_align_curve(f0, 0.01, time_step, length)
         uv_res = resample_align_curve(uv.astype(np.float32), 0.01, time_step, length) > 0.5
         if not interp_uv:

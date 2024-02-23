@@ -17,11 +17,17 @@ dictionary: dictionaries/opencpop-extension.txt
 binary_data_dir: data/xxx/binary
 binarization_args:
   num_workers: 0
+pe: parselmouth
+pe_ckpt: null
+vocoder: NsfHifiGAN
+vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
 
 use_spk_id: false
 num_spk: 1
 use_energy_embed: false
 use_breathiness_embed: false
+use_voicing_embed: false
+use_tension_embed: false
 use_key_shift_embed: true
 use_speed_embed: true
 

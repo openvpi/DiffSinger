@@ -14,10 +14,13 @@ from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from utils.binarizer_utils import (
+    DecomposedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
-    get_breathiness_pyworld
+    get_breathiness_pyworld,
+    get_voicing_pyworld,
+    get_tension_base_harmonic,
 )
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
@@ -42,6 +45,8 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'uv',  # unvoiced masks (only for objective evaluation metrics), bool[T_s,]
     'energy',  # frame-level RMS (dB), float32[T_s,]
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
+    'voicing',  # frame-level RMS of harmonic parts (dB), float32[T_s,]
+    'tension',  # frame-level tension (logit), float32[T_s,]
 ]
 DS_INDEX_SEP = '#'
 
@@ -51,6 +56,8 @@ pitch_extractor: BasePE = None
 midi_smooth: SinusoidalSmoothingConv1d = None
 energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
+voicing_smooth: SinusoidalSmoothingConv1d = None
+tension_smooth: SinusoidalSmoothingConv1d = None
 
 
 class VarianceBinarizer(BaseBinarizer):
@@ -70,7 +77,9 @@ class VarianceBinarizer(BaseBinarizer):
 
         predict_energy = hparams['predict_energy']
         predict_breathiness = hparams['predict_breathiness']
-        self.predict_variances = predict_energy or predict_breathiness
+        predict_voicing = hparams['predict_voicing']
+        predict_tension = hparams['predict_tension']
+        self.predict_variances = predict_energy or predict_breathiness or predict_voicing or predict_tension
         self.lr = LengthRegulator().to(self.device)
         self.prefer_ds = self.binarization_args['prefer_ds']
         self.cached_ds = {}
@@ -275,7 +284,11 @@ class VarianceBinarizer(BaseBinarizer):
                 uv = f0 == 0
                 f0, _ = interp_f0(f0, uv)
         if f0 is None:
-            f0, uv = pitch_extractor.get_pitch(waveform, length, hparams, interp_uv=True)
+            f0, uv = pitch_extractor.get_pitch(
+                waveform, samplerate=hparams['audio_sample_rate'], length=length,
+                hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
+                interp_uv=True
+            )
         if uv.all():  # All unvoiced
             print(f'Skipped \'{item_name}\': empty gt f0')
             return None
@@ -355,7 +368,10 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if energy is None:
-                energy = get_energy_librosa(waveform, length, hparams).astype(np.float32)
+                energy = get_energy_librosa(
+                    waveform, length,
+                    hop_size=hparams['hop_size'], win_size=hparams['win_size']
+                ).astype(np.float32)
                 energy_from_wav = True
 
             if energy_from_wav:
@@ -367,6 +383,12 @@ class VarianceBinarizer(BaseBinarizer):
                 energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['energy'] = energy
+
+        # create a DeconstructedWaveform object for further feature extraction
+        dec_waveform = DecomposedWaveform(
+            waveform, samplerate=hparams['audio_sample_rate'], f0=f0 * ~uv,
+            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
+        ) if waveform is not None else None
 
         # Below: extract breathiness
         if hparams['predict_breathiness']:
@@ -384,7 +406,9 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if breathiness is None:
-                breathiness = get_breathiness_pyworld(waveform, f0 * ~uv, length, hparams).astype(np.float32)
+                breathiness = get_breathiness_pyworld(
+                    dec_waveform, None, None, length=length
+                )
                 breathiness_from_wav = True
 
             if breathiness_from_wav:
@@ -396,6 +420,68 @@ class VarianceBinarizer(BaseBinarizer):
                 breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['breathiness'] = breathiness
+
+        # Below: extract voicing
+        if hparams['predict_voicing']:
+            voicing = None
+            voicing_from_wav = False
+            if self.prefer_ds:
+                voicing_seq = self.load_attr_from_ds(ds_id, name, 'voicing', idx=ds_seg_idx)
+                if voicing_seq is not None:
+                    voicing = resample_align_curve(
+                        np.array(voicing_seq.split(), np.float32),
+                        original_timestep=float(self.load_attr_from_ds(
+                            ds_id, name, 'voicing_timestep', idx=ds_seg_idx
+                        )),
+                        target_timestep=self.timestep,
+                        align_length=length
+                    )
+            if voicing is None:
+                voicing = get_voicing_pyworld(
+                    dec_waveform, None, None, length=length
+                )
+                voicing_from_wav = True
+
+            if voicing_from_wav:
+                global voicing_smooth
+                if voicing_smooth is None:
+                    voicing_smooth = SinusoidalSmoothingConv1d(
+                        round(hparams['voicing_smooth_width'] / self.timestep)
+                    ).eval().to(self.device)
+                voicing = voicing_smooth(torch.from_numpy(voicing).to(self.device)[None])[0].cpu().numpy()
+
+            processed_input['voicing'] = voicing
+
+        # Below: extract tension
+        if hparams['predict_tension']:
+            tension = None
+            tension_from_wav = False
+            if self.prefer_ds:
+                tension_seq = self.load_attr_from_ds(ds_id, name, 'tension', idx=ds_seg_idx)
+                if tension_seq is not None:
+                    tension = resample_align_curve(
+                        np.array(tension_seq.split(), np.float32),
+                        original_timestep=float(self.load_attr_from_ds(
+                            ds_id, name, 'tension_timestep', idx=ds_seg_idx
+                        )),
+                        target_timestep=self.timestep,
+                        align_length=length
+                    )
+            if tension is None:
+                tension = get_tension_base_harmonic(
+                    dec_waveform, None, None, length=length, domain='logit'
+                )
+                tension_from_wav = True
+
+            if tension_from_wav:
+                global tension_smooth
+                if tension_smooth is None:
+                    tension_smooth = SinusoidalSmoothingConv1d(
+                        round(hparams['tension_smooth_width'] / self.timestep)
+                    ).eval().to(self.device)
+                tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0].cpu().numpy()
+
+            processed_input['tension'] = tension
 
         return processed_input
 
