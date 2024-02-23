@@ -189,10 +189,10 @@ class AcousticBinarizer(BaseBinarizer):
 
             processed_input['tension'] = tension.cpu().numpy()
 
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             processed_input['key_shift'] = 0.
 
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             processed_input['speed'] = 1.
 
         return processed_input
@@ -207,7 +207,7 @@ class AcousticBinarizer(BaseBinarizer):
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
             key_shift_min, key_shift_max = aug_args['range']
-            assert hparams.get('use_key_shift_embed', False), \
+            assert hparams['use_key_shift_embed'], \
                 'Random pitch shifting augmentation requires use_key_shift_embed == True.'
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
@@ -273,7 +273,7 @@ class AcousticBinarizer(BaseBinarizer):
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_time_stretching']
             speed_min, speed_max = aug_args['range']
-            assert hparams.get('use_speed_embed', False), \
+            assert hparams['use_speed_embed'], \
                 'Random time stretching augmentation requires use_speed_embed == True.'
             assert 0 < speed_min < 1 < speed_max, \
                 'Random time stretching augmentation must have a range where 0 < min < 1 < max.'

@@ -58,7 +58,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             if hparams['use_spk_id'] else None
         self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
             if hparams['use_spk_id'] and export_spk is not None else []
-        if hparams.get('use_key_shift_embed', False) and not self.expose_gender:
+        if hparams['use_key_shift_embed'] and not self.expose_gender:
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             key_shift = freeze_gender * shift_max if freeze_gender >= 0. else freeze_gender * abs(shift_min)
             key_shift = max(min(key_shift, shift_max), shift_min)  # clip key shift
@@ -143,14 +143,14 @@ class DiffSingerAcousticExporter(BaseExporter):
                 for v_name in self.model.fs2.variance_embed_list
             }
         }
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             if self.expose_gender:
                 kwargs['gender'] = torch.rand((1, n_frames), dtype=torch.float32, device=self.device)
                 input_names.append('gender')
                 dynamix_axes['gender'] = {
                     1: 'n_frames'
                 }
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             if self.expose_velocity:
                 kwargs['velocity'] = torch.rand((1, n_frames), dtype=torch.float32, device=self.device)
                 input_names.append('velocity')

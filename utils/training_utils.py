@@ -113,7 +113,7 @@ class DsBatchSampler(Sampler):
                 indices = rng.permutation(len(self.dataset))
 
             if self.sort_by_similar_size:
-                grid = int(hparams.get('sampler_frame_count_grid', 6))
+                grid = int(hparams['sampler_frame_count_grid'])
                 assert grid > 0
                 sizes = (np.round(np.array(self.dataset.sizes)[indices] / grid) * grid).clip(grid, None)
                 sizes *= (-1 if self.size_reversed else 1)

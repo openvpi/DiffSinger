@@ -38,7 +38,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
 
         aug_item['mel'] = mel
 
-        if speed != 1. or hparams.get('use_speed_embed', False):
+        if speed != 1. or hparams['use_speed_embed']:
             aug_item['length'] = mel.shape[0]
             aug_item['speed'] = int(np.round(hparams['hop_size'] * speed)) / hparams['hop_size']  # real speed
             aug_item['seconds'] /= aug_item['speed']
@@ -83,7 +83,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
                         align_length=aug_item['length']
                     )
 
-        if key_shift != 0. or hparams.get('use_key_shift_embed', False):
+        if key_shift != 0. or hparams['use_key_shift_embed']:
             if replace_spk_id is None:
                 aug_item['key_shift'] = key_shift
             else:

@@ -36,7 +36,7 @@ def noise_like(shape, device, repeat=False):
     return repeat_noise() if repeat else noise()
 
 
-def linear_beta_schedule(timesteps, max_beta=hparams.get('max_beta', 0.01)):
+def linear_beta_schedule(timesteps, max_beta=0.01):
     """
     linear schedule
     """
@@ -239,8 +239,8 @@ class GaussianDiffusion(nn.Module):
             assert x_start is not None, 'Missing shallow diffusion source.'
             x = x_start
 
-        if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1 and t_max > 0:
-            algorithm = hparams.get('diff_accelerator', 'ddim')
+        if hparams['pndm_speedup'] > 1 and t_max > 0:
+            algorithm = hparams['diff_accelerator']
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.

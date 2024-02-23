@@ -123,7 +123,7 @@ def acoustic(
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
-        if gender is not None and hparams.get('use_key_shift_embed'):
+        if gender is not None and hparams['use_key_shift_embed']:
             param['gender'] = gender
 
         if spk_mix is not None:

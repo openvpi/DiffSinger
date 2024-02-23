@@ -128,9 +128,9 @@ class BaseTask(pl.LightningModule):
         self.load_state_dict(state_dict, strict=False)
 
     def load_pre_train_model(self):
-        pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
-        blacklist = hparams.get('finetune_ignored_params')
-        # whitelist=hparams.get('pre_train_whitelist')
+        pre_train_ckpt_path = hparams['finetune_ckpt_path']
+        blacklist = hparams['finetune_ignored_params']
+        # whitelist=hparams['pre_train_whitelist']
         if blacklist is None:
             blacklist = []
         # if whitelist is  None:
