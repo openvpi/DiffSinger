@@ -1480,6 +1480,30 @@ Whether to enable pitch prediction.
 <tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
+### predict_tension
+
+Whether to enable tension prediction.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
+### predict_voicing
+
+Whether to enable voicing prediction.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
 ### raw_data_dir
 
 Path(s) to the raw dataset including wave files, transcriptions, etc.
@@ -1731,6 +1755,50 @@ Task trainer class name.
 <tr><td align="center"><b>type</b></td><td>str</td>
 </tbody></table>
 
+### tension_logit_max
+
+Maximum tension logit value used for normalization to [-1, 1]. Logit is the reverse function of Sigmoid:
+
+$$
+f(x) = \ln\frac{x}{1-x}
+$$
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>10.0</td>
+</tbody></table>
+
+### tension_logit_min
+
+Minimum tension logit value used for normalization to [-1, 1]. Logit is the reverse function of Sigmoid:
+
+$$
+f(x) = \ln\frac{x}{1-x}
+$$
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-10.0</td>
+</tbody></table>
+
+### tension_smooth_width
+
+Length of sinusoidal smoothing convolution kernel (in seconds) on extracted tension curve.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.12</td>
+</tbody></table>
+
 ### test_prefixes
 
 List of data item names or name prefixes for the validation set. For each string `s` in the list:
@@ -1881,6 +1949,30 @@ Whether embed the speaker id from a multi-speaker dataset.
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### use_tension_embed
+
+Whether to accept and embed tension values into the model.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
+### use_voicing_embed
+
+Whether to accept and embed voicing values into the model.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
 ### val_check_interval
 
 Interval (in number of training steps) between validation checks.
@@ -1986,6 +2078,42 @@ Path of the vocoder model.
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
 <tr><td align="center"><b>default</b></td><td>checkpoints/nsf_hifigan/model</td>
+</tbody></table>
+
+### voicing_db_max
+
+Maximum voicing value in dB used for normalization to [-1, 1].
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-20.0</td>
+</tbody></table>
+
+### voicing_db_min
+
+Minimum voicing value in dB used for normalization to [-1, 1].
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>-96.0</td>
+</tbody></table>
+
+### voicing_smooth_width
+
+Length of sinusoidal smoothing convolution kernel (in seconds) on extracted voicing curve.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>0.12</td>
 </tbody></table>
 
 ### win_size
