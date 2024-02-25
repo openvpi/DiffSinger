@@ -402,6 +402,17 @@ Loss type of the DDPM.
 <tr><td align="center"><b>constraints</b></td><td>Choose from 'l1', 'l2'.</td>
 </tbody></table>
 
+### diff_speedup
+
+Diffusion sampling speed-up ratio. 1 means no speeding up.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>10</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be a factor of <a href="#K_step">K_step</a>.</td>
+</tbody></table>
+
 ### dilation_cycle_length
 
 Length k of the cycle $2^0, 2^1 ...., 2^k$ of convolution dilation factors through WaveNet residual blocks.
@@ -1349,17 +1360,6 @@ Strategy name for the Lightning trainer.
 <tr><td align="center"><b>customizability</b></td><td>reserved</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
 <tr><td align="center"><b>default</b></td><td>auto</td>
-</tbody></table>
-
-### pndm_speedup
-
-Diffusion sampling speed-up ratio. 1 means no speeding up.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>10</td>
-<tr><td align="center"><b>constraints</b></td><td>Must be a factor of <a href="#K_step">K_step</a>.</td>
 </tbody></table>
 
 ### predict_breathiness

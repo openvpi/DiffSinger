@@ -104,7 +104,7 @@ max_beta: 0.02
 diff_decoder_type: 'wavenet'
 diff_loss_type: l2
 diff_accelerator: ddim
-pndm_speedup: 10
+diff_speedup: 10
 
 # train and eval
 num_sanity_val_steps: 1

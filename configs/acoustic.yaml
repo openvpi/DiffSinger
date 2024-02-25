@@ -66,7 +66,7 @@ timesteps: 1000
 max_beta: 0.02
 rel_pos: true
 diff_accelerator: ddim
-pndm_speedup: 10
+diff_speedup: 10
 hidden_size: 256
 residual_layers: 20
 residual_channels: 512

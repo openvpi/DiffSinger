@@ -239,7 +239,7 @@ class GaussianDiffusion(nn.Module):
             assert x_start is not None, 'Missing shallow diffusion source.'
             x = x_start
 
-        if hparams['pndm_speedup'] > 1 and t_max > 0:
+        if hparams['diff_speedup'] > 1 and t_max > 0:
             algorithm = hparams['diff_accelerator']
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -270,7 +270,7 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
-                steps = t_max // hparams["pndm_speedup"]
+                steps = t_max // hparams["diff_speedup"]
                 self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = dpm_solver.sample(
                     x,
@@ -308,7 +308,7 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 uni_pc = UniPC(model_fn, noise_schedule, variant='bh2')
 
-                steps = t_max // hparams["pndm_speedup"]
+                steps = t_max // hparams["diff_speedup"]
                 self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = uni_pc.sample(
                     x,
@@ -320,7 +320,7 @@ class GaussianDiffusion(nn.Module):
                 self.bar.close()
             elif algorithm == 'pndm':
                 self.noise_list = deque(maxlen=4)
-                iteration_interval = hparams['pndm_speedup']
+                iteration_interval = hparams['diff_speedup']
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
                         total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
@@ -330,7 +330,7 @@ class GaussianDiffusion(nn.Module):
                         iteration_interval, cond=cond
                     )
             elif algorithm == 'ddim':
-                iteration_interval = hparams['pndm_speedup']
+                iteration_interval = hparams['diff_speedup']
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
                         total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
