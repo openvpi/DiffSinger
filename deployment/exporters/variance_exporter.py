@@ -5,6 +5,7 @@ from typing import Union, List, Tuple, Dict
 import onnx
 import onnxsim
 import torch
+import yaml
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerVarianceONNX
@@ -142,6 +143,33 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
         self._export_dictionary(path / 'dictionary.txt')
         self._export_phonemes((path / f'{self.model_name}.phonemes.txt'))
+
+        model_name = self.model_name
+        if self.freeze_spk is not None:
+            model_name += '.' + self.freeze_spk[0]
+        dsconfig = {
+            # basic configs
+            'phonemes': f'{self.model_name}.phonemes.txt',
+            'linguistic': f'{model_name}.linguistic.onnx',
+            'predict_dur': self.model.predict_dur,
+        }
+        # multi-speaker
+        if len(self.export_spk) > 0:
+            dsconfig['speakers'] = [f'{self.model_name}.{spk[0]}' for spk in self.export_spk]
+        # functionalities
+        if self.model.predict_dur:
+            dsconfig['dur'] = f'{model_name}.dur.onnx'
+        if self.model.predict_pitch:
+            dsconfig['pitch'] = f'{model_name}.pitch.onnx'
+        if self.model.predict_variances:
+            dsconfig['variance'] = f'{model_name}.variance.onnx'
+        # frame specifications
+        dsconfig['sample_rate'] = hparams['audio_sample_rate']
+        dsconfig['hop_size'] = hparams['hop_size']
+        config_path = path / 'dsconfig.yaml'
+        with open(config_path, 'w', encoding='utf8') as fw:
+            yaml.safe_dump(dsconfig, fw, sort_keys=False)
+        print(f'| export configs => {config_path} **PLEASE EDIT BEFORE USE**')
 
     @torch.no_grad()
     def _torch_export_model(self):
