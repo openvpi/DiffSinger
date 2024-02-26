@@ -7,7 +7,28 @@ import pyworld as pw
 import torch
 import torch.nn.functional as F
 
+from modules.nsf_hifigan.nvSTFT import STFT
 from utils.pitch_utils import interp_f0
+
+
+def get_mel_torch(
+        waveform, samplerate,
+        *,
+        num_mel_bins=128, hop_size=512, win_size=2048, fft_size=2048,
+        fmin=40, fmax=16000, mel_base='e',
+        keyshift=0, speed=1, device=None
+):
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    stft = STFT(samplerate, num_mel_bins, fft_size, win_size, hop_size, fmin, fmax)
+    with torch.no_grad():
+        wav_torch = torch.from_numpy(waveform).to(device)
+        mel_torch = stft.get_mel(wav_torch.unsqueeze(0), keyshift=keyshift, speed=speed).squeeze(0).T
+        if mel_base != 'e':
+            assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
+            # log mel to log10 mel
+            mel_torch = 0.434294 * mel_torch
+        return mel_torch.cpu().numpy()
 
 
 @torch.no_grad()

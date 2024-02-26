@@ -8,7 +8,6 @@ except ModuleNotFoundError:
     rank_zero_info = print
 
 from modules.nsf_hifigan.models import load_model
-from modules.nsf_hifigan.nvSTFT import load_wav_to_torch, STFT
 from basics.base_vocoder import BaseVocoder
 from modules.vocoders.registry import register_vocoder
 from utils.hparams import hparams
@@ -103,25 +102,3 @@ class NsfHifiGAN(BaseVocoder):
                 y = self.model(c).view(-1)
         wav_out = y.cpu().numpy()
         return wav_out
-
-    @staticmethod
-    def wav2spec(inp_path, keyshift=0, speed=1, device=None):
-        if device is None:
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        sampling_rate = hparams['audio_sample_rate']
-        num_mels = hparams['audio_num_mel_bins']
-        n_fft = hparams['fft_size']
-        win_size = hparams['win_size']
-        hop_size = hparams['hop_size']
-        fmin = hparams['fmin']
-        fmax = hparams['fmax']
-        stft = STFT(sampling_rate, num_mels, n_fft, win_size, hop_size, fmin, fmax)
-        with torch.no_grad():
-            wav_torch, _ = load_wav_to_torch(inp_path, target_sr=stft.target_sr)
-            mel_torch = stft.get_mel(wav_torch.unsqueeze(0).to(device), keyshift=keyshift, speed=speed).squeeze(0).T
-            mel_base = hparams.get('mel_base', 10)
-            if mel_base != 'e':
-                assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
-                # log mel to log10 mel
-                mel_torch = 0.434294 * mel_torch
-            return wav_torch.cpu().numpy(), mel_torch.cpu().numpy()

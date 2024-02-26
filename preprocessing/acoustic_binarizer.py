@@ -12,6 +12,7 @@ import pathlib
 import random
 from copy import deepcopy
 
+import librosa
 import numpy as np
 import torch
 
@@ -19,10 +20,10 @@ from basics.base_binarizer import BaseBinarizer
 from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
-from modules.vocoders.registry import VOCODERS
 from utils.binarizer_utils import (
     DecomposedWaveform,
     SinusoidalSmoothingConv1d,
+    get_mel_torch,
     get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness_pyworld,
@@ -82,10 +83,13 @@ class AcousticBinarizer(BaseBinarizer):
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
-        if hparams['vocoder'] in VOCODERS:
-            wav, mel = VOCODERS[hparams['vocoder']].wav2spec(meta_data['wav_fn'])
-        else:
-            wav, mel = VOCODERS[hparams['vocoder'].split('.')[-1]].wav2spec(meta_data['wav_fn'])
+        waveform, _ = librosa.load(meta_data['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
+        mel = get_mel_torch(
+            waveform, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
+            hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
+            fmin=hparams['fmin'], fmax=hparams['fmax'], mel_base=hparams['mel_base'],
+            device=self.device
+        )
         length = mel.shape[0]
         seconds = length * hparams['hop_size'] / hparams['audio_sample_rate']
         processed_input = {
@@ -110,7 +114,7 @@ class AcousticBinarizer(BaseBinarizer):
         if pitch_extractor is None:
             pitch_extractor = initialize_pe()
         gt_f0, uv = pitch_extractor.get_pitch(
-            wav, samplerate=hparams['audio_sample_rate'], length=length,
+            waveform, samplerate=hparams['audio_sample_rate'], length=length,
             hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
             interp_uv=True
         )
@@ -122,7 +126,7 @@ class AcousticBinarizer(BaseBinarizer):
         if self.need_energy:
             # get ground truth energy
             energy = get_energy_librosa(
-                wav, length, hop_size=hparams['hop_size'], win_size=hparams['win_size']
+                waveform, length, hop_size=hparams['hop_size'], win_size=hparams['win_size']
             ).astype(np.float32)
 
             global energy_smooth
@@ -136,7 +140,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         # create a DeconstructedWaveform object for further feature extraction
         dec_waveform = DecomposedWaveform(
-            wav, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
+            waveform, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
             hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
         )
 

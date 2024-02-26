@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+import librosa
 import numpy as np
 import torch
 
@@ -7,8 +8,7 @@ from basics.base_augmentation import BaseAugmentation, require_same_keys
 from basics.base_pe import BasePE
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.vocoders.registry import VOCODERS
-from utils.binarizer_utils import get_mel2ph_torch
+from utils.binarizer_utils import get_mel_torch, get_mel2ph_torch
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 
@@ -27,14 +27,13 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
     @require_same_keys
     def process_item(self, item: dict, key_shift=0., speed=1., replace_spk_id=None) -> dict:
         aug_item = deepcopy(item)
-        if hparams['vocoder'] in VOCODERS:
-            wav, mel = VOCODERS[hparams['vocoder']].wav2spec(
-                aug_item['wav_fn'], keyshift=key_shift, speed=speed
-            )
-        else:
-            wav, mel = VOCODERS[hparams['vocoder'].split('.')[-1]].wav2spec(
-                aug_item['wav_fn'], keyshift=key_shift, speed=speed
-            )
+        waveform, _ = librosa.load(aug_item['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
+        mel = get_mel_torch(
+            waveform, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
+            hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
+            fmin=hparams['fmin'], fmax=hparams['fmax'], mel_base=hparams['mel_base'],
+            keyshift=key_shift, speed=speed, device=self.device
+        )
 
         aug_item['mel'] = mel
 
@@ -48,7 +47,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             ).cpu().numpy()
 
             f0, _ = self.pe.get_pitch(
-                wav, samplerate=hparams['audio_sample_rate'], length=aug_item['length'],
+                waveform, samplerate=hparams['audio_sample_rate'], length=aug_item['length'],
                 hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
                 speed=speed, interp_uv=True
             )
