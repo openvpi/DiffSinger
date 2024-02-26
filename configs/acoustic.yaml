@@ -45,11 +45,11 @@ raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'
 binarizer_cls: preprocessing.acoustic_binarizer.AcousticBinarizer
 dictionary: dictionaries/opencpop-extension.txt
-spec_min: [-12]
+spec_min: [-5]
 spec_max: [0]
-mel_vmin: -14
-mel_vmax: 4
-mel_base: 'e'
+mel_vmin: -6.
+mel_vmax: 1.5
+mel_base: '10'
 energy_smooth_width: 0.12
 breathiness_smooth_width: 0.12
 voicing_smooth_width: 0.12
