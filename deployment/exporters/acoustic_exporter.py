@@ -146,7 +146,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         dsconfig['num_mel_bins'] = hparams['audio_num_mel_bins']
         dsconfig['mel_fmin'] = hparams['fmin']
         dsconfig['mel_fmax'] = hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2
-        dsconfig['mel_base'] = '10'
+        dsconfig['mel_base'] = str(hparams.get('mel_base', '10'))
         dsconfig['mel_scale'] = 'slaney'
         config_path = path / 'dsconfig.yaml'
         with open(config_path, 'w', encoding='utf8') as fw:

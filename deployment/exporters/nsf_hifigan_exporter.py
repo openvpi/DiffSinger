@@ -65,7 +65,7 @@ class NSFHiFiGANExporter(BaseExporter):
                 'num_mel_bins': hparams['audio_num_mel_bins'],
                 'mel_fmin': hparams['fmin'],
                 'mel_fmax': hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2,
-                'mel_base': '10',
+                'mel_base': str(hparams.get('mel_base', '10')),
                 'mel_scale': 'slaney',
             }, fw, sort_keys=False)
         print(f'| export configs => {config_path} **PLEASE EDIT BEFORE USE**')
