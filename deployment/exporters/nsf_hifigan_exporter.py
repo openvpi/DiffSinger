@@ -32,7 +32,7 @@ class NSFHiFiGANExporter(BaseExporter):
         config_path = self.model_path.with_name('config.json')
         with open(config_path, 'r', encoding='utf8') as f:
             config = json.load(f)
-        model = NSFHiFiGANONNX(config).eval().to(self.device)
+        model = NSFHiFiGANONNX(config, mel_base=hparams.get('mel_base', '10')).eval().to(self.device)
         load_ckpt(model.generator, str(self.model_path),
                   prefix_in_ckpt=None, key_in_ckpt='generator',
                   strict=True, device=self.device)

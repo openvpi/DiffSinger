@@ -25,11 +25,11 @@ class NsfHifiGAN(BaseVocoder):
             )
         rank_zero_info(f'| Load HifiGAN: {model_path}')
         self.model, self.h = load_model(model_path)
-    
+
     @property
     def device(self):
         return next(self.model.parameters()).device
-    
+
     def to_device(self, device):
         self.model.to(device)
 
@@ -57,8 +57,11 @@ class NsfHifiGAN(BaseVocoder):
             print('Mismatch parameters: hparams[\'fmax\']=', hparams['fmax'], '!=', self.h.fmax, '(vocoder)')
         with torch.no_grad():
             c = mel.transpose(2, 1)  # [B, T, bins]
-            # log10 to log mel
-            c = 2.30259 * c
+            mel_base = hparams.get('mel_base', 10)
+            if mel_base != 'e':
+                assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
+                # log10 to log mel
+                c = 2.30259 * c
             f0 = kwargs.get('f0')  # [B, T]
             if f0 is not None:
                 y = self.model(c, f0).view(-1)
@@ -87,8 +90,11 @@ class NsfHifiGAN(BaseVocoder):
             print('Mismatch parameters: hparams[\'fmax\']=', hparams['fmax'], '!=', self.h.fmax, '(vocoder)')
         with torch.no_grad():
             c = torch.FloatTensor(mel).unsqueeze(0).transpose(2, 1).to(self.device)
-            # log10 to log mel
-            c = 2.30259 * c
+            mel_base = hparams.get('mel_base', 10)
+            if mel_base != 'e':
+                assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
+                # log10 to log mel
+                c = 2.30259 * c
             f0 = kwargs.get('f0')
             if f0 is not None:
                 f0 = torch.FloatTensor(f0[None, :]).to(self.device)
@@ -113,6 +119,9 @@ class NsfHifiGAN(BaseVocoder):
         with torch.no_grad():
             wav_torch, _ = load_wav_to_torch(inp_path, target_sr=stft.target_sr)
             mel_torch = stft.get_mel(wav_torch.unsqueeze(0).to(device), keyshift=keyshift, speed=speed).squeeze(0).T
-            # log mel to log10 mel
-            mel_torch = 0.434294 * mel_torch
+            mel_base = hparams.get('mel_base', 10)
+            if mel_base != 'e':
+                assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
+                # log mel to log10 mel
+                mel_torch = 0.434294 * mel_torch
             return wav_torch.cpu().numpy(), mel_torch.cpu().numpy()
