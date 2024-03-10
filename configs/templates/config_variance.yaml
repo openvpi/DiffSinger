@@ -23,6 +23,8 @@ use_spk_id: false
 num_spk: 1
 predict_dur: true
 predict_pitch: true
+# NOTICE: before enabling variance predictions, please read the docs at
+# https://github.com/openvpi/DiffSinger/tree/main/docs/BestPractices.md#choosing-variance-parameters
 predict_energy: false
 predict_breathiness: false
 predict_voicing: false

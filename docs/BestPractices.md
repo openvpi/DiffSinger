@@ -187,12 +187,56 @@ The DS files should also use the same dictionary as that of your target model. T
 |           `f0_seq`           |                ✓                |              ✓               |                     ✓                      |       WAV       |     DS/WAV     |
 | `energy`, `breathiness`, ... |                                 |                              |                     ✓                      |       WAV       |     DS/WAV     |
 
-This means you only need one column in trancriptions.csv, the `name` column, to declare all DS files included in the dataset. The name pattern can be:
+This means you only need one column in transcriptions.csv, the `name` column, to declare all DS files included in the dataset. The name pattern can be:
 
 - Full name: `some-name` will firstly match the first segment in `some-name.ds`.
 - Name with index: `some-name#0` and `some-name#1` will match segment 0 and segment 1 in `some-name.ds` if there are no match with full name.
 
 Though not recommended, the binarizer will still try to load attributes from transcriptions.csv or extract parameters from recordings if there are no matching DS files. In this case the full name matching logic is applied (the same as the normal binarization process).
+
+## Choosing variance parameters
+
+Variance parameters are a type of parameters that are significantly related to singing styles and emotions, have no default values and need to be predicted by the variance models. Choosing the proper variance parameters can obtain more controllability and expressiveness for your singing models. In this section, we are only talking about **narrowly defined variance parameters**, which are variance parameters except the pitch.
+
+### Supported variance parameters
+
+#### Energy
+
+> WARNING
+>
+> This parameter is no longer recommended in favor of the new voicing parameter. The latter are less coupled with breathiness than energy.
+
+Energy is defined as the RMS curve of the singing, in dB, which can control the strength of voice to a certain extent.
+
+#### Breathiness
+
+Breathiness is defined as the RMS curve of the aperiodic part of the singing, in dB, which can control the power of the air and unvoiced consonants in the voice.
+
+#### Voicing
+
+Voicing is defined as the RMS curve of the harmonic part of the singing, in dB, which can control the power of the harmonics in vowels and voiced consonants in the voice.
+
+#### Tension
+
+Tension is mostly related to the ratio of the base harmonic to the full harmonics, which can be used to control the strength and timbre of the voice. The ratio is calculated as
+$$
+r = \frac{\text{RMS}(H_{full}-H_{base})}{\text{RMS}(H_{full})}
+$$
+where $H_{full}$ is the full harmonics and $H_{base}$ is the base harmonic. The ratio is then mapped to the final domain via the inverse function of Sigmoid, that
+$$
+T = \log{\frac{r}{1-r}}
+$$
+where $T$ is the tension value.
+
+### Principles of choosing multiple parameters
+
+#### Energy, breathiness and voicing
+
+These three parameters should **NOT** be enabled together. Energy is the RMS of the full waveform, which is the composition of the harmonic part and the aperiodic part. Therefore, these three parameters are coupled with each other.
+
+#### Energy, voicing and tension
+
+When voicing (or energy) is enabled, it almost fixes the loudness. However, tension sometimes rely on the implicitly predicted loudness for more expressiveness, because when a person sings with higher tension, he/she always produces louder voice. For this reason, some people may find their models or datasets _less natural_ with tension control. To be specific, changing tension will change the timbre but keep the loudness, and changing voicing (or energy) will change the loudness but keep the timbre. This behavior can be suitable for some, but not all datasets and users. Therefore, it is highly recommended for everyone to conduct some experiments on the actual datasets used to train the model.
 
 ## Mutual influence between variance modules
 
