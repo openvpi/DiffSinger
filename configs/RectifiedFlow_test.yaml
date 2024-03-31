@@ -1,7 +1,7 @@
-base_config:
-  - configs/acoustic.yaml
+#base_config:
+#  - configs/acoustic.yaml
 
-
+diff_loss_type: l2_rf_norm
 
 diffusion_type: 'RectifiedFlow' #ddpm
 
