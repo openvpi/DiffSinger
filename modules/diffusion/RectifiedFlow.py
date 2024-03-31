@@ -122,7 +122,7 @@ class RectifiedFlow(nn.Module):
         k_3 = model_fn(x + 0.125 * (k_2 + k_1) * dt, self.timesteps * (t + 0.25 * dt), cond)
         k_4 = model_fn(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.timesteps * (t + 0.5 * dt), cond)
         k_5 = model_fn(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.timesteps * (t + 0.75 * dt), cond)
-        k_6 = model_fn(x - (3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.timesteps * (t + dt),
+        k_6 = model_fn(x  (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.timesteps * (t + dt),
                        cond)
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt / 90
         t += dt
@@ -165,7 +165,7 @@ class RectifiedFlow(nn.Module):
                        cond).double()
         k_5 = model_fn((x + 0.0625 * (3 * k_1 + 9 * k_4) * dt.double()).float(), self.timesteps * (t + 0.75 * dt),
                        cond).double()
-        k_6 = model_fn((x - (3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
+        k_6 = model_fn((x (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
                        self.timesteps * (t + dt),
                        cond).double()
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt.double() / 90
