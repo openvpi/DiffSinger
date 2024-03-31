@@ -48,7 +48,7 @@ class RectifiedFlow(nn.Module):
 
     def get_timestep(self, B, device):
         if self.timestep_type == 'continuous':
-            t_start = 1 - (self.timesteps - self.k_step) / self.timesteps
+            t_start =  (self.timesteps - self.k_step) / self.timesteps
             t = t_start + (1.0 - t_start) * torch.rand((B,), device=device)
             return t, t * self.timesteps
         elif self.timestep_type == 'discrete':
