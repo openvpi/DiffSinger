@@ -72,6 +72,8 @@ class RectifiedFlow(nn.Module):
             t = torch.randint(0, self.k_step, (B,), device=device).long() + (self.timesteps - self.k_step)
 
             return t.float() / self.timesteps, t
+        else:
+            raise NotImplementedError(self.timestep_type)
 
     def p_losses(self, x_start, t, cond):
 

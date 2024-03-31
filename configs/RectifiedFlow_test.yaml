@@ -1,0 +1,11 @@
+base_config:
+  - configs/acoustic.yaml
+
+
+
+diffusion_type: 'RectifiedFlow' #ddpm
+
+diff_accelerator: 'rk4' # euler
+
+diff_speedup: 100
+timestep_type: 'continuous' #discrete
