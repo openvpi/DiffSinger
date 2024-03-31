@@ -219,7 +219,7 @@ class RectifiedFlow(nn.Module):
 
             for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                x, _ = algorithm_fn(x, i*dt, dt, cond, model_fn=self.denoise_fn)
+                x, _ = algorithm_fn(x,t_start+ i*dt, dt, cond, model_fn=self.denoise_fn)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
