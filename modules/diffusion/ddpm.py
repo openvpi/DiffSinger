@@ -363,7 +363,8 @@ class GaussianDiffusion(nn.Module):
             if self.num_feats == 1:
                 spec = spec[:, None, :, :]  # [B, F=1, M, T]
             t = torch.randint(0, self.k_step, (b,), device=device).long()
-            return self.p_losses(spec, t, cond=cond)
+            x_recon, noise = self.p_losses(spec, t, cond=cond)
+            return x_recon, noise, t / self.timesteps
         else:
             # src_spec: [B, T, M] or [B, F, T, M]
             if src_spec is not None:

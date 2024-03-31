@@ -137,8 +137,9 @@ class AcousticTask(BaseTask):
                 losses['aux_mel_loss'] = aux_mel_loss
 
             if output.diff_out is not None:
-                x_recon, x_noise = output.diff_out
-                mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
+                x_recon, x_noise, timestep = output.diff_out
+                mel_loss = self.mel_loss(x_recon, x_noise, timesteps=timestep,
+                                         nonpadding=(mel2ph > 0).unsqueeze(-1).float())
                 losses['mel_loss'] = mel_loss
 
             return losses
@@ -212,6 +213,6 @@ class AcousticTask(BaseTask):
         mel_len = self.valid_dataset.metadata['mel'][data_idx]
         spec_cat = torch.cat([(out_spec - gt_spec).abs() + vmin, gt_spec, out_spec], -1)
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
-        self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}',  spec_to_figure(
+        self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}', spec_to_figure(
             spec_cat[:mel_len], vmin, vmax, title_text
         ), global_step=self.global_step)

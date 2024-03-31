@@ -11,6 +11,7 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding
 )
+from modules.diffusion.RectifiedFlow import RectifiedFlow
 from modules.diffusion.ddpm import (
     GaussianDiffusion, PitchDiffusion
 )
@@ -51,21 +52,35 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 aux_decoder_arch=self.shallow_args['aux_decoder_arch'],
                 aux_decoder_args=self.shallow_args['aux_decoder_args']
             )
-
-        self.diffusion = GaussianDiffusion(
-            out_dims=out_dims,
-            num_feats=1,
-            timesteps=hparams['timesteps'],
-            k_step=hparams['K_step'],
-            denoiser_type=hparams['diff_decoder_type'],
-            denoiser_args={
-                'n_layers': hparams['residual_layers'],
-                'n_chans': hparams['residual_channels'],
-                'n_dilates': hparams['dilation_cycle_length'],
-            },
-            spec_min=hparams['spec_min'],
-            spec_max=hparams['spec_max']
-        )
+        diffusion_type = hparams.get('diffusion_type', 'ddpm')
+        if diffusion_type == 'ddpm':
+            self.diffusion = GaussianDiffusion(
+                out_dims=out_dims,
+                num_feats=1,
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=hparams['spec_min'],
+                spec_max=hparams['spec_max']
+            )
+        elif diffusion_type == 'RectifiedFlow':
+            self.diffusion = RectifiedFlow(out_dims=out_dims,
+                                           num_feats=1,
+                                           timesteps=hparams['timesteps'],
+                                           k_step=hparams['K_step'],
+                                           denoiser_type=hparams['diff_decoder_type'],
+                                           denoiser_args={
+                                               'n_layers': hparams['residual_layers'],
+                                               'n_chans': hparams['residual_channels'],
+                                               'n_dilates': hparams['dilation_cycle_length'],
+                                           },
+                                           spec_min=hparams['spec_min'],
+                                           spec_max=hparams['spec_max'])
 
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
@@ -96,16 +111,16 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 else:
                     aux_out = None
                 if self.train_diffusion:
-                    x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-                    diff_out = (x_recon, noise)
+                    x_recon, noise, timestep = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                    diff_out = (x_recon, noise, timestep)
                 else:
                     diff_out = None
                 return ShallowDiffusionOutput(aux_out=aux_out, diff_out=diff_out)
 
             else:
                 aux_out = None
-                x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise))
+                x_recon, noise, timestep = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise, timestep))
 
 
 class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
