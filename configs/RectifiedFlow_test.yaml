@@ -5,7 +5,7 @@ diff_loss_type: l2_rf_norm
 
 diffusion_type: 'RectifiedFlow' #ddpm
 
-diff_accelerator: 'rk4' # euler
+diff_accelerator: 'rk4' # euler rk2 rk5 rk5_fp64 euler_fp64 rk4_fp64 rk2_fp64
 
 diff_speedup: 100
 timestep_type: 'continuous' #discrete

@@ -44,15 +44,13 @@ class RectifiedFlow(nn.Module):
         self.register_buffer('spec_min', spec_min)
         self.register_buffer('spec_max', spec_max)
 
-
-
     def get_timestep(self, B, device):
         if self.timestep_type == 'continuous':
-            t_start =  (self.timesteps - self.k_step) / self.timesteps
+            t_start = (self.timesteps - self.k_step) / self.timesteps
             t = t_start + (1.0 - t_start) * torch.rand((B,), device=device)
             return t, t * self.timesteps
         elif self.timestep_type == 'discrete':
-            t = torch.randint(0, self.k_step+1, (B,), device=device).long() + (self.timesteps - self.k_step) #todo
+            t = torch.randint(0, self.k_step + 1, (B,), device=device).long() + (self.timesteps - self.k_step)  # todo
 
             return t.float() / self.timesteps, t
         else:
@@ -110,6 +108,71 @@ class RectifiedFlow(nn.Module):
         return x, t
 
     @torch.no_grad()
+    def sample_rk2(self, x, t, dt, cond, model_fn):
+        k_1 = model_fn(x, self.timesteps * t, cond)
+        k_2 = model_fn(x + 0.5 * k_1 * dt, self.timesteps * (t + 0.5 * dt), cond)
+        x += k_2 * dt
+        t += dt
+        return x, t
+
+    @torch.no_grad()
+    def sample_rk5(self, x, t, dt, cond, model_fn):
+        k_1 = model_fn(x, self.timesteps * t, cond)
+        k_2 = model_fn(x + 0.25 * k_1 * dt, self.timesteps * (t + 0.25 * dt), cond)
+        k_3 = model_fn(x + 0.125 * (k_2 + k_1) * dt, self.timesteps * (t + 0.25 * dt), cond)
+        k_4 = model_fn(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.timesteps * (t + 0.5 * dt), cond)
+        k_5 = model_fn(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.timesteps * (t + 0.75 * dt), cond)
+        k_6 = model_fn(x - (3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.timesteps * (t + dt),
+                       cond)
+        x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt / 90
+        t += dt
+        return x, t
+
+    @torch.no_grad()
+    def sample_euler_fp64(self, x, t, dt, cond, model_fn):
+        x = x.double()
+        x += model_fn(x.float(), self.timesteps * t, cond).double() * dt.double()
+        t += dt
+        return x, t
+
+    @torch.no_grad()
+    def sample_rk4_fp64(self, x, t, dt, cond, model_fn):
+        x = x.double()
+        k_1 = model_fn(x.float(), self.timesteps * t, cond).double()
+        k_2 = model_fn((x + 0.5 * k_1 * dt.double()).float(), self.timesteps * (t + 0.5 * dt), cond).double()
+        k_3 = model_fn((x + 0.5 * k_2 * dt.double()).float(), self.timesteps * (t + 0.5 * dt), cond).double()
+        k_4 = model_fn((x + k_3 * dt.double()).float(), self.timesteps * (t + dt), cond).double()
+        x += (k_1 + 2 * k_2 + 2 * k_3 + k_4) * dt.double() / 6
+        t += dt
+        return x, t
+
+    @torch.no_grad()
+    def sample_rk2_fp64(self, x, t, dt, cond, model_fn):
+        x = x.double()
+        k_1 = model_fn(x.float(), self.timesteps * t, cond).double()
+        k_2 = model_fn((x + 0.5 * k_1 * dt.double()).float(), self.timesteps * (t + 0.5 * dt), cond).double()
+        x += k_2 * dt.double()
+        t += dt
+        return x, t
+
+    @torch.no_grad()
+    def sample_rk5_fp64(self, x, t, dt, cond, model_fn):
+        x = x.double()
+        k_1 = model_fn(x.float(), self.timesteps * t, cond).double()
+        k_2 = model_fn((x + 0.25 * k_1 * dt.double()).float(), self.timesteps * (t + 0.25 * dt), cond).double()
+        k_3 = model_fn((x + 0.125 * (k_2 + k_1) * dt.double()).float(), self.timesteps * (t + 0.25 * dt), cond).double()
+        k_4 = model_fn((x + 0.5 * (-k_2 + 2 * k_3) * dt.double()).float(), self.timesteps * (t + 0.5 * dt),
+                       cond).double()
+        k_5 = model_fn((x + 0.0625 * (3 * k_1 + 9 * k_4) * dt.double()).float(), self.timesteps * (t + 0.75 * dt),
+                       cond).double()
+        k_6 = model_fn((x - (3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
+                       self.timesteps * (t + dt),
+                       cond).double()
+        x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt.double() / 90
+        t += dt
+        return x, t
+
+    @torch.no_grad()
     def inference(self, cond, b=1, x_start=None, device=None):
         depth = hparams.get('K_step_infer', self.k_step)
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
@@ -147,14 +210,17 @@ class RectifiedFlow(nn.Module):
         if infer_step != 0:
             dt = (1.0 - t_start) / infer_step
             t = torch.full((b,), t_start, device=device)
-            algorithm_fn = {'euler': self.sample_euler, 'rk4': self.sample_rk4}.get(algorithm)
+            algorithm_fn = {'euler': self.sample_euler, 'rk4': self.sample_rk4, 'rk2': self.sample_rk2,
+                            'rk5': self.sample_rk5, 'rk5_fp64': self.sample_rk5_fp64,
+                            'euler_fp64': self.sample_euler_fp64,
+                            'rk4_fp64': self.sample_rk4_fp64, 'rk2_fp64': self.sample_rk2_fp64, }.get(algorithm)
             if algorithm_fn is None:
                 raise NotImplementedError(algorithm)
 
             for _ in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                x, t = algorithm_fn(x, t, dt, cond,model_fn=self.denoise_fn)
-
+                x, t = algorithm_fn(x, t, dt, cond, model_fn=self.denoise_fn)
+            x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
 
@@ -163,7 +229,6 @@ class RectifiedFlow(nn.Module):
 
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
-
 
 
 class RepetitiveRectifiedFlow(RectifiedFlow):
