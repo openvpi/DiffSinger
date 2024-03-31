@@ -198,14 +198,14 @@ class VarianceTask(BaseTask):
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
             nonpadding = (mel2ph > 0).unsqueeze(-1) if mel2ph is not None else None
             if pitch_pred is not None:
-                (pitch_x_recon, pitch_noise) = pitch_pred
+                (pitch_x_recon, pitch_noise,timestep) = pitch_pred
                 losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
-                    pitch_x_recon, pitch_noise, nonpadding=nonpadding
+                    pitch_x_recon, pitch_noise,timesteps=timestep, nonpadding=nonpadding
                 )
             if variances_pred is not None:
-                (variance_x_recon, variance_noise) = variances_pred
+                (variance_x_recon, variance_noise,timestep) = variances_pred
                 losses['var_loss'] = self.lambda_var_loss * self.var_loss(
-                    variance_x_recon, variance_noise, nonpadding=nonpadding
+                    variance_x_recon, variance_noise,timesteps=timestep, nonpadding=nonpadding
                 )
             return losses
 
