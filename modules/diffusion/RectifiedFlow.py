@@ -52,7 +52,7 @@ class RectifiedFlow(nn.Module):
             t = t_start + (1.0 - t_start) * torch.rand((B,), device=device)
             return t, t * self.timesteps
         elif self.timestep_type == 'discrete':
-            t = torch.randint(0, self.k_step, (B,), device=device).long() + (self.timesteps - self.k_step)
+            t = torch.randint(0, self.k_step+1, (B,), device=device).long() + (self.timesteps - self.k_step) #todo
 
             return t.float() / self.timesteps, t
         else:
