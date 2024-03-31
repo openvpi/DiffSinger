@@ -26,7 +26,8 @@ class DiffusionNoiseLoss(nn.Module):
 
     def l2_rf_norm(self, x_recon, noise, timestep):
         eps = 1e-8
-        timestep = timestep + eps
+        timestep = timestep.float()
+        timestep=torch.clip(timestep, 0+eps, 1-eps)
         weights = 0.398942 / timestep / (1 - timestep) * torch.exp(
             -0.5 * torch.log(timestep / (1 - timestep)) ** 2) + eps
         return weights[:, None, None, None] * self.loss(x_recon, noise)
