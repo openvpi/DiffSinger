@@ -11,7 +11,7 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding
 )
-from modules.diffusion.RectifiedFlow import RectifiedFlow
+from modules.diffusion.RectifiedFlow import RectifiedFlow, PitchRectifiedFlow, MultiVarianceRectifiedFlow
 from modules.diffusion.ddpm import (
     GaussianDiffusion, PitchDiffusion
 )
@@ -143,7 +143,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         )
         self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
-
+        diffusion_type = hparams.get('diffusion_type', 'ddpm')
         if self.predict_pitch:
             self.use_melody_encoder = hparams.get('use_melody_encoder', False)
             if self.use_melody_encoder:
@@ -154,21 +154,37 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_predictor = PitchDiffusion(
-                vmin=pitch_hparams['pitd_norm_min'],
-                vmax=pitch_hparams['pitd_norm_max'],
-                cmin=pitch_hparams['pitd_clip_min'],
-                cmax=pitch_hparams['pitd_clip_max'],
-                repeat_bins=pitch_hparams['repeat_bins'],
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args={
-                    'n_layers': pitch_hparams['residual_layers'],
-                    'n_chans': pitch_hparams['residual_channels'],
-                    'n_dilates': pitch_hparams['dilation_cycle_length'],
-                }
-            )
+
+            if diffusion_type == 'ddpm':
+                self.pitch_predictor = PitchDiffusion(
+                    vmin=pitch_hparams['pitd_norm_min'],
+                    vmax=pitch_hparams['pitd_norm_max'],
+                    cmin=pitch_hparams['pitd_clip_min'],
+                    cmax=pitch_hparams['pitd_clip_max'],
+                    repeat_bins=pitch_hparams['repeat_bins'],
+                    timesteps=hparams['timesteps'],
+                    k_step=hparams['K_step'],
+                    denoiser_type=hparams['diff_decoder_type'],
+                    denoiser_args={
+                        'n_layers': pitch_hparams['residual_layers'],
+                        'n_chans': pitch_hparams['residual_channels'],
+                        'n_dilates': pitch_hparams['dilation_cycle_length'],
+                    }
+                )
+            elif diffusion_type == 'RectifiedFlow':
+                self.diffusion = PitchRectifiedFlow( vmin=pitch_hparams['pitd_norm_min'],
+                    vmax=pitch_hparams['pitd_norm_max'],
+                    cmin=pitch_hparams['pitd_clip_min'],
+                    cmax=pitch_hparams['pitd_clip_max'],
+                    repeat_bins=pitch_hparams['repeat_bins'],
+                    timesteps=hparams['timesteps'],
+                    k_step=hparams['K_step'],
+                    denoiser_type=hparams['diff_decoder_type'],
+                    denoiser_args={
+                        'n_layers': pitch_hparams['residual_layers'],
+                        'n_chans': pitch_hparams['residual_channels'],
+                        'n_dilates': pitch_hparams['dilation_cycle_length'],
+                    })
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
@@ -176,7 +192,11 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 v_name: Linear(1, hparams['hidden_size'])
                 for v_name in self.variance_prediction_list
             })
-            self.variance_predictor = self.build_adaptor()
+
+            if diffusion_type == 'ddpm':
+                self.variance_predictor = self.build_adaptor()
+            elif diffusion_type == 'RectifiedFlow':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlow)
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,

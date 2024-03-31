@@ -1,3 +1,5 @@
+from typing import List, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,27 +43,7 @@ class RectifiedFlow(nn.Module):
         self.register_buffer('spec_min', spec_min)
         self.register_buffer('spec_max', spec_max)
 
-    def reflow_loss(self, x_1, t, cond, loss_type=None):
-        x_0 = torch.randn_like(x_1)
-        x_t = x_0 + t[:, None, None, None] * (x_1 - x_0)
-        v_pred = self.velocity_fn(x_t, 1000 * t, cond)
 
-        if loss_type is None:
-            loss_type = self.loss_type
-        else:
-            loss_type = loss_type
-
-        if loss_type == 'l1':
-            loss = (x_1 - x_0 - v_pred).abs().mean()
-        elif loss_type == 'l2':
-            loss = F.mse_loss(x_1 - x_0, v_pred)
-        elif loss_type == 'l2_lognorm':
-            weights = 0.398942 / t / (1 - t) * torch.exp(-0.5 * torch.log(t / (1 - t)) ** 2)
-            loss = torch.mean(weights[:, None, None, None] * F.mse_loss(x_1 - x_0, v_pred, reduction='none'))
-        else:
-            raise NotImplementedError()
-
-        return loss
 
     def get_timestep(self, B, device):
         if self.timestep_type == 'continuous':
@@ -180,3 +162,126 @@ class RectifiedFlow(nn.Module):
 
     def denorm_spec(self, x):
         return (x + 1) / 2 * (self.spec_max - self.spec_min) + self.spec_min
+
+
+
+class RepetitiveRectifiedFlow(RectifiedFlow):
+    def __init__(self, vmin: float | int | list, vmax: float | int | list, repeat_bins: int,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)
+        num_feats = 1 if isinstance(vmin, (float, int)) else len(vmin)
+        spec_min = [vmin] if num_feats == 1 else [[v] for v in vmin]
+        spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
+        self.repeat_bins = repeat_bins
+        super().__init__(
+            out_dims=repeat_bins, num_feats=num_feats,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas, spec_min=spec_min, spec_max=spec_max
+        )
+
+    def norm_spec(self, x):
+        """
+
+        :param x: [B, T] or [B, F, T]
+        :return [B, T, R] or [B, F, T, R]
+        """
+        if self.num_feats == 1:
+            repeats = [1, 1, self.repeat_bins]
+        else:
+            repeats = [1, 1, 1, self.repeat_bins]
+        return super().norm_spec(x.unsqueeze(-1).repeat(repeats))
+
+    def denorm_spec(self, x):
+        """
+
+        :param x: [B, T, R] or [B, F, T, R]
+        :return [B, T] or [B, F, T]
+        """
+        return super().denorm_spec(x).mean(dim=-1)
+
+
+class PitchRectifiedFlow(RepetitiveRectifiedFlow):
+    def __init__(self, vmin: float, vmax: float,
+                 cmin: float, cmax: float, repeat_bins,
+                 timesteps=1000, k_step=1000,
+                 denoiser_type=None, denoiser_args=None,
+                 betas=None):
+        self.vmin = vmin  # norm min
+        self.vmax = vmax  # norm max
+        self.cmin = cmin  # clip min
+        self.cmax = cmax  # clip max
+        super().__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def norm_spec(self, x):
+        return super().norm_spec(x.clamp(min=self.cmin, max=self.cmax))
+
+    def denorm_spec(self, x):
+        return super().denorm_spec(x).clamp(min=self.cmin, max=self.cmax)
+
+
+class MultiVarianceRectifiedFlow(RepetitiveRectifiedFlow):
+    def __init__(
+            self, ranges: List[Tuple[float, float]],
+            clamps: List[Tuple[float | None, float | None] | None],
+            repeat_bins, timesteps=1000, k_step=1000,
+            denoiser_type=None, denoiser_args=None,
+            betas=None
+    ):
+        assert len(ranges) == len(clamps)
+        self.clamps = clamps
+        vmin = [r[0] for r in ranges]
+        vmax = [r[1] for r in ranges]
+        if len(vmin) == 1:
+            vmin = vmin[0]
+        if len(vmax) == 1:
+            vmax = vmax[0]
+        super().__init__(
+            vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
+            timesteps=timesteps, k_step=k_step,
+            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            betas=betas
+        )
+
+    def clamp_spec(self, xs: list | tuple):
+        clamped = []
+        for x, c in zip(xs, self.clamps):
+            if c is None:
+                clamped.append(x)
+                continue
+            clamped.append(x.clamp(min=c[0], max=c[1]))
+        return clamped
+
+    def norm_spec(self, xs: list | tuple):
+        """
+
+        :param xs: sequence of [B, T]
+        :return: [B, F, T] => super().norm_spec(xs) => [B, F, T, R]
+        """
+        assert len(xs) == self.num_feats
+        clamped = self.clamp_spec(xs)
+        xs = torch.stack(clamped, dim=1)  # [B, F, T]
+        if self.num_feats == 1:
+            xs = xs.squeeze(1)  # [B, T]
+        return super().norm_spec(xs)
+
+    def denorm_spec(self, xs):
+        """
+
+        :param xs: [B, T, R] or [B, F, T, R] => super().denorm_spec(xs) => [B, T] or [B, F, T]
+        :return: sequence of [B, T]
+        """
+        xs = super().denorm_spec(xs)
+        if self.num_feats == 1:
+            xs = [xs]
+        else:
+            xs = xs.unbind(dim=1)
+        assert len(xs) == self.num_feats
+        return self.clamp_spec(xs)
