@@ -122,7 +122,7 @@ class RectifiedFlow(nn.Module):
         k_3 = model_fn(x + 0.125 * (k_2 + k_1) * dt, self.timesteps * (t + 0.25 * dt), cond)
         k_4 = model_fn(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.timesteps * (t + 0.5 * dt), cond)
         k_5 = model_fn(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.timesteps * (t + 0.75 * dt), cond)
-        k_6 = model_fn(x  (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.timesteps * (t + dt),
+        k_6 = model_fn(x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.timesteps * (t + dt),
                        cond)
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt / 90
         t += dt
@@ -165,7 +165,7 @@ class RectifiedFlow(nn.Module):
                        cond).double()
         k_5 = model_fn((x + 0.0625 * (3 * k_1 + 9 * k_4) * dt.double()).float(), self.timesteps * (t + 0.75 * dt),
                        cond).double()
-        k_6 = model_fn((x (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
+        k_6 = model_fn((x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
                        self.timesteps * (t + dt),
                        cond).double()
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt.double() / 90
@@ -209,7 +209,7 @@ class RectifiedFlow(nn.Module):
 
         if infer_step != 0:
             dt = (1.0 - t_start) / infer_step
-            t = torch.full((b,), t_start, device=device)
+            # t = torch.full((b,), t_start, device=device)
             algorithm_fn = {'euler': self.sample_euler, 'rk4': self.sample_rk4, 'rk2': self.sample_rk2,
                             'rk5': self.sample_rk5, 'rk5_fp64': self.sample_rk5_fp64,
                             'euler_fp64': self.sample_euler_fp64,
@@ -217,9 +217,9 @@ class RectifiedFlow(nn.Module):
             if algorithm_fn is None:
                 raise NotImplementedError(algorithm)
 
-            for _ in tqdm(range(infer_step), desc='sample time step', total=infer_step,
+            for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                x, t = algorithm_fn(x, t, dt, cond, model_fn=self.denoise_fn)
+                x, _ = algorithm_fn(x, i*dt, dt, cond, model_fn=self.denoise_fn)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
