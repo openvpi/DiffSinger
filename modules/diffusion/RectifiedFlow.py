@@ -203,9 +203,9 @@ class RectifiedFlow(nn.Module):
 
         else:
             infer_step = int(t_max)
-            for i in tqdm(reversed(range(0, t_max)), desc='sample time step', total=t_max,
-                          disable=not hparams['infer'], leave=False):
-                x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
+            # for i in tqdm(reversed(range(0, t_max)), desc='sample time step', total=t_max,
+            #               disable=not hparams['infer'], leave=False):
+            #     x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
 
         if infer_step != 0:
             dt = (1.0 - t_start) / infer_step
