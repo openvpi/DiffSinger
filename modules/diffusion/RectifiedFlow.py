@@ -216,10 +216,10 @@ class RectifiedFlow(nn.Module):
                             'rk4_fp64': self.sample_rk4_fp64, 'rk2_fp64': self.sample_rk2_fp64, }.get(algorithm)
             if algorithm_fn is None:
                 raise NotImplementedError(algorithm)
-
+            dts=torch.tensor(dt).to(x)
             for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                x, _ = algorithm_fn(x,t_start+ i*dt, dt, cond, model_fn=self.denoise_fn)
+                x, _ = algorithm_fn(x,t_start+ i*dts, dt, cond, model_fn=self.denoise_fn)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
