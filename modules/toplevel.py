@@ -81,6 +81,8 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                                            },
                                            spec_min=hparams['spec_min'],
                                            spec_max=hparams['spec_max'])
+        else:
+            raise NotImplementedError(diffusion_type)
 
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
@@ -185,6 +187,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                         'n_chans': pitch_hparams['residual_channels'],
                         'n_dilates': pitch_hparams['dilation_cycle_length'],
                     })
+            else:
+                raise NotImplementedError(diffusion_type)
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
@@ -197,6 +201,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 self.variance_predictor = self.build_adaptor()
             elif diffusion_type == 'RectifiedFlow':
                 self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlow)
+            else:
+                raise NotImplementedError(diffusion_type)
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
