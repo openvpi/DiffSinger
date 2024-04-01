@@ -172,7 +172,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                     }
                 )
             elif diffusion_type == 'RectifiedFlow':
-                self.diffusion = PitchRectifiedFlow( vmin=pitch_hparams['pitd_norm_min'],
+                self.pitch_predictor = PitchRectifiedFlow( vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
                     cmin=pitch_hparams['pitd_clip_min'],
                     cmax=pitch_hparams['pitd_clip_max'],
