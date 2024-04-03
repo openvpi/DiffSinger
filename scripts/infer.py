@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 from typing import Tuple
 
-root_dir = Path(__file__).parent.parent.resolve()
+root_dir = Path(__file__).resolve().parent.parent
 os.environ['PYTHONPATH'] = str(root_dir)
 sys.path.insert(0, str(root_dir))
 
@@ -23,9 +23,10 @@ def find_exp(exp):
                 exp = subdir.name
                 break
         else:
-            assert False, \
-                f'There are no matching exp starting with \'{exp}\' in \'checkpoints\' folder. ' \
+            raise click.BadParameter(
+                f'There are no matching exp starting with \'{exp}\' in \'checkpoints\' folder. '
                 'Please specify \'--exp\' as the folder name or prefix.'
+            )
     else:
         print(f'| found ckpt by name: {exp}')
     return exp
@@ -37,25 +38,81 @@ def main():
 
 
 @main.command(help='Run DiffSinger acoustic model inference')
-@click.argument('proj', type=str, metavar='DS_FILE')
-@click.option('--exp', type=str, required=True, metavar='EXP', help='Selection of model')
-@click.option('--ckpt', type=int, required=False, metavar='STEPS', help='Selection of checkpoint training steps')
-@click.option('--spk', type=str, required=False, help='Speaker name or mix of speakers')
-@click.option('--out', type=str, required=False, metavar='DIR', help='Path of the output folder')
-@click.option('--title', type=str, required=False, help='Title of output file')
-@click.option('--num', type=int, required=False, default=1, help='Number of runs')
-@click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
-@click.option('--gender', type=float, required=False, help='Formant shifting (gender control)')
-@click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
-@click.option('--depth', type=int, required=False, default=-1, help='Shallow diffusion depth')
-@click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
-@click.option('--mel', is_flag=True, help='Save intermediate mel format instead of waveform')
+@click.argument(
+    'proj', type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, readable=True,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    metavar='DS_FILE'
+)
+@click.option(
+    '--exp', type=str,
+    required=True, metavar='EXP',
+    callback=lambda ctx, param, value: find_exp(value),
+    help='Selection of model'
+)
+@click.option(
+    '--ckpt', type=click.IntRange(min=0),
+    required=False, metavar='STEPS',
+    help='Selection of checkpoint training steps'
+)
+@click.option(
+    '--spk', type=click.STRING,
+    required=False,
+    help='Speaker name or mixture of speakers'
+)
+@click.option(
+    '--out', type=click.Path(
+        file_okay=False, dir_okay=True, path_type=pathlib.Path
+    ),
+    required=False,
+    help='Path of the output folder'
+)
+@click.option(
+    '--title', type=click.STRING,
+    required=False,
+    help='Title of output file'
+)
+@click.option(
+    '--num', type=click.IntRange(min=1),
+    required=False, default=1,
+    help='Number of runs'
+)
+@click.option(
+    '--key', type=click.INT,
+    required=False, default=0,
+    help='Key transition of pitch'
+)
+@click.option(
+    '--gender', type=click.FloatRange(min=-1, max=1),
+    required=False,
+    help='Formant shifting (gender control)'
+)
+@click.option(
+    '--seed', type=click.INT,
+    required=False, default=-1,
+    help='Random seed of the inference'
+)
+@click.option(
+    '--depth', type=click.INT,
+    required=False, default=-1,
+    help='Shallow diffusion depth'
+)
+@click.option(
+    '--speedup', type=click.INT,
+    required=False, default=0,
+    help='Diffusion acceleration ratio'
+)
+@click.option(
+    '--mel', is_flag=True,
+    help='Save intermediate mel format instead of waveform'
+)
 def acoustic(
-        proj: str,
+        proj: pathlib.Path,
         exp: str,
         ckpt: int,
         spk: str,
-        out: str,
+        out: pathlib.Path,
         title: str,
         num: int,
         key: int,
@@ -65,16 +122,9 @@ def acoustic(
         speedup: int,
         mel: bool
 ):
-    proj = pathlib.Path(proj).resolve()
     name = proj.stem if not title else title
-    exp = find_exp(exp)
-    if out:
-        out = pathlib.Path(out)
-    else:
+    if out is None:
         out = proj.parent
-
-    if gender is not None:
-        assert -1 <= gender <= 1, 'Gender must be in [-1, 1].'
 
     with open(proj, 'r', encoding='utf-8') as f:
         params = json.load(f)
@@ -146,25 +196,77 @@ def acoustic(
 
 
 @main.command(help='Run DiffSinger variance model inference')
-@click.argument('proj', type=str, metavar='DS_FILE')
-@click.option('--exp', type=str, required=True, metavar='EXP', help='Selection of model')
-@click.option('--ckpt', type=int, required=False, metavar='STEPS', help='Selection of checkpoint training steps')
-@click.option('--predict', type=str, multiple=True, metavar='TAGS', help='Parameters to predict')
-@click.option('--spk', type=str, required=False, help='Speaker name or mix of speakers')
-@click.option('--out', type=str, required=False, metavar='DIR', help='Path of the output folder')
-@click.option('--title', type=str, required=False, help='Title of output file')
-@click.option('--num', type=int, required=False, default=1, help='Number of runs')
-@click.option('--key', type=int, required=False, default=0, help='Key transition of pitch')
-@click.option('--expr', type=float, required=False, help='Static expressiveness control')
-@click.option('--seed', type=int, required=False, default=-1, help='Random seed of the inference')
-@click.option('--speedup', type=int, required=False, default=0, help='Diffusion acceleration ratio')
+@click.argument(
+    'proj', type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, readable=True,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    metavar='DS_FILE'
+)
+@click.option(
+    '--exp', type=str,
+    required=True, metavar='EXP',
+    callback=lambda ctx, param, value: find_exp(value),
+    help='Selection of model'
+)
+@click.option(
+    '--ckpt', type=click.IntRange(min=0),
+    required=False, metavar='STEPS',
+    help='Selection of checkpoint training steps'
+)
+@click.option(
+    '--predict', type=click.STRING,
+    multiple=True, metavar='TAGS',
+    help='Parameters to predict'
+)
+@click.option(
+    '--spk', type=click.STRING,
+    required=False,
+    help='Speaker name or mixture of speakers'
+)
+@click.option(
+    '--out', type=click.Path(
+        file_okay=False, dir_okay=True, path_type=pathlib.Path
+    ),
+    required=False,
+    help='Path of the output folder'
+)
+@click.option(
+    '--title', type=click.STRING,
+    required=False,
+    help='Title of output file'
+)
+@click.option(
+    '--num', type=click.IntRange(min=1),
+    required=False, default=1,
+    help='Number of runs'
+)
+@click.option(
+    '--key', type=click.INT,
+    required=False, default=0,
+    help='Key transition of pitch'
+)
+@click.option(
+    '--expr', type=click.FloatRange(min=0, max=1),
+    required=False, help='Static expressiveness control'
+)
+@click.option(
+    '--seed', type=click.INT,
+    required=False, default=-1,
+    help='Random seed of the inference'
+)
+@click.option(
+    '--speedup', type=click.INT,
+    required=False, default=0,
+    help='Diffusion acceleration ratio'
+)
 def variance(
-        proj: str,
+        proj: pathlib.Path,
         exp: str,
         ckpt: int,
         spk: str,
         predict: Tuple[str],
-        out: str,
+        out: pathlib.Path,
         title: str,
         num: int,
         key: int,
@@ -172,18 +274,11 @@ def variance(
         seed: int,
         speedup: int
 ):
-    proj = pathlib.Path(proj).resolve()
     name = proj.stem if not title else title
-    exp = find_exp(exp)
-    if out:
-        out = pathlib.Path(out)
-    else:
+    if out is None:
         out = proj.parent
     if (not out or out.resolve() == proj.parent.resolve()) and not title:
         name += '_variance'
-
-    if expr is not None:
-        assert 0 <= expr <= 1, 'Expressiveness must be in [0, 1].'
 
     with open(proj, 'r', encoding='utf-8') as f:
         params = json.load(f)
