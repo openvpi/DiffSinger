@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 
 from modules.diffusion.ddpm import MultiVarianceDiffusion
+from utils import filter_kwargs
 from utils.hparams import hparams
 
 VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension']
@@ -67,19 +68,23 @@ class ParameterAdaptorModule(torch.nn.Module):
             f'Total number of repeat bins must be divisible by number of ' \
             f'variance parameters ({len(self.variance_prediction_list)}).'
         repeat_bins = total_repeat_bins // len(self.variance_prediction_list)
-        return cls(
-            ranges=ranges,
-            clamps=clamps,
-            repeat_bins=repeat_bins,
-            timesteps=hparams['timesteps'],
-            k_step=hparams['K_step'],
-            denoiser_type=hparams['diff_decoder_type'],
-            denoiser_args={
-                'n_layers': variances_hparams['residual_layers'],
-                'n_chans': variances_hparams['residual_channels'],
-                'n_dilates': variances_hparams['dilation_cycle_length'],
-            }
+        kwargs = filter_kwargs(
+            {
+                'ranges': ranges,
+                'clamps': clamps,
+                'repeat_bins': repeat_bins,
+                'timesteps': hparams.get('timesteps'),
+                'time_scale_factor': hparams['time_scale_factor'],
+                'denoiser_type': hparams['diff_decoder_type'],
+                'denoiser_args': {
+                    'n_layers': variances_hparams['residual_layers'],
+                    'n_chans': variances_hparams['residual_channels'],
+                    'n_dilates': variances_hparams['dilation_cycle_length'],
+                }
+            },
+            cls
         )
+        return cls(**kwargs)
 
     def collect_variance_inputs(self, **kwargs) -> list:
         return [kwargs.get(name) for name in self.variance_prediction_list]

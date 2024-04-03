@@ -69,18 +69,20 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 spec_max=hparams['spec_max']
             )
         elif diffusion_type == 'RectifiedFlow':
-            self.diffusion = RectifiedFlow(out_dims=out_dims,
-                                           num_feats=1,
-                                           timesteps=hparams['timesteps'],
-                                           k_step=hparams['K_step'],
-                                           denoiser_type=hparams['diff_decoder_type'],
-                                           denoiser_args={
-                                               'n_layers': hparams['residual_layers'],
-                                               'n_chans': hparams['residual_channels'],
-                                               'n_dilates': hparams['dilation_cycle_length'],
-                                           },
-                                           spec_min=hparams['spec_min'],
-                                           spec_max=hparams['spec_max'])
+            self.diffusion = RectifiedFlow(
+                out_dims=out_dims,
+                num_feats=1,
+                t_start=hparams['T_start'],
+                time_scale_factor=hparams['time_scale_factor'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=hparams['spec_min'],
+                spec_max=hparams['spec_max']
+            )
         else:
             raise NotImplementedError(diffusion_type)
 
@@ -174,19 +176,20 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                     }
                 )
             elif diffusion_type == 'RectifiedFlow':
-                self.pitch_predictor = PitchRectifiedFlow( vmin=pitch_hparams['pitd_norm_min'],
+                self.pitch_predictor = PitchRectifiedFlow(
+                    vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
                     cmin=pitch_hparams['pitd_clip_min'],
                     cmax=pitch_hparams['pitd_clip_max'],
                     repeat_bins=pitch_hparams['repeat_bins'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
+                    time_scale_factor=hparams['time_scale_factor'],
                     denoiser_type=hparams['diff_decoder_type'],
                     denoiser_args={
                         'n_layers': pitch_hparams['residual_layers'],
                         'n_chans': pitch_hparams['residual_channels'],
                         'n_dilates': pitch_hparams['dilation_cycle_length'],
-                    })
+                    }
+                )
             else:
                 raise NotImplementedError(diffusion_type)
 

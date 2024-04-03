@@ -13,7 +13,7 @@ from tqdm import tqdm
 from modules.diffusion.wavenet import WaveNet
 from utils.hparams import hparams
 
-DIFF_DENOISERS = {
+BACKBONES = {
     'wavenet': WaveNet
 }
 
@@ -68,7 +68,7 @@ class GaussianDiffusion(nn.Module):
                  denoiser_type=None, denoiser_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](out_dims, num_feats, **denoiser_args)
+        self.denoise_fn: nn.Module = BACKBONES[denoiser_type](out_dims, num_feats, **denoiser_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
 
@@ -224,6 +224,10 @@ class GaussianDiffusion(nn.Module):
 
     def inference(self, cond, b=1, x_start=None, device=None):
         depth = hparams.get('K_step_infer', self.k_step)
+        speedup = hparams['diff_speedup']
+        if speedup > 0:
+            assert depth % speedup == 0, f'Acceleration ratio must be a factor of diffusion depth {depth}.'
+
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
         if self.use_shallow_diffusion:
             t_max = min(depth, self.k_step)
@@ -241,7 +245,7 @@ class GaussianDiffusion(nn.Module):
             assert x_start is not None, 'Missing shallow diffusion source.'
             x = x_start
 
-        if hparams['diff_speedup'] > 1 and t_max > 0:
+        if speedup > 1 and t_max > 0:
             algorithm = hparams['diff_accelerator']
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
@@ -322,7 +326,7 @@ class GaussianDiffusion(nn.Module):
                 self.bar.close()
             elif algorithm == 'pndm':
                 self.noise_list = deque(maxlen=4)
-                iteration_interval = hparams['diff_speedup']
+                iteration_interval = speedup
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
                         total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
@@ -332,7 +336,7 @@ class GaussianDiffusion(nn.Module):
                         iteration_interval, cond=cond
                     )
             elif algorithm == 'ddim':
-                iteration_interval = hparams['diff_speedup']
+                iteration_interval = speedup
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
                         total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
@@ -384,8 +388,8 @@ class GaussianDiffusion(nn.Module):
 
 
 class RepetitiveDiffusion(GaussianDiffusion):
-    def __init__(self, vmin: float | int | list, vmax: float | int | list, repeat_bins: int,
-                 timesteps=1000, k_step=1000,
+    def __init__(self, vmin: float | int | list, vmax: float | int | list,
+                 repeat_bins: int, timesteps=1000, k_step=1000,
                  denoiser_type=None, denoiser_args=None,
                  betas=None):
         assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)

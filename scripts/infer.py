@@ -94,14 +94,14 @@ def main():
     help='Random seed of the inference'
 )
 @click.option(
-    '--depth', type=click.INT,
-    required=False, default=-1,
+    '--depth', type=click.FloatRange(min=0, max=1),
+    required=False,
     help='Shallow diffusion depth'
 )
 @click.option(
-    '--speedup', type=click.INT,
-    required=False, default=0,
-    help='Diffusion acceleration ratio'
+    '--steps', type=click.IntRange(min=1),
+    required=False,
+    help='Diffusion sampling steps'
 )
 @click.option(
     '--mel', is_flag=True,
@@ -118,8 +118,8 @@ def acoustic(
         key: int,
         gender: float,
         seed: int,
-        depth: int,
-        speedup: int,
+        depth: float,
+        steps: int,
         mel: bool
 ):
     name = proj.stem if not title else title
@@ -159,20 +159,46 @@ def acoustic(
         f'Vocoder ckpt \'{hparams["vocoder_ckpt"]}\' not found. ' \
         f'Please put it to the checkpoints directory to run inference.'
 
-    if depth >= 0:
-        assert depth <= hparams['K_step'], f'Diffusion depth should not be larger than K_step {hparams["K_step"]}.'
-        hparams['K_step_infer'] = depth
-    elif hparams.get('use_shallow_diffusion', False):
-        depth = hparams['K_step_infer']
-    else:
-        depth = hparams['K_step']  # gaussian start (full depth diffusion)
-
-    if speedup > 0:
-        assert depth % speedup == 0, f'Acceleration ratio must be factor of diffusion depth {depth}.'
-        hparams['diff_speedup'] = speedup
-    elif 'diff_speedup' not in hparams:
-        # NOTICE: this is for compatibility
+    # For compatibility:
+    # migrate timesteps, K_step, K_step_infer, diff_speedup to time_scale_factor, T_start, T_start_infer, sampling_steps
+    if 'diff_speedup' not in hparams and 'pndm_speedup' in hparams:
         hparams['diff_speedup'] = hparams['pndm_speedup']
+    if 'T_start' not in hparams:
+        hparams['T_start'] = 1 - hparams['K_step'] / hparams['timesteps']
+    if 'T_start_infer' not in hparams:
+        hparams['T_start_infer'] = 1 - hparams['K_step_infer'] / hparams['timesteps']
+    if 'sampling_steps' not in hparams:
+        if hparams['use_shallow_diffusion']:
+            hparams['sampling_steps'] = hparams['K_step_infer'] // hparams['diff_speedup']
+        else:
+            hparams['sampling_steps'] = hparams['timesteps'] // hparams['diff_speedup']
+    if 'time_scale_factor' not in hparams:
+        hparams['time_scale_factor'] = hparams['timesteps']
+
+    if depth is not None:
+        assert depth <= 1 - hparams['T_start'], (
+            f"Depth should not be larger than 1 - T_start ({1 - hparams['T_start']})"
+        )
+        hparams['K_step_infer'] = round(hparams['timesteps'] * depth)
+        hparams['T_start_infer'] = 1 - depth
+    if steps is not None:
+        if hparams['use_shallow_diffusion']:
+            step_size = (1 - hparams['T_start_infer']) / steps
+            if 'K_step_infer' in hparams:
+                hparams['diff_speedup'] = round(step_size * hparams['K_step_infer'])
+        else:
+            if 'timesteps' in hparams:
+                hparams['diff_speedup'] = round(hparams['timesteps'] / steps)
+        hparams['sampling_steps'] = steps
+    # log all the six migrated parameters
+    print('timesteps:', hparams.get('timesteps'))
+    print('K_step:', hparams.get('K_step'))
+    print('K_step_infer:', hparams.get('K_step_infer'))
+    print('diff_speedup:', hparams.get('diff_speedup'))
+    print('T_start:', hparams['T_start'])
+    print('T_start_infer:', hparams.get('T_start_infer'))
+    print('sampling_steps:', hparams.get('sampling_steps'))
+    print('time_scale_factor:', hparams.get('time_scale_factor'))
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
@@ -256,9 +282,9 @@ def acoustic(
     help='Random seed of the inference'
 )
 @click.option(
-    '--speedup', type=click.INT,
-    required=False, default=0,
-    help='Diffusion acceleration ratio'
+    '--steps', type=click.IntRange(min=1),
+    required=False,
+    help='Diffusion sampling steps'
 )
 def variance(
         proj: pathlib.Path,
@@ -272,7 +298,7 @@ def variance(
         key: int,
         expr: float,
         seed: int,
-        speedup: int
+        steps: int
 ):
     name = proj.stem if not title else title
     if out is None:
@@ -309,12 +335,24 @@ def variance(
     from utils.hparams import set_hparams, hparams
     set_hparams()
 
-    if speedup > 0:
-        assert hparams['K_step'] % speedup == 0, f'Acceleration ratio must be factor of K_step {hparams["K_step"]}.'
-        hparams['diff_speedup'] = speedup
-    elif 'diff_speedup' not in hparams:
-        # NOTICE: this is for compatibility
+    # For compatibility:
+    # migrate timesteps, K_step, K_step_infer, diff_speedup to time_scale_factor, T_start, T_start_infer, sampling_steps
+    if 'diff_speedup' not in hparams and 'pndm_speedup' in hparams:
         hparams['diff_speedup'] = hparams['pndm_speedup']
+    if 'sampling_steps' not in hparams:
+        hparams['sampling_steps'] = hparams['timesteps'] // hparams['diff_speedup']
+    if 'time_scale_factor' not in hparams:
+        hparams['time_scale_factor'] = hparams['timesteps']
+
+    if steps is not None:
+        if 'timesteps' in hparams:
+            hparams['diff_speedup'] = round(hparams['timesteps'] / steps)
+        hparams['sampling_steps'] = steps
+    # log all the six migrated parameters
+    print('timesteps:', hparams.get('timesteps'))
+    print('diff_speedup:', hparams.get('diff_speedup'))
+    print('sampling_steps:', hparams.get('sampling_steps'))
+    print('time_scale_factor:', hparams.get('time_scale_factor'))
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
