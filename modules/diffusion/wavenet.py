@@ -67,7 +67,7 @@ class WaveNet(nn.Module):
         super().__init__()
         self.in_dims = in_dims
         self.n_feats = n_feats
-        self.use_sinusoidal_pos_embed = hparams.get('use_sinusoidal_pos_embed', False)
+        self.use_sinusoidal_pos_embed = hparams.get('use_sinusoidal_pos_embed', True)
         self.input_projection = Conv1d(in_dims * n_feats, n_chans, 1)
         if self.use_sinusoidal_pos_embed:
             self.diffusion_embedding = SinusoidalPosEmb(n_chans)
