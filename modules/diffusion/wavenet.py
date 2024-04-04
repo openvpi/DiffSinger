@@ -67,13 +67,17 @@ class WaveNet(nn.Module):
         super().__init__()
         self.in_dims = in_dims
         self.n_feats = n_feats
+        self.use_sinusoidal_pos_embed = hparams.get('use_sinusoidal_pos_embed', False)
         self.input_projection = Conv1d(in_dims * n_feats, n_chans, 1)
-        self.diffusion_embedding = SinusoidalPosEmb(n_chans)
-        self.mlp = nn.Sequential(
-            nn.Linear(n_chans, n_chans * 4),
-            nn.Mish(),
-            nn.Linear(n_chans * 4, n_chans)
-        )
+        if self.use_sinusoidal_pos_embed:
+            self.diffusion_embedding = SinusoidalPosEmb(n_chans)
+            self.mlp = nn.Sequential(
+                nn.Linear(n_chans, n_chans * 4),
+                nn.Mish(),
+                nn.Linear(n_chans * 4, n_chans)
+            )
+        else:
+            self.diffusion_embedding = nn.Linear(1, n_chans)
         self.residual_layers = nn.ModuleList([
             ResidualBlock(
                 encoder_hidden=hparams['hidden_size'],
@@ -100,8 +104,11 @@ class WaveNet(nn.Module):
         x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)
-        diffusion_step = self.diffusion_embedding(diffusion_step)
-        diffusion_step = self.mlp(diffusion_step)
+        if self.use_sinusoidal_pos_embed:
+            diffusion_step = self.diffusion_embedding(diffusion_step)
+            diffusion_step = self.mlp(diffusion_step)
+        else:
+            diffusion_step = self.diffusion_embedding(diffusion_step[..., None])
         skip = []
         for layer in self.residual_layers:
             x, skip_connection = layer(x, cond, diffusion_step)
