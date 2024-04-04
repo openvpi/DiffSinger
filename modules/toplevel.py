@@ -52,8 +52,8 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 aux_decoder_arch=self.shallow_args['aux_decoder_arch'],
                 aux_decoder_args=self.shallow_args['aux_decoder_args']
             )
-        diffusion_type = hparams.get('diffusion_type', 'ddpm')
-        if diffusion_type == 'ddpm':
+        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
+        if self.diffusion_type == 'ddpm':
             self.diffusion = GaussianDiffusion(
                 out_dims=out_dims,
                 num_feats=1,
@@ -68,7 +68,7 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 spec_min=hparams['spec_min'],
                 spec_max=hparams['spec_max']
             )
-        elif diffusion_type == 'RectifiedFlow':
+        elif self.diffusion_type == 'RectifiedFlow':
             self.diffusion = RectifiedFlow(
                 out_dims=out_dims,
                 num_feats=1,
@@ -84,7 +84,7 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 spec_max=hparams['spec_max']
             )
         else:
-            raise NotImplementedError(diffusion_type)
+            raise NotImplementedError(self.diffusion_type)
 
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
@@ -147,7 +147,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         )
         self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
-        diffusion_type = hparams.get('diffusion_type', 'ddpm')
+        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
         if self.predict_pitch:
             self.use_melody_encoder = hparams.get('use_melody_encoder', False)
             if self.use_melody_encoder:
@@ -159,7 +159,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
 
-            if diffusion_type == 'ddpm':
+            if self.diffusion_type == 'ddpm':
                 self.pitch_predictor = PitchDiffusion(
                     vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
@@ -175,7 +175,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                         'n_dilates': pitch_hparams['dilation_cycle_length'],
                     }
                 )
-            elif diffusion_type == 'RectifiedFlow':
+            elif self.diffusion_type == 'RectifiedFlow':
                 self.pitch_predictor = PitchRectifiedFlow(
                     vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
@@ -191,7 +191,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                     }
                 )
             else:
-                raise NotImplementedError(diffusion_type)
+                raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
@@ -200,12 +200,12 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 for v_name in self.variance_prediction_list
             })
 
-            if diffusion_type == 'ddpm':
+            if self.diffusion_type == 'ddpm':
                 self.variance_predictor = self.build_adaptor()
-            elif diffusion_type == 'RectifiedFlow':
+            elif self.diffusion_type == 'RectifiedFlow':
                 self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlow)
             else:
-                raise NotImplementedError(diffusion_type)
+                raise NotImplementedError(self.diffusion_type)
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,

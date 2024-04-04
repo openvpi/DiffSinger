@@ -79,80 +79,80 @@ class RectifiedFlow(nn.Module):
             return self.denorm_spec(x)
 
     @torch.no_grad()
-    def sample_euler(self, x, t, dt, cond, model_fn):
-        x += model_fn(x, self.time_scale_factor * t, cond) * dt
+    def sample_euler(self, x, t, dt, cond):
+        x += self.denoise_fn(x, self.time_scale_factor * t, cond) * dt
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk4(self, x, t, dt, cond, model_fn):
-        k_1 = model_fn(x, self.time_scale_factor * t, cond)
-        k_2 = model_fn(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
-        k_3 = model_fn(x + 0.5 * k_2 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
-        k_4 = model_fn(x + k_3 * dt, self.time_scale_factor * (t + dt), cond)
+    def sample_rk4(self, x, t, dt, cond):
+        k_1 = self.denoise_fn(x, self.time_scale_factor * t, cond)
+        k_2 = self.denoise_fn(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+        k_3 = self.denoise_fn(x + 0.5 * k_2 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+        k_4 = self.denoise_fn(x + k_3 * dt, self.time_scale_factor * (t + dt), cond)
         x += (k_1 + 2 * k_2 + 2 * k_3 + k_4) * dt / 6
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk2(self, x, t, dt, cond, model_fn):
-        k_1 = model_fn(x, self.time_scale_factor * t, cond)
-        k_2 = model_fn(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+    def sample_rk2(self, x, t, dt, cond):
+        k_1 = self.denoise_fn(x, self.time_scale_factor * t, cond)
+        k_2 = self.denoise_fn(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
         x += k_2 * dt
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk5(self, x, t, dt, cond, model_fn):
-        k_1 = model_fn(x, self.time_scale_factor * t, cond)
-        k_2 = model_fn(x + 0.25 * k_1 * dt, self.time_scale_factor * (t + 0.25 * dt), cond)
-        k_3 = model_fn(x + 0.125 * (k_2 + k_1) * dt, self.time_scale_factor * (t + 0.25 * dt), cond)
-        k_4 = model_fn(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
-        k_5 = model_fn(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.time_scale_factor * (t + 0.75 * dt), cond)
-        k_6 = model_fn(x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.time_scale_factor * (t + dt),
+    def sample_rk5(self, x, t, dt, cond):
+        k_1 = self.denoise_fn(x, self.time_scale_factor * t, cond)
+        k_2 = self.denoise_fn(x + 0.25 * k_1 * dt, self.time_scale_factor * (t + 0.25 * dt), cond)
+        k_3 = self.denoise_fn(x + 0.125 * (k_2 + k_1) * dt, self.time_scale_factor * (t + 0.25 * dt), cond)
+        k_4 = self.denoise_fn(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+        k_5 = self.denoise_fn(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.time_scale_factor * (t + 0.75 * dt), cond)
+        k_6 = self.denoise_fn(x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7, self.time_scale_factor * (t + dt),
                        cond)
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt / 90
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_euler_fp64(self, x, t, dt, cond, model_fn):
+    def sample_euler_fp64(self, x, t, dt, cond):
         x = x.double()
-        x += model_fn(x.float(), self.time_scale_factor * t, cond).double() * dt.double()
+        x += self.denoise_fn(x.float(), self.time_scale_factor * t, cond).double() * dt.double()
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk4_fp64(self, x, t, dt, cond, model_fn):
+    def sample_rk4_fp64(self, x, t, dt, cond):
         x = x.double()
-        k_1 = model_fn(x.float(), self.time_scale_factor * t, cond).double()
-        k_2 = model_fn((x + 0.5 * k_1 * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt), cond).double()
-        k_3 = model_fn((x + 0.5 * k_2 * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt), cond).double()
-        k_4 = model_fn((x + k_3 * dt.double()).float(), self.time_scale_factor * (t + dt), cond).double()
+        k_1 = self.denoise_fn(x.float(), self.time_scale_factor * t, cond).double()
+        k_2 = self.denoise_fn((x + 0.5 * k_1 * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt), cond).double()
+        k_3 = self.denoise_fn((x + 0.5 * k_2 * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt), cond).double()
+        k_4 = self.denoise_fn((x + k_3 * dt.double()).float(), self.time_scale_factor * (t + dt), cond).double()
         x += (k_1 + 2 * k_2 + 2 * k_3 + k_4) * dt.double() / 6
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk2_fp64(self, x, t, dt, cond, model_fn):
+    def sample_rk2_fp64(self, x, t, dt, cond):
         x = x.double()
-        k_1 = model_fn(x.float(), self.time_scale_factor * t, cond).double()
-        k_2 = model_fn((x + 0.5 * k_1 * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt), cond).double()
+        k_1 = self.denoise_fn(x.float(), self.time_scale_factor * t, cond).double()
+        k_2 = self.denoise_fn((x + 0.5 * k_1 * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt), cond).double()
         x += k_2 * dt.double()
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk5_fp64(self, x, t, dt, cond, model_fn):
+    def sample_rk5_fp64(self, x, t, dt, cond):
         x = x.double()
-        k_1 = model_fn(x.float(), self.time_scale_factor * t, cond).double()
-        k_2 = model_fn((x + 0.25 * k_1 * dt.double()).float(), self.time_scale_factor * (t + 0.25 * dt), cond).double()
-        k_3 = model_fn((x + 0.125 * (k_2 + k_1) * dt.double()).float(), self.time_scale_factor * (t + 0.25 * dt), cond).double()
-        k_4 = model_fn((x + 0.5 * (-k_2 + 2 * k_3) * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt),
+        k_1 = self.denoise_fn(x.float(), self.time_scale_factor * t, cond).double()
+        k_2 = self.denoise_fn((x + 0.25 * k_1 * dt.double()).float(), self.time_scale_factor * (t + 0.25 * dt), cond).double()
+        k_3 = self.denoise_fn((x + 0.125 * (k_2 + k_1) * dt.double()).float(), self.time_scale_factor * (t + 0.25 * dt), cond).double()
+        k_4 = self.denoise_fn((x + 0.5 * (-k_2 + 2 * k_3) * dt.double()).float(), self.time_scale_factor * (t + 0.5 * dt),
                        cond).double()
-        k_5 = model_fn((x + 0.0625 * (3 * k_1 + 9 * k_4) * dt.double()).float(), self.time_scale_factor * (t + 0.75 * dt),
+        k_5 = self.denoise_fn((x + 0.0625 * (3 * k_1 + 9 * k_4) * dt.double()).float(), self.time_scale_factor * (t + 0.75 * dt),
                        cond).double()
-        k_6 = model_fn((x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
+        k_6 = self.denoise_fn((x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt.double() / 7).float(),
                        self.time_scale_factor * (t + dt),
                        cond).double()
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt.double() / 90
@@ -189,7 +189,7 @@ class RectifiedFlow(nn.Module):
             dts=torch.tensor([dt]).to(x)
             for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                x, _ = algorithm_fn(x,t_start+ i*dts, dt, cond, model_fn=self.denoise_fn)
+                x, _ = algorithm_fn(x,t_start+ i*dts, dt, cond)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
