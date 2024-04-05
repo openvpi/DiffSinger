@@ -9,6 +9,9 @@ from torch import Tensor
 from deployment.modules.diffusion import (
     GaussianDiffusionONNX, PitchDiffusionONNX, MultiVarianceDiffusionONNX
 )
+from deployment.modules.rectified_flow import (
+    RectifiedFlowONNX, PitchRectifiedFlowONNX, MultiVarianceRectifiedFlowONNX
+)
 from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX, FastSpeech2VarianceONNX
 from modules.toplevel import DiffSingerAcoustic, DiffSingerVariance
 from utils.hparams import hparams
@@ -22,20 +25,38 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
         self.fs2 = FastSpeech2AcousticONNX(
             vocab_size=vocab_size
         )
-        self.diffusion = GaussianDiffusionONNX(
-            out_dims=out_dims,
-            num_feats=1,
-            timesteps=hparams['timesteps'],
-            k_step=hparams['K_step'],
-            denoiser_type=hparams['diff_decoder_type'],
-            denoiser_args={
-                'n_layers': hparams['residual_layers'],
-                'n_chans': hparams['residual_channels'],
-                'n_dilates': hparams['dilation_cycle_length'],
-            },
-            spec_min=hparams['spec_min'],
-            spec_max=hparams['spec_max']
-        )
+        if self.diffusion_type == 'ddpm':
+            self.diffusion = GaussianDiffusionONNX(
+                out_dims=out_dims,
+                num_feats=1,
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=hparams['spec_min'],
+                spec_max=hparams['spec_max']
+            )
+        elif self.diffusion_type == 'RectifiedFlow':
+            self.diffusion = RectifiedFlowONNX(
+                out_dims=out_dims,
+                num_feats=1,
+                t_start=hparams['T_start'],
+                time_scale_factor=hparams['time_scale_factor'],
+                denoiser_type=hparams['diff_decoder_type'],
+                denoiser_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=hparams['spec_min'],
+                spec_max=hparams['spec_max']
+            )
+        else:
+            raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
 
     def forward_fs2_aux(
             self,
@@ -66,6 +87,15 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
     def forward_diffusion(self, condition: Tensor, speedup: int):
         return self.diffusion(condition, speedup=speedup)
 
+    def forward_shallow_reflow(
+            self, condition: Tensor, x_end: Tensor,
+            depth, steps: int
+    ):
+        return self.diffusion(condition, x_end=x_end, depth=depth, steps=steps)
+
+    def forward_reflow(self, condition: Tensor, steps: int):
+        return self.diffusion(condition, steps=steps)
+
     def view_as_fs2_aux(self) -> nn.Module:
         model = copy.deepcopy(self)
         del model.diffusion
@@ -82,6 +112,16 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             model.forward = model.forward_diffusion
         return model
 
+    def view_as_reflow(self) -> nn.Module:
+        model = copy.deepcopy(self)
+        del model.fs2
+        if self.use_shallow_diffusion:
+            del model.aux_decoder
+            model.forward = model.forward_shallow_reflow
+        else:
+            model.forward = model.forward_reflow
+        return model
+
 
 class DiffSingerVarianceONNX(DiffSingerVariance):
     def __init__(self, vocab_size):
@@ -95,24 +135,47 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             del self.pitch_predictor
             self.smooth: nn.Conv1d = None
             pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_predictor = PitchDiffusionONNX(
-                vmin=pitch_hparams['pitd_norm_min'],
-                vmax=pitch_hparams['pitd_norm_max'],
-                cmin=pitch_hparams['pitd_clip_min'],
-                cmax=pitch_hparams['pitd_clip_max'],
-                repeat_bins=pitch_hparams['repeat_bins'],
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args={
-                    'n_layers': pitch_hparams['residual_layers'],
-                    'n_chans': pitch_hparams['residual_channels'],
-                    'n_dilates': pitch_hparams['dilation_cycle_length'],
-                },
-            )
+            if self.diffusion_type == 'ddpm':
+                self.pitch_predictor = PitchDiffusionONNX(
+                    vmin=pitch_hparams['pitd_norm_min'],
+                    vmax=pitch_hparams['pitd_norm_max'],
+                    cmin=pitch_hparams['pitd_clip_min'],
+                    cmax=pitch_hparams['pitd_clip_max'],
+                    repeat_bins=pitch_hparams['repeat_bins'],
+                    timesteps=hparams['timesteps'],
+                    k_step=hparams['K_step'],
+                    denoiser_type=hparams['diff_decoder_type'],
+                    denoiser_args={
+                        'n_layers': pitch_hparams['residual_layers'],
+                        'n_chans': pitch_hparams['residual_channels'],
+                        'n_dilates': pitch_hparams['dilation_cycle_length'],
+                    }
+                )
+            elif self.diffusion_type == 'RectifiedFlow':
+                self.pitch_predictor = PitchRectifiedFlowONNX(
+                    vmin=pitch_hparams['pitd_norm_min'],
+                    vmax=pitch_hparams['pitd_norm_max'],
+                    cmin=pitch_hparams['pitd_clip_min'],
+                    cmax=pitch_hparams['pitd_clip_max'],
+                    repeat_bins=pitch_hparams['repeat_bins'],
+                    time_scale_factor=hparams['time_scale_factor'],
+                    denoiser_type=hparams['diff_decoder_type'],
+                    denoiser_args={
+                        'n_layers': pitch_hparams['residual_layers'],
+                        'n_chans': pitch_hparams['residual_channels'],
+                        'n_dilates': pitch_hparams['dilation_cycle_length'],
+                    }
+                )
+            else:
+                raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
         if self.predict_variances:
             del self.variance_predictor
-            self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusionONNX)
+            if self.diffusion_type == 'ddpm':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusionONNX)
+            elif self.diffusion_type == 'RectifiedFlow':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlowONNX)
+            else:
+                raise NotImplementedError(self.diffusion_type)
 
     def build_smooth_op(self, device):
         smooth_kernel_size = round(hparams['midi_smooth_width'] * hparams['audio_sample_rate'] / hparams['hop_size'])
@@ -204,6 +267,12 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         x_pred = self.pitch_predictor(pitch_cond, speedup=speedup)
         return x_pred
 
+    def forward_pitch_reflow(
+            self, pitch_cond, steps: int = 10
+    ):
+        x_pred = self.pitch_predictor(pitch_cond, steps=steps)
+        return x_pred
+
     def forward_pitch_postprocess(self, x_pred, base_pitch):
         pitch_pred = self.pitch_predictor.clamp_spec(x_pred) + base_pitch
         return pitch_pred
@@ -229,6 +298,10 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def forward_variance_diffusion(self, variance_cond, speedup: int = 1):
         xs_pred = self.variance_predictor(variance_cond, speedup=speedup)
+        return xs_pred
+
+    def forward_variance_reflow(self, variance_cond, steps: int = 10):
+        xs_pred = self.variance_predictor(variance_cond, steps=steps)
         return xs_pred
 
     def forward_variance_postprocess(self, xs_pred):
@@ -289,6 +362,18 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         model.forward = model.forward_pitch_diffusion
         return model
 
+    def view_as_pitch_reflow(self):
+        assert self.predict_pitch
+        model = copy.deepcopy(self)
+        del model.fs2
+        del model.lr
+        if self.use_melody_encoder:
+            del model.melody_encoder
+        if self.predict_variances:
+            del model.variance_predictor
+        model.forward = model.forward_pitch_reflow
+        return model
+
     def view_as_pitch_postprocess(self):
         model = copy.deepcopy(self)
         del model.fs2
@@ -321,6 +406,18 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             if self.use_melody_encoder:
                 del model.melody_encoder
         model.forward = model.forward_variance_diffusion
+        return model
+
+    def view_as_variance_reflow(self):
+        assert self.predict_variances
+        model = copy.deepcopy(self)
+        del model.fs2
+        del model.lr
+        if self.predict_pitch:
+            del model.pitch_predictor
+            if self.use_melody_encoder:
+                del model.melody_encoder
+        model.forward = model.forward_variance_reflow
         return model
 
     def view_as_variance_postprocess(self):
