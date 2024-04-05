@@ -3,6 +3,7 @@ from torch import Tensor
 import torch
 
 
+from utils.hparams import hparams
 class DiffusionNoiseLoss(nn.Module):
     def __init__(self, loss_type):
         super().__init__()
@@ -30,6 +31,7 @@ class DiffusionNoiseLoss(nn.Module):
         timestep=torch.clip(timestep, 0+eps, 1-eps)
         weights = 0.398942 / timestep / (1 - timestep) * torch.exp(
             -0.5 * torch.log(timestep / (1 - timestep)) ** 2) + eps
+        weights = torch.clip(weights, hparams['loss_clip_min'],  )
         return weights[:, None, None, None] * self.loss(x_recon, noise)
 
     def _forward(self, x_recon, noise, timestep=None):
