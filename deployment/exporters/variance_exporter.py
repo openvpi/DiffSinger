@@ -178,7 +178,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             for variance in VARIANCE_CHECKLIST:
                 dsconfig[f'predict_{variance}'] = (variance in self.model.variance_prediction_list)
         # sampling acceleration
-        dsconfig['acceleration_type'] = self.acceleration_type
+        dsconfig['use_continuous_acceleration'] = self.acceleration_type == 'continuous'
         # frame specifications
         dsconfig['sample_rate'] = hparams['audio_sample_rate']
         dsconfig['hop_size'] = hparams['hop_size']
