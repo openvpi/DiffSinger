@@ -46,7 +46,7 @@ class RectifiedFlowONNX(RectifiedFlow):
 
         dt = (1 - t_start) / max(1, steps)
         if dt > 0.:
-            for t in torch.arange(t_start, 1., dt, dtype=torch.float32, device=device)[:, None]:
+            for t in torch.arange(steps, dtype=torch.long, device=device)[:, None].float() * dt + t_start:
                 x = self.sample_euler(x, t, dt, condition)
 
         if self.num_feats == 1:

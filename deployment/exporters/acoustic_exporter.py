@@ -147,8 +147,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         for variance in VARIANCE_CHECKLIST:
             dsconfig[f'use_{variance}_embed'] = (variance in self.model.fs2.variance_embed_list)
         # sampling acceleration and shallow diffusion
-        dsconfig['acceleration_type'] = self.acceleration_type
-        dsconfig['use_shallow_diffusion'] = self.model.use_shallow_diffusion
+        dsconfig['use_continuous_acceleration'] = self.acceleration_type == 'continuous'
+        dsconfig['use_variable_depth'] = self.model.use_shallow_diffusion
         if self.acceleration_type == 'continuous':
             dsconfig['max_depth'] = 1 - self.model.diffusion.t_start
         else:
