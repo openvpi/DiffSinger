@@ -190,15 +190,6 @@ def acoustic(
             if 'timesteps' in hparams:
                 hparams['diff_speedup'] = round(hparams['timesteps'] / steps)
         hparams['sampling_steps'] = steps
-    # log all the six migrated parameters
-    print('timesteps:', hparams.get('timesteps'))
-    print('K_step:', hparams.get('K_step'))
-    print('K_step_infer:', hparams.get('K_step_infer'))
-    print('diff_speedup:', hparams.get('diff_speedup'))
-    print('T_start:', hparams['T_start'])
-    print('T_start_infer:', hparams.get('T_start_infer'))
-    print('sampling_steps:', hparams.get('sampling_steps'))
-    print('time_scale_factor:', hparams.get('time_scale_factor'))
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
@@ -348,11 +339,6 @@ def variance(
         if 'timesteps' in hparams:
             hparams['diff_speedup'] = round(hparams['timesteps'] / steps)
         hparams['sampling_steps'] = steps
-    # log all the six migrated parameters
-    print('timesteps:', hparams.get('timesteps'))
-    print('diff_speedup:', hparams.get('diff_speedup'))
-    print('sampling_steps:', hparams.get('sampling_steps'))
-    print('time_scale_factor:', hparams.get('time_scale_factor'))
 
     spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
     for param in params:
