@@ -97,12 +97,17 @@ lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
 lambda_var_loss: 1.0
 
+diffusion_type: reflow  # ddpm
+time_scale_factor: 1000
 schedule_type: 'linear'
 K_step: 1000
 timesteps: 1000
 max_beta: 0.02
-diff_decoder_type: 'wavenet'
-diff_loss_type: l2
+backbone_type: 'wavenet'
+main_loss_type: l2
+main_loss_log_norm: true
+sampling_algorithm: euler
+sampling_steps: 20
 diff_accelerator: ddim
 diff_speedup: 10
 
@@ -111,16 +116,16 @@ num_sanity_val_steps: 1
 optimizer_args:
   lr: 0.0006
 lr_scheduler_args:
-  step_size: 12000
+  step_size: 10000
   gamma: 0.75
 max_batch_frames: 80000
 max_batch_size: 48
 dataset_size_key: 'lengths'
 val_check_interval: 2000
 num_valid_plots: 10
-max_updates: 288000
+max_updates: 160000
 num_ckpt_keep: 5
-permanent_ckpt_start: 180000
+permanent_ckpt_start: 80000
 permanent_ckpt_interval: 10000
 
 finetune_enabled: false

@@ -10,7 +10,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.aux_decoder import build_aux_loss
-from modules.losses.diff_loss import DiffusionNoiseLoss
+from modules.losses import DiffusionLoss, RectifiedFlowLoss
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import get_vocoder_cls
 from utils.hparams import hparams
@@ -67,6 +67,8 @@ class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = AcousticDataset
+        self.diffusion_type = hparams['diffusion_type']
+        assert self.diffusion_type in ['ddpm', 'reflow'], f"Unknown diffusion type: {self.diffusion_type}"
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
         if self.use_shallow_diffusion:
             self.shallow_args = hparams['shallow_diffusion_args']
@@ -100,7 +102,14 @@ class AcousticTask(BaseTask):
             self.aux_mel_loss = build_aux_loss(self.shallow_args['aux_decoder_arch'])
             self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
             self.register_validation_loss('aux_mel_loss')
-        self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
+        if self.diffusion_type == 'ddpm':
+            self.mel_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+        elif self.diffusion_type == 'reflow':
+            self.mel_loss = RectifiedFlowLoss(
+                loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+            )
+        else:
+            raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
         self.register_validation_loss('mel_loss')
 
     def run_model(self, sample, infer=False):
@@ -136,10 +145,16 @@ class AcousticTask(BaseTask):
                 aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, norm_gt)
                 losses['aux_mel_loss'] = aux_mel_loss
 
+            non_padding = (mel2ph > 0).unsqueeze(-1).float()
             if output.diff_out is not None:
-                x_recon, x_noise, timestep = output.diff_out
-                mel_loss = self.mel_loss(x_recon, x_noise, timesteps=timestep,
-                                         nonpadding=(mel2ph > 0).unsqueeze(-1).float())
+                if self.diffusion_type == 'ddpm':
+                    x_recon, x_noise = output.diff_out
+                    mel_loss = self.mel_loss(x_recon, x_noise, non_padding=non_padding)
+                elif self.diffusion_type == 'reflow':
+                    v_pred, v_gt, t = output.diff_out
+                    mel_loss = self.mel_loss(v_pred, v_gt, t=t, non_padding=non_padding)
+                else:
+                    raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
                 losses['mel_loss'] = mel_loss
 
             return losses

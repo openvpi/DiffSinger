@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import deque
 from functools import partial
-from inspect import isfunction
 from typing import List, Tuple
 
 import numpy as np
@@ -10,18 +9,12 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from modules.diffusion.wavenet import WaveNet
+from modules.backbones.wavenet import WaveNet
 from utils.hparams import hparams
 
 BACKBONES = {
     'wavenet': WaveNet
 }
-
-
-def default(val, d):
-    if val is not None:
-        return val
-    return d() if isfunction(d) else d
 
 
 def extract(a, t, x_shape):
@@ -65,10 +58,10 @@ beta_schedule = {
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, out_dims, num_feats=1, timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None, betas=None,
+                 backbone_type=None, backbone_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = BACKBONES[denoiser_type](out_dims, num_feats, **denoiser_args)
+        self.denoise_fn: nn.Module = BACKBONES[backbone_type](out_dims, num_feats, **backbone_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
 
@@ -118,6 +111,15 @@ class GaussianDiffusion(nn.Module):
         spec_max = torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2)
         self.register_buffer('spec_min', spec_min)
         self.register_buffer('spec_max', spec_max)
+
+    @property
+    def backbone(self):
+        return self.denoise_fn
+
+    @backbone.setter
+    @torch.jit.unused
+    def backbone(self, value):
+        self.denoise_fn = value
 
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
@@ -215,7 +217,8 @@ class GaussianDiffusion(nn.Module):
         )
 
     def p_losses(self, x_start, t, cond, noise=None):
-        noise = default(noise, lambda: torch.randn_like(x_start))
+        if noise is None:
+            noise = torch.randn_like(x_start)
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_recon = self.denoise_fn(x_noisy, t, cond)
@@ -346,7 +349,7 @@ class GaussianDiffusion(nn.Module):
                         iteration_interval, cond=cond
                     )
             else:
-                raise NotImplementedError(algorithm)
+                raise ValueError(f"Unsupported acceleration algorithm for DDPM: {algorithm}.")
         else:
             for i in tqdm(reversed(range(0, t_max)), desc='sample time step', total=t_max,
                           disable=not hparams['infer'], leave=False):
@@ -368,7 +371,7 @@ class GaussianDiffusion(nn.Module):
                 spec = spec[:, None, :, :]  # [B, F=1, M, T]
             t = torch.randint(0, self.k_step, (b,), device=device).long()
             x_recon, noise = self.p_losses(spec, t, cond=cond)
-            return x_recon, noise, t / self.timesteps
+            return x_recon, noise
         else:
             # src_spec: [B, T, M] or [B, F, T, M]
             if src_spec is not None:
@@ -390,7 +393,7 @@ class GaussianDiffusion(nn.Module):
 class RepetitiveDiffusion(GaussianDiffusion):
     def __init__(self, vmin: float | int | list, vmax: float | int | list,
                  repeat_bins: int, timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None,
+                 backbone_type=None, backbone_args=None,
                  betas=None):
         assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)
         num_feats = 1 if isinstance(vmin, (float, int)) else len(vmin)
@@ -400,7 +403,7 @@ class RepetitiveDiffusion(GaussianDiffusion):
         super().__init__(
             out_dims=repeat_bins, num_feats=num_feats,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas, spec_min=spec_min, spec_max=spec_max
         )
 
@@ -429,7 +432,7 @@ class PitchDiffusion(RepetitiveDiffusion):
     def __init__(self, vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None,
+                 backbone_type=None, backbone_args=None,
                  betas=None):
         self.vmin = vmin  # norm min
         self.vmax = vmax  # norm max
@@ -438,7 +441,7 @@ class PitchDiffusion(RepetitiveDiffusion):
         super().__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas
         )
 
@@ -454,7 +457,7 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
             self, ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, timesteps=1000, k_step=1000,
-            denoiser_type=None, denoiser_args=None,
+            backbone_type=None, backbone_args=None,
             betas=None
     ):
         assert len(ranges) == len(clamps)
@@ -468,7 +471,7 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
         super().__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas
         )
 

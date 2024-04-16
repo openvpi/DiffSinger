@@ -4,14 +4,14 @@ from typing import List, Tuple
 
 import torch
 
-from modules.diffusion.RectifiedFlow import (
+from modules.core import (
     RectifiedFlow, PitchRectifiedFlow, MultiVarianceRectifiedFlow
 )
 
 
 class RectifiedFlowONNX(RectifiedFlow):
     def sample_euler(self, x, t, dt: float, cond):
-        x += self.denoise_fn(x, t * self.time_scale_factor, cond) * dt
+        x += self.velocity_fn(x, t * self.time_scale_factor, cond) * dt
         return x
 
     def norm_spec(self, x):
@@ -62,7 +62,7 @@ class PitchRectifiedFlowONNX(RectifiedFlowONNX, PitchRectifiedFlow):
     def __init__(self, vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  time_scale_factor=1000,
-                 denoiser_type=None, denoiser_args=None):
+                 backbone_type=None, backbone_args=None):
         self.vmin = vmin
         self.vmax = vmax
         self.cmin = cmin
@@ -70,7 +70,7 @@ class PitchRectifiedFlowONNX(RectifiedFlowONNX, PitchRectifiedFlow):
         super(PitchRectifiedFlow, self).__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             time_scale_factor=time_scale_factor,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args
+            backbone_type=backbone_type, backbone_args=backbone_args
         )
 
     def clamp_spec(self, x):
@@ -89,7 +89,7 @@ class MultiVarianceRectifiedFlowONNX(RectifiedFlowONNX, MultiVarianceRectifiedFl
             self, ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, time_scale_factor=1000,
-            denoiser_type=None, denoiser_args=None
+            backbone_type=None, backbone_args=None
     ):
         assert len(ranges) == len(clamps)
         self.clamps = clamps
@@ -102,7 +102,7 @@ class MultiVarianceRectifiedFlowONNX(RectifiedFlowONNX, MultiVarianceRectifiedFl
         super(MultiVarianceRectifiedFlow, self).__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             time_scale_factor=time_scale_factor,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args
+            backbone_type=backbone_type, backbone_args=backbone_args
         )
 
     def denorm_spec(self, x):

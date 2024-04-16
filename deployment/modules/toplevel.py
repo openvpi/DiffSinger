@@ -31,8 +31,8 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
                 num_feats=1,
                 timesteps=hparams['timesteps'],
                 k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args={
+                backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                backbone_args={
                     'n_layers': hparams['residual_layers'],
                     'n_chans': hparams['residual_channels'],
                     'n_dilates': hparams['dilation_cycle_length'],
@@ -40,14 +40,14 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
                 spec_min=hparams['spec_min'],
                 spec_max=hparams['spec_max']
             )
-        elif self.diffusion_type == 'RectifiedFlow':
+        elif self.diffusion_type == 'reflow':
             self.diffusion = RectifiedFlowONNX(
                 out_dims=out_dims,
                 num_feats=1,
                 t_start=hparams['T_start'],
                 time_scale_factor=hparams['time_scale_factor'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args={
+                backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                backbone_args={
                     'n_layers': hparams['residual_layers'],
                     'n_chans': hparams['residual_channels'],
                     'n_dilates': hparams['dilation_cycle_length'],
@@ -144,14 +144,14 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                     repeat_bins=pitch_hparams['repeat_bins'],
                     timesteps=hparams['timesteps'],
                     k_step=hparams['K_step'],
-                    denoiser_type=hparams['diff_decoder_type'],
-                    denoiser_args={
+                    backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                    backbone_args={
                         'n_layers': pitch_hparams['residual_layers'],
                         'n_chans': pitch_hparams['residual_channels'],
                         'n_dilates': pitch_hparams['dilation_cycle_length'],
                     }
                 )
-            elif self.diffusion_type == 'RectifiedFlow':
+            elif self.diffusion_type == 'reflow':
                 self.pitch_predictor = PitchRectifiedFlowONNX(
                     vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
@@ -159,8 +159,8 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                     cmax=pitch_hparams['pitd_clip_max'],
                     repeat_bins=pitch_hparams['repeat_bins'],
                     time_scale_factor=hparams['time_scale_factor'],
-                    denoiser_type=hparams['diff_decoder_type'],
-                    denoiser_args={
+                    backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                    backbone_args={
                         'n_layers': pitch_hparams['residual_layers'],
                         'n_chans': pitch_hparams['residual_channels'],
                         'n_dilates': pitch_hparams['dilation_cycle_length'],
@@ -172,7 +172,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             del self.variance_predictor
             if self.diffusion_type == 'ddpm':
                 self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusionONNX)
-            elif self.diffusion_type == 'RectifiedFlow':
+            elif self.diffusion_type == 'reflow':
                 self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlowONNX)
             else:
                 raise NotImplementedError(self.diffusion_type)

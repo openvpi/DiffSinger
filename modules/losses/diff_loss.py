@@ -1,10 +1,8 @@
 import torch.nn as nn
 from torch import Tensor
-import torch
 
 
-from utils.hparams import hparams
-class DiffusionNoiseLoss(nn.Module):
+class DiffusionLoss(nn.Module):
     def __init__(self, loss_type):
         super().__init__()
         self.loss_type = loss_type
@@ -12,38 +10,25 @@ class DiffusionNoiseLoss(nn.Module):
             self.loss = nn.L1Loss(reduction='none')
         elif self.loss_type == 'l2':
             self.loss = nn.MSELoss(reduction='none')
-        elif self.loss_type == 'l2_rf_norm':
-            self.loss = nn.MSELoss(reduction='none')
         else:
             raise NotImplementedError()
 
     @staticmethod
-    def _mask_nonpadding(x_recon, noise, nonpadding=None):
-        if nonpadding is not None:
-            nonpadding = nonpadding.transpose(1, 2).unsqueeze(1)
-            return x_recon * nonpadding, noise * nonpadding
+    def _mask_non_padding(x_recon, noise, non_padding=None):
+        if non_padding is not None:
+            non_padding = non_padding.transpose(1, 2).unsqueeze(1)
+            return x_recon * non_padding, noise * non_padding
         else:
             return x_recon, noise
 
-    def l2_rf_norm(self, x_recon, noise, timestep):
-        eps = 1e-7
-        timestep = timestep.float()
-        timestep=torch.clip(timestep, 0+eps, 1-eps)
-        weights = 0.398942 / timestep / (1 - timestep) * torch.exp(
-            -0.5 * torch.log(timestep / (1 - timestep)) ** 2) + eps
-        weights = torch.clip(weights, hparams['loss_clip_min'],  )
-        return weights[:, None, None, None] * self.loss(x_recon, noise)
-
-    def _forward(self, x_recon, noise, timestep=None):
-        if self.loss_type == 'l2_rf_norm':
-            return self.l2_rf_norm(x_recon, noise, timestep)
+    def _forward(self, x_recon, noise):
         return self.loss(x_recon, noise)
 
-    def forward(self, x_recon: Tensor, noise: Tensor, timesteps: Tensor = None, nonpadding: Tensor = None) -> Tensor:
+    def forward(self, x_recon: Tensor, noise: Tensor, non_padding: Tensor = None) -> Tensor:
         """
         :param x_recon: [B, 1, M, T]
         :param noise: [B, 1, M, T]
-        :param nonpadding: [B, T, M]
+        :param non_padding: [B, T, M]
         """
-        x_recon, noise = self._mask_nonpadding(x_recon, noise, nonpadding)
-        return self._forward(x_recon, noise, timestep=timesteps).mean()
+        x_recon, noise = self._mask_non_padding(x_recon, noise, non_padding)
+        return self._forward(x_recon, noise).mean()

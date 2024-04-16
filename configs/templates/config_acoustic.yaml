@@ -53,7 +53,10 @@ residual_channels: 512
 residual_layers: 20
 
 # shallow diffusion
+diffusion_type: reflow
 use_shallow_diffusion: true
+T_start: 0.4
+T_start_infer: 0.4
 K_step: 300
 K_step_infer: 300
 shallow_diffusion_args:
@@ -73,11 +76,11 @@ optimizer_args:
   lr: 0.0006
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR
-  step_size: 30000
-  gamma: 0.5
+  step_size: 10000
+  gamma: 0.75
 max_batch_frames: 50000
 max_batch_size: 64
-max_updates: 200000
+max_updates: 160000
 
 num_valid_plots: 10
 val_with_vocoder: true

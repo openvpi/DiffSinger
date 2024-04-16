@@ -235,7 +235,7 @@ def graph_extract_conditioner_projections(
         alias_prefix: str
 ):
     """
-    Extract conditioner projection nodes out of the denoiser wrapped by diffusion.
+    Extract conditioner projection nodes out of the backbone wrapped by diffusion.
     These nodes only need to be calculated once before entering the main denoising loop,
     and can be reused inside the loop. This optimizes the performance of ONNX inference.
 

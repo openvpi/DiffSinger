@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from modules.diffusion.ddpm import MultiVarianceDiffusion
+from modules.core.ddpm import MultiVarianceDiffusion
 from utils import filter_kwargs
 from utils.hparams import hparams
 
@@ -74,9 +74,9 @@ class ParameterAdaptorModule(torch.nn.Module):
                 'clamps': clamps,
                 'repeat_bins': repeat_bins,
                 'timesteps': hparams.get('timesteps'),
-                'time_scale_factor': hparams['time_scale_factor'],
-                'denoiser_type': hparams['diff_decoder_type'],
-                'denoiser_args': {
+                'time_scale_factor': hparams.get('time_scale_factor'),
+                'backbone_type': hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                'backbone_args': {
                     'n_layers': variances_hparams['residual_layers'],
                     'n_chans': variances_hparams['residual_channels'],
                     'n_dilates': variances_hparams['dilation_cycle_length'],

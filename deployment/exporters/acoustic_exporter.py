@@ -50,7 +50,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.aux_decoder_class_name = remove_suffix(
             self.model.aux_decoder.decoder.__class__.__name__, 'ONNX'
         ) if self.model.use_shallow_diffusion else None
-        self.denoiser_class_name = remove_suffix(self.model.diffusion.denoise_fn.__class__.__name__, 'ONNX')
+        self.backbone_class_name = remove_suffix(self.model.diffusion.backbone.__class__.__name__, 'ONNX')
         self.diffusion_class_name = remove_suffix(self.model.diffusion.__class__.__name__, 'ONNX')
 
         # Attributes for exporting
@@ -81,7 +81,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         # Acceleration
         if self.model.diffusion_type == 'ddpm':
             self.acceleration_type = 'discrete'
-        elif self.model.diffusion_type == 'RectifiedFlow':
+        elif self.model.diffusion_type == 'reflow':
             self.acceleration_type = 'continuous'
         else:
             raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
@@ -246,7 +246,7 @@ class DiffSingerAcousticExporter(BaseExporter):
 
         condition = torch.rand((1, n_frames, hparams['hidden_size']), device=self.device)
 
-        # Prepare inputs for denoiser tracing and GaussianDiffusion scripting
+        # Prepare inputs for backbone tracing and GaussianDiffusion scripting
         shape = (1, 1, hparams['audio_num_mel_bins'], n_frames)
         noise = torch.randn(shape, device=self.device)
         x_aux = torch.randn((1, n_frames, hparams['audio_num_mel_bins']), device=self.device)
@@ -259,15 +259,15 @@ class DiffSingerAcousticExporter(BaseExporter):
             dummy_depth = torch.tensor(0.1, device=self.device)
             dummy_steps_or_speedup = 200
 
-        print(f'Tracing {self.denoiser_class_name} denoiser...')
+        print(f'Tracing {self.backbone_class_name} backbone...')
         if self.model.diffusion_type == 'ddpm':
             major_mel_decoder = self.model.view_as_diffusion()
-        elif self.model.diffusion_type == 'RectifiedFlow':
+        elif self.model.diffusion_type == 'reflow':
             major_mel_decoder = self.model.view_as_reflow()
         else:
             raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
-        major_mel_decoder.diffusion.denoise_fn = torch.jit.trace(
-            major_mel_decoder.diffusion.denoise_fn,
+        major_mel_decoder.diffusion.backbone = torch.jit.trace(
+            major_mel_decoder.diffusion.backbone,
             (
                 noise,
                 time_or_step,
@@ -361,8 +361,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.graph_fold_back_to_squeeze(diffusion.graph)
         onnx_helper.graph_extract_conditioner_projections(
             graph=diffusion.graph, op_type='Conv',
-            weight_pattern=r'diffusion\.denoise_fn\.residual_layers\.\d+\.conditioner_projection\.weight',
-            alias_prefix='/diffusion/denoise_fn/cache'
+            weight_pattern=r'diffusion\..*\.conditioner_projection\.weight',
+            alias_prefix='/diffusion/backbone/cache'
         )
         onnx_helper.graph_remove_unused_values(diffusion.graph)
         print(f'Running ONNX Simplifier #2 on {self.diffusion_class_name}...')

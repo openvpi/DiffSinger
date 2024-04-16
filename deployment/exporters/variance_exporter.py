@@ -48,14 +48,14 @@ class DiffSingerVarianceExporter(BaseExporter):
         self.dur_predictor_class_name = \
             remove_suffix(self.model.fs2.dur_predictor.__class__.__name__, 'ONNX') \
             if self.model.predict_dur else None
-        self.pitch_denoiser_class_name = \
-            remove_suffix(self.model.pitch_predictor.denoise_fn.__class__.__name__, 'ONNX') \
+        self.pitch_backbone_class_name = \
+            remove_suffix(self.model.pitch_predictor.backbone.__class__.__name__, 'ONNX') \
             if self.model.predict_pitch else None
         self.pitch_predictor_class_name = \
             remove_suffix(self.model.pitch_predictor.__class__.__name__, 'ONNX') \
             if self.model.predict_pitch else None
-        self.variance_denoiser_class_name = \
-            remove_suffix(self.model.variance_predictor.denoise_fn.__class__.__name__, 'ONNX') \
+        self.variance_backbone_class_name = \
+            remove_suffix(self.model.variance_predictor.backbone.__class__.__name__, 'ONNX') \
             if self.model.predict_variances else None
         self.multi_var_predictor_class_name = \
             remove_suffix(self.model.variance_predictor.__class__.__name__, 'ONNX') \
@@ -84,7 +84,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         # Acceleration
         if self.model.diffusion_type == 'ddpm':
             self.acceleration_type = 'discrete'
-        elif self.model.diffusion_type == 'RectifiedFlow':
+        elif self.model.diffusion_type == 'reflow':
             self.acceleration_type = 'continuous'
         else:
             raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
@@ -380,20 +380,20 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-            # Prepare inputs for denoiser tracing and PitchDiffusion scripting
+            # Prepare inputs for backbone tracing and PitchDiffusion scripting
             shape = (1, 1, hparams['pitch_prediction_args']['repeat_bins'], 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
 
-            print(f'Tracing {self.pitch_denoiser_class_name} denoiser...')
+            print(f'Tracing {self.pitch_backbone_class_name} backbone...')
             if self.model.diffusion_type == 'ddpm':
                 pitch_predictor = self.model.view_as_pitch_diffusion()
-            elif self.model.diffusion_type == 'RectifiedFlow':
+            elif self.model.diffusion_type == 'reflow':
                 pitch_predictor = self.model.view_as_pitch_reflow()
             else:
                 raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
-            pitch_predictor.pitch_predictor.denoise_fn = torch.jit.trace(
-                pitch_predictor.pitch_predictor.denoise_fn,
+            pitch_predictor.pitch_predictor.backbone = torch.jit.trace(
+                pitch_predictor.pitch_predictor.backbone,
                 (
                     noise,
                     time_or_step,
@@ -529,21 +529,21 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-            # Prepare inputs for denoiser tracing and MultiVarianceDiffusion scripting
+            # Prepare inputs for backbone tracing and MultiVarianceDiffusion scripting
             shape = (1, len(self.model.variance_prediction_list), repeat_bins, 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
             step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
 
-            print(f'Tracing {self.variance_denoiser_class_name} denoiser...')
+            print(f'Tracing {self.variance_backbone_class_name} backbone...')
             if self.model.diffusion_type == 'ddpm':
                 multi_var_predictor = self.model.view_as_variance_diffusion()
-            elif self.model.diffusion_type == 'RectifiedFlow':
+            elif self.model.diffusion_type == 'reflow':
                 multi_var_predictor = self.model.view_as_variance_reflow()
             else:
                 raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
-            multi_var_predictor.variance_predictor.denoise_fn = torch.jit.trace(
-                multi_var_predictor.variance_predictor.denoise_fn,
+            multi_var_predictor.variance_predictor.backbone = torch.jit.trace(
+                multi_var_predictor.variance_predictor.backbone,
                 (
                     noise,
                     step,
@@ -689,8 +689,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.graph_fold_back_to_squeeze(pitch_predictor.graph)
         onnx_helper.graph_extract_conditioner_projections(
             graph=pitch_predictor.graph, op_type='Conv',
-            weight_pattern=r'pitch_predictor\.denoise_fn\.residual_layers\.\d+\.conditioner_projection\.weight',
-            alias_prefix='/pitch_predictor/denoise_fn/cache'
+            weight_pattern=r'pitch_predictor\..*\.conditioner_projection\.weight',
+            alias_prefix='/pitch_predictor/backbone/cache'
         )
         onnx_helper.graph_remove_unused_values(pitch_predictor.graph)
         print(f'Running ONNX Simplifier #2 on {self.pitch_predictor_class_name}...')
@@ -743,8 +743,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.graph_fold_back_to_squeeze(var_diffusion.graph)
         onnx_helper.graph_extract_conditioner_projections(
             graph=var_diffusion.graph, op_type='Conv',
-            weight_pattern=r'variance_predictor\.denoise_fn\.residual_layers\.\d+\.conditioner_projection\.weight',
-            alias_prefix='/variance_predictor/denoise_fn/cache'
+            weight_pattern=r'variance_predictor\..*\.conditioner_projection\.weight',
+            alias_prefix='/variance_predictor/backbone/cache'
         )
         onnx_helper.graph_remove_unused_values(var_diffusion.graph)
         print(f'Running ONNX Simplifier #2 on {self.multi_var_predictor_class_name}...')
