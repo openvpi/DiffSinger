@@ -58,9 +58,6 @@ TBD
   - [UniPC](https://github.com/wl-zhao/UniPC) for diffusion sampling acceleration
 - Rectified Flow (RF): [paper](https://arxiv.org/abs/2209.03003), [implementation](https://github.com/gnobitab/RectifiedFlow)
 
-### Sampling Algorithms
-
-
 ### Dependencies & Submodules
 
 - [HiFi-GAN](https://github.com/jik876/hifi-gan) and [NSF](https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/tree/master/project/01-nsf) for waveform reconstruction
