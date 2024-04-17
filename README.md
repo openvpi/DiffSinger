@@ -44,13 +44,27 @@ TBD
 
 ## References
 
-- Original DiffSinger: [paper](https://arxiv.org/abs/2105.02446), [implementation](https://github.com/MoonInTheRiver/DiffSinger)
+### Original Paper & Implementation
+
+- Paper: [DiffSinger: Singing Voice Synthesis via Shallow Diffusion Mechanism](https://arxiv.org/abs/2105.02446)
+- Implementation: [MoonInTheRiver/DiffSinger](https://github.com/MoonInTheRiver/DiffSinger)
+
+### Generative Models & Algorithms
+
+- Denoising Diffusion Probabilistic Models (DDPM): [paper](https://arxiv.org/abs/2006.11239), [implementation](https://github.com/hojonathanho/diffusion)
+  - [DDIM](https://arxiv.org/abs/2010.02502) for diffusion sampling acceleration
+  - [PNDM](https://arxiv.org/abs/2202.09778) for diffusion sampling acceleration
+  - [DPM-Solver++](https://github.com/LuChengTHU/dpm-solver) for diffusion sampling acceleration
+  - [UniPC](https://github.com/wl-zhao/UniPC) for diffusion sampling acceleration
+- Rectified Flow (RF): [paper](https://arxiv.org/abs/2209.03003), [implementation](https://github.com/gnobitab/RectifiedFlow)
+
+### Sampling Algorithms
+
+
+### Dependencies & Submodules
+
 - [HiFi-GAN](https://github.com/jik876/hifi-gan) and [NSF](https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/tree/master/project/01-nsf) for waveform reconstruction
 - [pc-ddsp](https://github.com/yxlllc/pc-ddsp) for waveform reconstruction
-- [DDIM](https://arxiv.org/abs/2010.02502) for diffusion sampling acceleration
-- [PNDM](https://arxiv.org/abs/2202.09778) for diffusion sampling acceleration
-- [DPM-Solver++](https://github.com/LuChengTHU/dpm-solver) for diffusion sampling acceleration
-- [UniPC](https://github.com/wl-zhao/UniPC) for diffusion sampling acceleration
 - [RMVPE](https://github.com/Dream-High/RMVPE) and yxlllc's [fork](https://github.com/yxlllc/RMVPE) for pitch extraction
 
 ## Disclaimer
