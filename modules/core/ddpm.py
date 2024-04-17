@@ -112,15 +112,6 @@ class GaussianDiffusion(nn.Module):
         self.register_buffer('spec_min', spec_min)
         self.register_buffer('spec_max', spec_max)
 
-    @property
-    def backbone(self):
-        return self.denoise_fn
-
-    @backbone.setter
-    @torch.jit.unused
-    def backbone(self, value):
-        self.denoise_fn = value
-
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
         variance = extract(1. - self.alphas_cumprod, t, x_start.shape)

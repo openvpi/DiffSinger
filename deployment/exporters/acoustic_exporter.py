@@ -266,12 +266,14 @@ class DiffSingerAcousticExporter(BaseExporter):
             major_mel_decoder = self.model.view_as_reflow()
         else:
             raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
-        major_mel_decoder.diffusion.backbone = torch.jit.trace(
-            major_mel_decoder.diffusion.backbone,
-            (
-                noise,
-                time_or_step,
-                condition.transpose(1, 2)
+        major_mel_decoder.diffusion.set_backbone(
+            torch.jit.trace(
+                major_mel_decoder.diffusion.backbone,
+                (
+                    noise,
+                    time_or_step,
+                    condition.transpose(1, 2)
+                )
             )
         )
 

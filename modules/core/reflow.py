@@ -33,15 +33,6 @@ class RectifiedFlow(nn.Module):
         self.register_buffer('spec_min', spec_min, persistent=False)
         self.register_buffer('spec_max', spec_max, persistent=False)
 
-    @property
-    def backbone(self):
-        return self.velocity_fn
-
-    @backbone.setter
-    @torch.jit.unused
-    def backbone(self, value):
-        self.velocity_fn = value
-
     def p_losses(self, x_end, t, cond):
         x_start = torch.randn_like(x_end)
         x_t = x_start + t[:, None, None, None] * (x_end - x_start)

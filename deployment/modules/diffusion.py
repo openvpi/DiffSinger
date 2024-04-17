@@ -16,6 +16,16 @@ def extract(a, t):
 
 # noinspection PyMethodOverriding
 class GaussianDiffusionONNX(GaussianDiffusion):
+    @property
+    def backbone(self):
+        return self.denoise_fn
+
+    # We give up the setter for the property `backbone` because this will cause TorchScript to fail
+    # @backbone.setter
+    @torch.jit.unused
+    def set_backbone(self, value):
+        self.denoise_fn = value
+
     def q_sample(self, x_start, t, noise):
         return (
                 extract(self.sqrt_alphas_cumprod, t) * x_start +

@@ -10,6 +10,16 @@ from modules.core import (
 
 
 class RectifiedFlowONNX(RectifiedFlow):
+    @property
+    def backbone(self):
+        return self.velocity_fn
+
+    # We give up the setter for the property `backbone` because this will cause TorchScript to fail
+    # @backbone.setter
+    @torch.jit.unused
+    def set_backbone(self, value):
+        self.velocity_fn = value
+
     def sample_euler(self, x, t, dt: float, cond):
         x += self.velocity_fn(x, t * self.time_scale_factor, cond) * dt
         return x

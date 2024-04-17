@@ -392,12 +392,14 @@ class DiffSingerVarianceExporter(BaseExporter):
                 pitch_predictor = self.model.view_as_pitch_reflow()
             else:
                 raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
-            pitch_predictor.pitch_predictor.backbone = torch.jit.trace(
-                pitch_predictor.pitch_predictor.backbone,
-                (
-                    noise,
-                    time_or_step,
-                    condition
+            pitch_predictor.pitch_predictor.set_backbone(
+                torch.jit.trace(
+                    pitch_predictor.pitch_predictor.backbone,
+                    (
+                        noise,
+                        time_or_step,
+                        condition
+                    )
                 )
             )
 
@@ -542,12 +544,14 @@ class DiffSingerVarianceExporter(BaseExporter):
                 multi_var_predictor = self.model.view_as_variance_reflow()
             else:
                 raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
-            multi_var_predictor.variance_predictor.backbone = torch.jit.trace(
-                multi_var_predictor.variance_predictor.backbone,
-                (
-                    noise,
-                    step,
-                    condition
+            multi_var_predictor.variance_predictor.set_backbone(
+                torch.jit.trace(
+                    multi_var_predictor.variance_predictor.backbone,
+                    (
+                        noise,
+                        step,
+                        condition
+                    )
                 )
             )
 
