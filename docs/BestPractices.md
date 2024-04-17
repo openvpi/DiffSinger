@@ -101,8 +101,8 @@ Variance models support multi-speaker settings like acoustic models do.
 Functionalities of variance models are defined by their outputs. There are three main prediction modules that can be enabled/disable independently:
 
 - Duration Predictor: predicts the phoneme durations. See `predict_dur` in the configuration schemas.
-- Pitch Diffusion: predicts the pitch curve. See `predict_pitch` in the configuration schemas.
-- Multi-Variance Diffusion: jointly predicts other variance parameters. See `predict_energy` and `predict_breathiness` in the configuration schemas.
+- Pitch Predictor: predicts the pitch curve. See `predict_pitch` in the configuration schemas.
+- Multi-Variance Predictor: jointly predicts other variance parameters. See `predict_energy` and `predict_breathiness` in the configuration schemas.
 
 There may be some mutual influence between the modules above when they are enabled together. See [mutual influence between variance modules](#mutual-influence-between-variance-modules) for more details.
 

@@ -309,7 +309,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         if self.model.predict_pitch:
             use_melody_encoder = hparams.get('use_melody_encoder', False)
             use_glide_embed = use_melody_encoder and hparams['use_glide_embed'] and not self.freeze_glide
-            # Prepare inputs for preprocessor of PitchDiffusion
+            # Prepare inputs for preprocessor of the pitch predictor
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
@@ -380,7 +380,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-            # Prepare inputs for backbone tracing and PitchDiffusion scripting
+            # Prepare inputs for backbone tracing and pitch predictor scripting
             shape = (1, 1, hparams['pitch_prediction_args']['repeat_bins'], 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
@@ -444,7 +444,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-            # Prepare inputs for postprocessor of MultiVarianceDiffusion
+            # Prepare inputs for postprocessor of the multi-variance predictor
             torch.onnx.export(
                 self.model.view_as_pitch_postprocess(),
                 (
@@ -477,7 +477,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             total_repeat_bins = hparams['variances_prediction_args']['total_repeat_bins']
             repeat_bins = total_repeat_bins // len(self.model.variance_prediction_list)
 
-            # Prepare inputs for preprocessor of MultiVarianceDiffusion
+            # Prepare inputs for preprocessor of the multi-variance predictor
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
             variances = {
                 v_name: torch.FloatTensor([[0.] * 15]).to(self.device)
@@ -531,7 +531,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-            # Prepare inputs for backbone tracing and MultiVarianceDiffusion scripting
+            # Prepare inputs for backbone tracing and multi-variance predictor scripting
             shape = (1, len(self.model.variance_prediction_list), repeat_bins, 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
@@ -596,7 +596,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 opset_version=15
             )
 
-            # Prepare inputs for postprocessor of MultiVarianceDiffusion
+            # Prepare inputs for postprocessor of the multi-variance predictor
             xs_shape = (1, 15) \
                 if len(self.model.variance_prediction_list) == 1 \
                 else (1, len(self.model.variance_prediction_list), 15)
