@@ -2,6 +2,7 @@ import ctypes
 import concurrent.futures
 import multiprocessing
 import re
+import torch.multiprocessing
 import traceback
 
 from torch.multiprocessing import current_process
@@ -42,7 +43,9 @@ def multiprocess_run(map_func, args, num_workers):
 
     sval = multiprocessing.Value(ctypes.c_bool, False)
     with concurrent.futures.ProcessPoolExecutor(
-            max_workers=num_workers, initializer=setup_interrupt_flag, initargs=(sval,)
+            max_workers=num_workers,
+            mp_context=torch.multiprocessing.get_context('spawn'),
+            initializer=setup_interrupt_flag, initargs=(sval,)
     ) as executor:
         futures = [executor.submit(multiprocess_worker_main, map_func, *a) for a in args]
         try:
