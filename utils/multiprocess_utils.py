@@ -1,10 +1,13 @@
-import platform
+import ctypes
+import concurrent.futures
+import multiprocessing
 import re
 import traceback
 
-from torch.multiprocessing import Manager, Process, current_process, get_context
+from torch.multiprocessing import current_process
 
 is_main_process = not bool(re.match(r'((.*Process)|(SyncManager)|(.*PoolWorker))-\d+', current_process().name))
+_interrupted: multiprocessing.Value
 
 
 def main_process_print(self, *args, sep=' ', end='\n', file=None):
@@ -12,41 +15,43 @@ def main_process_print(self, *args, sep=' ', end='\n', file=None):
         print(self, *args, sep=sep, end=end, file=file)
 
 
-def chunked_worker_run(map_func, args, results_queue=None):
-    for a in args:
-        # noinspection PyBroadException
-        try:
-            res = map_func(*a)
-            results_queue.put(res)
-        except KeyboardInterrupt:
-            break
-        except Exception:
-            traceback.print_exc()
-            results_queue.put(None)
+def multiprocess_worker_main(map_func, *args):
+    global _interrupted
+    if _interrupted.value:
+        return None
+    # noinspection PyBroadException
+    try:
+        return map_func(*args)
+    except KeyboardInterrupt:
+        _interrupted.value = True
+        return None
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
-def chunked_multiprocess_run(map_func, args, num_workers, q_max_size=1000):
+def setup_interrupt_flag(sval):
+    global _interrupted
+    _interrupted = sval
+
+
+def multiprocess_run(map_func, args, num_workers):
     num_jobs = len(args)
     if num_jobs < num_workers:
         num_workers = num_jobs
 
-    queues = [Manager().Queue(maxsize=q_max_size // num_workers) for _ in range(num_workers)]
-    if platform.system().lower() != 'windows':
-        process_creation_func = get_context('spawn').Process
-    else:
-        process_creation_func = Process
-
-    workers = []
-    for i in range(num_workers):
-        worker = process_creation_func(
-            target=chunked_worker_run, args=(map_func, args[i::num_workers], queues[i]), daemon=True
-        )
-        workers.append(worker)
-        worker.start()
-
-    for i in range(num_jobs):
-        yield queues[i % num_workers].get()
-
-    for worker in workers:
-        worker.join()
-        worker.close()
+    sval = multiprocessing.Value(ctypes.c_bool, False)
+    with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_workers, initializer=setup_interrupt_flag, initargs=(sval,)
+    ) as executor:
+        futures = [executor.submit(multiprocess_worker_main, map_func, *a) for a in args]
+        try:
+            yield from (f.result() for f in concurrent.futures.as_completed(futures))
+        except KeyboardInterrupt:
+            for f in futures:
+                if not f.done():
+                    f.cancel()
+            global _interrupted
+            _interrupted.value = True
+            executor.shutdown(wait=True)
+            raise

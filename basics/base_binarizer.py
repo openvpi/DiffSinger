@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDatasetBuilder
-from utils.multiprocess_utils import chunked_multiprocess_run
+from utils.multiprocess_utils import multiprocess_run
 from utils.phoneme_utils import build_phoneme_list, locate_dictionary
 from utils.plot import distribution_to_figure
 from utils.text_encoder import TokenTextEncoder
@@ -296,7 +296,7 @@ class BaseBinarizer:
             if num_workers > 0:
                 # code for parallel processing
                 for item in tqdm(
-                        chunked_multiprocess_run(self.process_item, args, num_workers=num_workers),
+                        multiprocess_run(self.process_item, args, num_workers=num_workers),
                         total=len(list(self.meta_data_iterator(prefix)))
                 ):
                     postprocess(item)
