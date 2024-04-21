@@ -1,0 +1,18 @@
+semi_vowel:
+- r
+- w
+- y
+
+vowel:
+- a
+- i
+- u
+- e
+- o
+- N
+- M
+- NG
+- cl
+- vf
+- AP
+- SP
