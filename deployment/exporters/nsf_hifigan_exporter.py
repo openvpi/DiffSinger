@@ -5,6 +5,7 @@ from typing import Union
 import onnx
 import onnxsim
 import torch
+import yaml
 from torch import nn
 
 from basics.base_exporter import BaseExporter
@@ -32,7 +33,7 @@ class NSFHiFiGANExporter(BaseExporter):
         config_path = self.model_path.with_name('config.json')
         with open(config_path, 'r', encoding='utf8') as f:
             config = json.load(f)
-        model = NSFHiFiGANONNX(config).eval().to(self.device)
+        model = NSFHiFiGANONNX(config, mel_base=hparams.get('mel_base', '10')).eval().to(self.device)
         load_ckpt(model.generator, str(self.model_path),
                   prefix_in_ckpt=None, key_in_ckpt='generator',
                   strict=True, device=self.device)
@@ -42,6 +43,7 @@ class NSFHiFiGANExporter(BaseExporter):
     def export(self, path: Path):
         path.mkdir(parents=True, exist_ok=True)
         self.export_model(path / self.model_cache_path.name)
+        self.export_attachments(path)
 
     def export_model(self, path: Path):
         self._torch_export_model()
@@ -49,6 +51,26 @@ class NSFHiFiGANExporter(BaseExporter):
         onnx.save(model_onnx, path)
         self.model_cache_path.unlink()
         print(f'| export model => {path}')
+
+    def export_attachments(self, path: Path):
+        config_path = path / 'vocoder.yaml'
+        with open(config_path, 'w', encoding='utf8') as fw:
+            yaml.safe_dump({
+                # basic configs
+                'name': self.model_name,
+                'model': self.model_cache_path.name,
+                # mel specifications
+                'sample_rate': hparams['audio_sample_rate'],
+                'hop_size': hparams['hop_size'],
+                'win_size': hparams['win_size'],
+                'fft_size': hparams['fft_size'],
+                'num_mel_bins': hparams['audio_num_mel_bins'],
+                'mel_fmin': hparams['fmin'],
+                'mel_fmax': hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2,
+                'mel_base': str(hparams.get('mel_base', '10')),
+                'mel_scale': 'slaney',
+            }, fw, sort_keys=False)
+        print(f'| export configs => {config_path} **PLEASE EDIT BEFORE USE**')
 
     @torch.no_grad()
     def _torch_export_model(self):

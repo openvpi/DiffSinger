@@ -11,8 +11,9 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding
 )
-from modules.diffusion.ddpm import (
-    GaussianDiffusion, PitchDiffusion
+from modules.core import (
+    GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion,
+    RectifiedFlow, PitchRectifiedFlow, MultiVarianceRectifiedFlow
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
@@ -51,21 +52,39 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 aux_decoder_arch=self.shallow_args['aux_decoder_arch'],
                 aux_decoder_args=self.shallow_args['aux_decoder_args']
             )
-
-        self.diffusion = GaussianDiffusion(
-            out_dims=out_dims,
-            num_feats=1,
-            timesteps=hparams['timesteps'],
-            k_step=hparams['K_step'],
-            denoiser_type=hparams['diff_decoder_type'],
-            denoiser_args={
-                'n_layers': hparams['residual_layers'],
-                'n_chans': hparams['residual_channels'],
-                'n_dilates': hparams['dilation_cycle_length'],
-            },
-            spec_min=hparams['spec_min'],
-            spec_max=hparams['spec_max']
-        )
+        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
+        if self.diffusion_type == 'ddpm':
+            self.diffusion = GaussianDiffusion(
+                out_dims=out_dims,
+                num_feats=1,
+                timesteps=hparams['timesteps'],
+                k_step=hparams['K_step'],
+                backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                backbone_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=hparams['spec_min'],
+                spec_max=hparams['spec_max']
+            )
+        elif self.diffusion_type == 'reflow':
+            self.diffusion = RectifiedFlow(
+                out_dims=out_dims,
+                num_feats=1,
+                t_start=hparams['T_start'],
+                time_scale_factor=hparams['time_scale_factor'],
+                backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                backbone_args={
+                    'n_layers': hparams['residual_layers'],
+                    'n_chans': hparams['residual_channels'],
+                    'n_dilates': hparams['dilation_cycle_length'],
+                },
+                spec_min=hparams['spec_min'],
+                spec_max=hparams['spec_max']
+            )
+        else:
+            raise NotImplementedError(self.diffusion_type)
 
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
@@ -96,16 +115,15 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                 else:
                     aux_out = None
                 if self.train_diffusion:
-                    x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-                    diff_out = (x_recon, noise)
+                    diff_out = self.diffusion(condition, gt_spec=gt_mel, infer=False)
                 else:
                     diff_out = None
                 return ShallowDiffusionOutput(aux_out=aux_out, diff_out=diff_out)
 
             else:
                 aux_out = None
-                x_recon, noise = self.diffusion(condition, gt_spec=gt_mel, infer=False)
-                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=(x_recon, noise))
+                diff_out = self.diffusion(condition, gt_spec=gt_mel, infer=False)
+                return ShallowDiffusionOutput(aux_out=aux_out, diff_out=diff_out)
 
 
 class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
@@ -128,7 +146,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         )
         self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
-
+        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
         if self.predict_pitch:
             self.use_melody_encoder = hparams.get('use_melody_encoder', False)
             if self.use_melody_encoder:
@@ -139,21 +157,40 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_predictor = PitchDiffusion(
-                vmin=pitch_hparams['pitd_norm_min'],
-                vmax=pitch_hparams['pitd_norm_max'],
-                cmin=pitch_hparams['pitd_clip_min'],
-                cmax=pitch_hparams['pitd_clip_max'],
-                repeat_bins=pitch_hparams['repeat_bins'],
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
-                denoiser_type=hparams['diff_decoder_type'],
-                denoiser_args={
-                    'n_layers': pitch_hparams['residual_layers'],
-                    'n_chans': pitch_hparams['residual_channels'],
-                    'n_dilates': pitch_hparams['dilation_cycle_length'],
-                }
-            )
+
+            if self.diffusion_type == 'ddpm':
+                self.pitch_predictor = PitchDiffusion(
+                    vmin=pitch_hparams['pitd_norm_min'],
+                    vmax=pitch_hparams['pitd_norm_max'],
+                    cmin=pitch_hparams['pitd_clip_min'],
+                    cmax=pitch_hparams['pitd_clip_max'],
+                    repeat_bins=pitch_hparams['repeat_bins'],
+                    timesteps=hparams['timesteps'],
+                    k_step=hparams['K_step'],
+                    backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                    backbone_args={
+                        'n_layers': pitch_hparams['residual_layers'],
+                        'n_chans': pitch_hparams['residual_channels'],
+                        'n_dilates': pitch_hparams['dilation_cycle_length'],
+                    }
+                )
+            elif self.diffusion_type == 'reflow':
+                self.pitch_predictor = PitchRectifiedFlow(
+                    vmin=pitch_hparams['pitd_norm_min'],
+                    vmax=pitch_hparams['pitd_norm_max'],
+                    cmin=pitch_hparams['pitd_clip_min'],
+                    cmax=pitch_hparams['pitd_clip_max'],
+                    repeat_bins=pitch_hparams['repeat_bins'],
+                    time_scale_factor=hparams['time_scale_factor'],
+                    backbone_type=hparams.get('backbone_type', hparams.get('diff_decoder_type')),
+                    backbone_args={
+                        'n_layers': pitch_hparams['residual_layers'],
+                        'n_chans': pitch_hparams['residual_channels'],
+                        'n_dilates': pitch_hparams['dilation_cycle_length'],
+                    }
+                )
+            else:
+                raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
@@ -161,7 +198,13 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 v_name: Linear(1, hparams['hidden_size'])
                 for v_name in self.variance_prediction_list
             })
-            self.variance_predictor = self.build_adaptor()
+
+            if self.diffusion_type == 'ddpm':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusion)
+            elif self.diffusion_type == 'reflow':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlow)
+            else:
+                raise NotImplementedError(self.diffusion_type)
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
@@ -239,7 +282,8 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                     delta_pitch_in = (pitch - base_pitch) * ~pitch_retake
                 pitch_cond += self.delta_pitch_embed(delta_pitch_in[:, :, None])
             else:
-                base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
+                if not retake_unset:  # retake
+                    base_pitch = base_pitch * pitch_retake + pitch * ~pitch_retake
                 pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
 
             if infer:

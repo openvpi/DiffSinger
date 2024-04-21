@@ -4,14 +4,8 @@ os.environ["LRU_CACHE_CAPACITY"] = "3"
 import torch
 import torch.utils.data
 import numpy as np
-import librosa
 from librosa.filters import mel as librosa_mel_fn
 import torch.nn.functional as F
-
-
-def load_wav_to_torch(full_path, target_sr=None):
-    data, sr = librosa.load(full_path, sr=target_sr, mono=True)
-    return torch.from_numpy(data), sr
 
 
 def dynamic_range_compression(x, C=1, clip_val=1e-5):
@@ -96,8 +90,3 @@ class STFT:
         spec = dynamic_range_compression_torch(spec, clip_val=clip_val)
 
         return spec
-
-    def __call__(self, audiopath):
-        audio, sr = load_wav_to_torch(audiopath, target_sr=self.target_sr)
-        spect = self.get_mel(audio.unsqueeze(0)).squeeze(0)
-        return spect

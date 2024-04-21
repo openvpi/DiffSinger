@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import deque
 from functools import partial
-from inspect import isfunction
 from typing import List, Tuple
 
 import numpy as np
@@ -10,18 +9,12 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from modules.diffusion.wavenet import WaveNet
+from modules.backbones.wavenet import WaveNet
 from utils.hparams import hparams
 
-DIFF_DENOISERS = {
+BACKBONES = {
     'wavenet': WaveNet
 }
-
-
-def default(val, d):
-    if val is not None:
-        return val
-    return d() if isfunction(d) else d
 
 
 def extract(a, t, x_shape):
@@ -36,7 +29,7 @@ def noise_like(shape, device, repeat=False):
     return repeat_noise() if repeat else noise()
 
 
-def linear_beta_schedule(timesteps, max_beta=hparams.get('max_beta', 0.01)):
+def linear_beta_schedule(timesteps, max_beta=0.01):
     """
     linear schedule
     """
@@ -65,10 +58,10 @@ beta_schedule = {
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, out_dims, num_feats=1, timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None, betas=None,
+                 backbone_type=None, backbone_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
-        self.denoise_fn: nn.Module = DIFF_DENOISERS[denoiser_type](out_dims, num_feats, **denoiser_args)
+        self.denoise_fn: nn.Module = BACKBONES[backbone_type](out_dims, num_feats, **backbone_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
 
@@ -144,7 +137,9 @@ class GaussianDiffusion(nn.Module):
         noise_pred = self.denoise_fn(x, t, cond=cond)
         x_recon = self.predict_start_from_noise(x, t=t, noise=noise_pred)
 
-        x_recon.clamp_(-1., 1.)
+        # This is previously inherited from original DiffSinger repository
+        # and disabled due to some loudness issues when speedup = 1.
+        # x_recon.clamp_(-1., 1.)
 
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
         return model_mean, posterior_variance, posterior_log_variance
@@ -213,7 +208,8 @@ class GaussianDiffusion(nn.Module):
         )
 
     def p_losses(self, x_start, t, cond, noise=None):
-        noise = default(noise, lambda: torch.randn_like(x_start))
+        if noise is None:
+            noise = torch.randn_like(x_start)
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_recon = self.denoise_fn(x_noisy, t, cond)
@@ -222,6 +218,10 @@ class GaussianDiffusion(nn.Module):
 
     def inference(self, cond, b=1, x_start=None, device=None):
         depth = hparams.get('K_step_infer', self.k_step)
+        speedup = hparams['diff_speedup']
+        if speedup > 0:
+            assert depth % speedup == 0, f'Acceleration ratio must be a factor of diffusion depth {depth}.'
+
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
         if self.use_shallow_diffusion:
             t_max = min(depth, self.k_step)
@@ -239,8 +239,8 @@ class GaussianDiffusion(nn.Module):
             assert x_start is not None, 'Missing shallow diffusion source.'
             x = x_start
 
-        if hparams.get('pndm_speedup') and hparams['pndm_speedup'] > 1 and t_max > 0:
-            algorithm = hparams.get('diff_accelerator', 'ddim')
+        if speedup > 1 and t_max > 0:
+            algorithm = hparams['diff_accelerator']
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.
@@ -270,7 +270,7 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
-                steps = t_max // hparams["pndm_speedup"]
+                steps = t_max // hparams["diff_speedup"]
                 self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = dpm_solver.sample(
                     x,
@@ -308,7 +308,7 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 uni_pc = UniPC(model_fn, noise_schedule, variant='bh2')
 
-                steps = t_max // hparams["pndm_speedup"]
+                steps = t_max // hparams["diff_speedup"]
                 self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
                 x = uni_pc.sample(
                     x,
@@ -320,7 +320,7 @@ class GaussianDiffusion(nn.Module):
                 self.bar.close()
             elif algorithm == 'pndm':
                 self.noise_list = deque(maxlen=4)
-                iteration_interval = hparams['pndm_speedup']
+                iteration_interval = speedup
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
                         total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
@@ -330,7 +330,7 @@ class GaussianDiffusion(nn.Module):
                         iteration_interval, cond=cond
                     )
             elif algorithm == 'ddim':
-                iteration_interval = hparams['pndm_speedup']
+                iteration_interval = speedup
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
                         total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
@@ -340,7 +340,7 @@ class GaussianDiffusion(nn.Module):
                         iteration_interval, cond=cond
                     )
             else:
-                raise NotImplementedError(algorithm)
+                raise ValueError(f"Unsupported acceleration algorithm for DDPM: {algorithm}.")
         else:
             for i in tqdm(reversed(range(0, t_max)), desc='sample time step', total=t_max,
                           disable=not hparams['infer'], leave=False):
@@ -361,7 +361,8 @@ class GaussianDiffusion(nn.Module):
             if self.num_feats == 1:
                 spec = spec[:, None, :, :]  # [B, F=1, M, T]
             t = torch.randint(0, self.k_step, (b,), device=device).long()
-            return self.p_losses(spec, t, cond=cond)
+            x_recon, noise = self.p_losses(spec, t, cond=cond)
+            return x_recon, noise
         else:
             # src_spec: [B, T, M] or [B, F, T, M]
             if src_spec is not None:
@@ -381,9 +382,9 @@ class GaussianDiffusion(nn.Module):
 
 
 class RepetitiveDiffusion(GaussianDiffusion):
-    def __init__(self, vmin: float | int | list, vmax: float | int | list, repeat_bins: int,
-                 timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None,
+    def __init__(self, vmin: float | int | list, vmax: float | int | list,
+                 repeat_bins: int, timesteps=1000, k_step=1000,
+                 backbone_type=None, backbone_args=None,
                  betas=None):
         assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)
         num_feats = 1 if isinstance(vmin, (float, int)) else len(vmin)
@@ -393,7 +394,7 @@ class RepetitiveDiffusion(GaussianDiffusion):
         super().__init__(
             out_dims=repeat_bins, num_feats=num_feats,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas, spec_min=spec_min, spec_max=spec_max
         )
 
@@ -422,7 +423,7 @@ class PitchDiffusion(RepetitiveDiffusion):
     def __init__(self, vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None,
+                 backbone_type=None, backbone_args=None,
                  betas=None):
         self.vmin = vmin  # norm min
         self.vmax = vmax  # norm max
@@ -431,7 +432,7 @@ class PitchDiffusion(RepetitiveDiffusion):
         super().__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas
         )
 
@@ -447,7 +448,7 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
             self, ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, timesteps=1000, k_step=1000,
-            denoiser_type=None, denoiser_args=None,
+            backbone_type=None, backbone_args=None,
             betas=None
     ):
         assert len(ranges) == len(clamps)
@@ -461,7 +462,7 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
         super().__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas
         )
 

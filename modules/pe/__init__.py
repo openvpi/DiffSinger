@@ -6,7 +6,7 @@ from .rmvpe import RMVPE
 
 
 def initialize_pe():
-    pe = hparams.get('pe', 'parselmouth')
+    pe = hparams['pe']
     pe_ckpt = hparams['pe_ckpt']
     if pe == 'parselmouth':
         return ParselmouthPE()

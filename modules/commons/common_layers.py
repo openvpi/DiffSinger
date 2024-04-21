@@ -104,35 +104,13 @@ class SinusoidalPositionalEmbedding(nn.Module):
         return int(1e5)  # an arbitrary large number
 
 
-class ConvTBC(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, padding=0):
-        super(ConvTBC, self).__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.padding = padding
-
-        self.weight = torch.nn.Parameter(torch.Tensor(
-            self.kernel_size, in_channels, out_channels))
-        self.bias = torch.nn.Parameter(torch.Tensor(out_channels))
-
-    def forward(self, x):
-        return torch.conv_tbc(x.contiguous(), self.weight, self.bias, self.padding)
-
-
 class TransformerFFNLayer(nn.Module):
-    def __init__(self, hidden_size, filter_size, padding="SAME", kernel_size=1, dropout=0., act='gelu'):
+    def __init__(self, hidden_size, filter_size, kernel_size=1, dropout=0., act='gelu'):
         super().__init__()
         self.kernel_size = kernel_size
         self.dropout = dropout
         self.act = act
-        if padding == 'SAME':
-            self.ffn_1 = nn.Conv1d(hidden_size, filter_size, kernel_size, padding=kernel_size // 2)
-        elif padding == 'LEFT':
-            self.ffn_1 = nn.Sequential(
-                nn.ConstantPad1d((kernel_size - 1, 0), 0.0),
-                nn.Conv1d(hidden_size, filter_size, kernel_size)
-            )
+        self.ffn_1 = nn.Conv1d(hidden_size, filter_size, kernel_size, padding=kernel_size // 2)
         if self.act == 'relu':
             self.act_fn = ReLU()
         elif self.act == 'gelu':
@@ -152,44 +130,18 @@ class TransformerFFNLayer(nn.Module):
         return x
 
 
-class BatchNorm1dTBC(nn.Module):
-    def __init__(self, c):
-        super(BatchNorm1dTBC, self).__init__()
-        self.bn = nn.BatchNorm1d(c)
-
-    def forward(self, x):
-        """
-
-        :param x: [T, B, C]
-        :return: [T, B, C]
-        """
-        x = x.permute(1, 2, 0)  # [B, C, T]
-        x = self.bn(x)  # [B, C, T]
-        x = x.permute(2, 0, 1)  # [T, B, C]
-        return x
-
-
 class EncSALayer(nn.Module):
     def __init__(self, c, num_heads, dropout, attention_dropout=0.1,
-                 relu_dropout=0.1, kernel_size=9, padding='SAME', norm='ln', act='gelu'):
+                 relu_dropout=0.1, kernel_size=9, act='gelu'):
         super().__init__()
-        self.c = c
         self.dropout = dropout
-        self.num_heads = num_heads
-        if num_heads > 0:
-            if norm == 'ln':
-                self.layer_norm1 = LayerNorm(c)
-            elif norm == 'bn':
-                self.layer_norm1 = BatchNorm1dTBC(c)
-            self.self_attn = MultiheadAttention(
-                self.c, num_heads, dropout=attention_dropout, bias=False,
-            )
-        if norm == 'ln':
-            self.layer_norm2 = LayerNorm(c)
-        elif norm == 'bn':
-            self.layer_norm2 = BatchNorm1dTBC(c)
+        self.layer_norm1 = LayerNorm(c)
+        self.self_attn = MultiheadAttention(
+            c, num_heads, dropout=attention_dropout, bias=False,
+        )
+        self.layer_norm2 = LayerNorm(c)
         self.ffn = TransformerFFNLayer(
-            c, 4 * c, kernel_size=kernel_size, dropout=relu_dropout, padding=padding, act=act
+            c, 4 * c, kernel_size=kernel_size, dropout=relu_dropout, act=act
         )
 
     def forward(self, x, encoder_padding_mask=None, **kwargs):
@@ -197,18 +149,17 @@ class EncSALayer(nn.Module):
         if layer_norm_training is not None:
             self.layer_norm1.training = layer_norm_training
             self.layer_norm2.training = layer_norm_training
-        if self.num_heads > 0:
-            residual = x
-            x = self.layer_norm1(x)
-            x, _, = self.self_attn(
-                query=x,
-                key=x,
-                value=x,
-                key_padding_mask=encoder_padding_mask
-            )
-            x = F.dropout(x, self.dropout, training=self.training)
-            x = residual + x
-            x = x * (1 - encoder_padding_mask.float()).transpose(0, 1)[..., None]
+        residual = x
+        x = self.layer_norm1(x)
+        x, _, = self.self_attn(
+            query=x,
+            key=x,
+            value=x,
+            key_padding_mask=encoder_padding_mask
+        )
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = residual + x
+        x = x * (1 - encoder_padding_mask.float()).transpose(0, 1)[..., None]
 
         residual = x
         x = self.layer_norm2(x)

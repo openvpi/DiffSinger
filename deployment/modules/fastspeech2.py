@@ -1,16 +1,21 @@
 import copy
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from modules.commons.common_layers import NormalInitEmbedding as Embedding
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
-from utils.pitch_utils import (
-    f0_bin, f0_mel_min, f0_mel_max
-)
 from utils.text_encoder import PAD_INDEX
+
+f0_bin = 256
+f0_max = 1100.0
+f0_min = 50.0
+f0_mel_min = 1127 * np.log(1 + f0_min / 700)
+f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
 
 def f0_to_coarse(f0):
@@ -38,10 +43,16 @@ class LengthRegulator(nn.Module):
 class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
     def __init__(self, vocab_size):
         super().__init__(vocab_size=vocab_size)
+
+        # for temporary compatibility; will be completely removed in the future
+        self.f0_embed_type = hparams.get('f0_embed_type', 'continuous')
+        if self.f0_embed_type == 'discrete':
+            self.pitch_embed = Embedding(300, hparams['hidden_size'], PAD_INDEX)
+
         self.lr = LengthRegulator()
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             self.shift_min, self.shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
 
     # noinspection PyMethodOverriding
@@ -71,7 +82,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             ], dim=-1).sum(-1)
             condition += variance_embeds
 
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             if hasattr(self, 'frozen_key_shift'):
                 key_shift_embed = self.key_shift_embed(self.frozen_key_shift[:, None, None])
             else:
@@ -81,7 +92,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
             condition += key_shift_embed
 
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             if velocity is not None:
                 velocity = torch.clip(velocity, min=self.speed_min, max=self.speed_max)
                 speed_embed = self.speed_embed(velocity[:, :, None])

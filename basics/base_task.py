@@ -3,7 +3,6 @@ import os
 import pathlib
 import shutil
 import sys
-from datetime import datetime
 from typing import Dict
 
 import matplotlib
@@ -16,7 +15,6 @@ matplotlib.use('Agg')
 import torch.utils.data
 from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
@@ -87,8 +85,8 @@ class BaseTask(pl.LightningModule):
     # Training, validation and testing
     ###########
     def setup(self, stage):
-        self.train_dataset = self.dataset_cls(hparams['train_set_name'])
-        self.valid_dataset = self.dataset_cls(hparams['valid_set_name'])
+        self.train_dataset = self.dataset_cls('train')
+        self.valid_dataset = self.dataset_cls('valid')
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
@@ -130,9 +128,9 @@ class BaseTask(pl.LightningModule):
         self.load_state_dict(state_dict, strict=False)
 
     def load_pre_train_model(self):
-        pre_train_ckpt_path = hparams.get('finetune_ckpt_path')
-        blacklist = hparams.get('finetune_ignored_params')
-        # whitelist=hparams.get('pre_train_whitelist')
+        pre_train_ckpt_path = hparams['finetune_ckpt_path']
+        blacklist = hparams['finetune_ignored_params']
+        # whitelist=hparams['pre_train_whitelist']
         if blacklist is None:
             blacklist = []
         # if whitelist is  None:
@@ -344,8 +342,7 @@ class BaseTask(pl.LightningModule):
             size_reversed=True,
             required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
-            shuffle_batch=True,
-            seed=hparams['seed']
+            shuffle_batch=True
         )
         return torch.utils.data.DataLoader(
             self.train_dataset,
@@ -396,7 +393,6 @@ class BaseTask(pl.LightningModule):
 
     @classmethod
     def start(cls):
-        pl.seed_everything(hparams['seed'], workers=True)
         task = cls()
 
         # if pre_train is not None:
@@ -408,7 +404,13 @@ class BaseTask(pl.LightningModule):
             accelerator=hparams['pl_trainer_accelerator'],
             devices=hparams['pl_trainer_devices'],
             num_nodes=hparams['pl_trainer_num_nodes'],
-            strategy=get_strategy(hparams['pl_trainer_strategy']),
+            strategy=get_strategy(
+                hparams['pl_trainer_devices'],
+                hparams['pl_trainer_num_nodes'],
+                hparams['pl_trainer_accelerator'],
+                hparams['pl_trainer_strategy'],
+                hparams['pl_trainer_precision'],
+            ),
             precision=hparams['pl_trainer_precision'],
             callbacks=[
                 DsModelCheckpoint(
@@ -445,14 +447,6 @@ class BaseTask(pl.LightningModule):
         if not hparams['infer']:  # train
             @rank_zero_only
             def train_payload_copy():
-                # copy_code = input(f'{hparams["save_codes"]} code backup? y/n: ') == 'y'
-                copy_code = True  # backup code every time
-                if copy_code:
-                    code_dir = work_dir / 'codes' / datetime.now().strftime('%Y%m%d%H%M%S')
-                    code_dir.mkdir(exist_ok=True, parents=True)
-                    for c in hparams['save_codes']:
-                        shutil.copytree(c, code_dir / c, dirs_exist_ok=True)
-                    print(f'| Copied codes to {code_dir}.')
                 # Copy spk_map.json and dictionary.txt to work dir
                 binary_dir = pathlib.Path(hparams['binary_data_dir'])
                 spk_map = work_dir / 'spk_map.json'

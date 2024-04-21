@@ -10,7 +10,7 @@ from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
 from modules.aux_decoder import build_aux_loss
-from modules.losses.diff_loss import DiffusionNoiseLoss
+from modules.losses import DiffusionLoss, RectifiedFlowLoss
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import get_vocoder_cls
 from utils.hparams import hparams
@@ -23,13 +23,17 @@ class AcousticDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
         super(AcousticDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         self.required_variances = {}  # key: variance name, value: padding value
-        if hparams.get('use_energy_embed', False):
+        if hparams['use_energy_embed']:
             self.required_variances['energy'] = 0.0
-        if hparams.get('use_breathiness_embed', False):
+        if hparams['use_breathiness_embed']:
             self.required_variances['breathiness'] = 0.0
+        if hparams['use_voicing_embed']:
+            self.required_variances['voicing'] = 0.0
+        if hparams['use_tension_embed']:
+            self.required_variances['tension'] = 0.0
 
-        self.need_key_shift = hparams.get('use_key_shift_embed', False)
-        self.need_speed = hparams.get('use_speed_embed', False)
+        self.need_key_shift = hparams['use_key_shift_embed']
+        self.need_speed = hparams['use_speed_embed']
         self.need_spk_id = hparams['use_spk_id']
 
     def collater(self, samples):
@@ -63,6 +67,8 @@ class AcousticTask(BaseTask):
     def __init__(self):
         super().__init__()
         self.dataset_cls = AcousticDataset
+        self.diffusion_type = hparams['diffusion_type']
+        assert self.diffusion_type in ['ddpm', 'reflow'], f"Unknown diffusion type: {self.diffusion_type}"
         self.use_shallow_diffusion = hparams['use_shallow_diffusion']
         if self.use_shallow_diffusion:
             self.shallow_args = hparams['shallow_diffusion_args']
@@ -74,10 +80,14 @@ class AcousticTask(BaseTask):
             self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
         self.logged_gt_wav = set()
         self.required_variances = []
-        if hparams.get('use_energy_embed', False):
+        if hparams['use_energy_embed']:
             self.required_variances.append('energy')
-        if hparams.get('use_breathiness_embed', False):
+        if hparams['use_breathiness_embed']:
             self.required_variances.append('breathiness')
+        if hparams['use_voicing_embed']:
+            self.required_variances.append('voicing')
+        if hparams['use_tension_embed']:
+            self.required_variances.append('tension')
         super()._finish_init()
 
     def _build_model(self):
@@ -92,7 +102,14 @@ class AcousticTask(BaseTask):
             self.aux_mel_loss = build_aux_loss(self.shallow_args['aux_decoder_arch'])
             self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
             self.register_validation_loss('aux_mel_loss')
-        self.mel_loss = DiffusionNoiseLoss(loss_type=hparams['diff_loss_type'])
+        if self.diffusion_type == 'ddpm':
+            self.mel_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+        elif self.diffusion_type == 'reflow':
+            self.mel_loss = RectifiedFlowLoss(
+                loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+            )
+        else:
+            raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
         self.register_validation_loss('mel_loss')
 
     def run_model(self, sample, infer=False):
@@ -128,9 +145,16 @@ class AcousticTask(BaseTask):
                 aux_mel_loss = self.lambda_aux_mel_loss * self.aux_mel_loss(aux_out, norm_gt)
                 losses['aux_mel_loss'] = aux_mel_loss
 
+            non_padding = (mel2ph > 0).unsqueeze(-1).float()
             if output.diff_out is not None:
-                x_recon, x_noise = output.diff_out
-                mel_loss = self.mel_loss(x_recon, x_noise, nonpadding=(mel2ph > 0).unsqueeze(-1).float())
+                if self.diffusion_type == 'ddpm':
+                    x_recon, x_noise = output.diff_out
+                    mel_loss = self.mel_loss(x_recon, x_noise, non_padding=non_padding)
+                elif self.diffusion_type == 'reflow':
+                    v_pred, v_gt, t = output.diff_out
+                    mel_loss = self.mel_loss(v_pred, v_gt, t=t, non_padding=non_padding)
+                else:
+                    raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
                 losses['mel_loss'] = mel_loss
 
             return losses
@@ -148,7 +172,7 @@ class AcousticTask(BaseTask):
         if sample['size'] > 0 and min(sample['indices']) < hparams['num_valid_plots']:
             mel_out: ShallowDiffusionOutput = self.run_model(sample, infer=True)
             for i in range(len(sample['indices'])):
-                data_idx = sample['indices'][i]
+                data_idx = sample['indices'][i].item()
                 if data_idx < hparams['num_valid_plots']:
                     if self.use_vocoder:
                         self.plot_wav(
@@ -162,7 +186,6 @@ class AcousticTask(BaseTask):
                     if mel_out.diff_out is not None:
                         self.plot_mel(data_idx, sample['mel'][i], mel_out.diff_out[i], 'diffmel')
         return losses, sample['size']
-
 
     ############
     # validation plots
@@ -205,6 +228,6 @@ class AcousticTask(BaseTask):
         mel_len = self.valid_dataset.metadata['mel'][data_idx]
         spec_cat = torch.cat([(out_spec - gt_spec).abs() + vmin, gt_spec, out_spec], -1)
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
-        self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}',  spec_to_figure(
+        self.logger.all_rank_experiment.add_figure(f'{name_prefix}_{data_idx}', spec_to_figure(
             spec_cat[:mel_len], vmin, vmax, title_text
         ), global_step=self.global_step)

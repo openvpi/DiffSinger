@@ -32,6 +32,10 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 self.variances_to_embed.add('energy')
             if hparams.get('use_breathiness_embed', False):
                 self.variances_to_embed.add('breathiness')
+            if hparams.get('use_voicing_embed', False):
+                self.variances_to_embed.add('voicing')
+            if hparams.get('use_tension_embed', False):
+                self.variances_to_embed.add('tension')
 
             self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
             if hparams['use_spk_id']:
@@ -107,7 +111,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 )).to(self.device)[None]
                 summary[v_name] = 'manual'
 
-        if hparams.get('use_key_shift_embed', False):
+        if hparams['use_key_shift_embed']:
             shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
             gender = param.get('gender')
             if gender is None:
@@ -131,7 +135,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     min=shift_min, max=shift_max
                 )
 
-        if hparams.get('use_speed_embed', False):
+        if hparams['use_speed_embed']:
             if param.get('velocity') is None:
                 summary['velocity'] = 'default'
                 batch['speed'] = torch.FloatTensor([1.]).to(self.device)[:, None]  # => [B=1, T=1]

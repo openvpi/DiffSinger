@@ -8,8 +8,7 @@ import utils
 import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
-from modules.losses.diff_loss import DiffusionNoiseLoss
-from modules.losses.dur_loss import DurationLoss
+from modules.losses import DurationLoss, DiffusionLoss, RectifiedFlowLoss
 from modules.metrics.curve import RawCurveAccuracy
 from modules.metrics.duration import RhythmCorrectness, PhonemeDurationAccuracy
 from modules.toplevel import DiffSingerVariance
@@ -24,7 +23,9 @@ class VarianceDataset(BaseDataset):
         super(VarianceDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
         need_energy = hparams['predict_energy']
         need_breathiness = hparams['predict_breathiness']
-        self.predict_variances = need_energy or need_breathiness
+        need_voicing = hparams['predict_voicing']
+        need_tension = hparams['predict_tension']
+        self.predict_variances = need_energy or need_breathiness or need_voicing or need_tension
 
     def collater(self, samples):
         batch = super().collater(samples)
@@ -59,6 +60,10 @@ class VarianceDataset(BaseDataset):
             batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
         if hparams['predict_breathiness']:
             batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0)
+        if hparams['predict_voicing']:
+            batch['voicing'] = utils.collate_nd([s['voicing'] for s in samples], 0)
+        if hparams['predict_tension']:
+            batch['tension'] = utils.collate_nd([s['tension'] for s in samples], 0)
 
         return batch
 
@@ -77,6 +82,8 @@ class VarianceTask(BaseTask):
         super().__init__()
         self.dataset_cls = VarianceDataset
 
+        self.diffusion_type = hparams['diffusion_type']
+
         self.use_spk_id = hparams['use_spk_id']
 
         self.predict_dur = hparams['predict_dur']
@@ -89,11 +96,17 @@ class VarianceTask(BaseTask):
 
         predict_energy = hparams['predict_energy']
         predict_breathiness = hparams['predict_breathiness']
+        predict_voicing = hparams['predict_voicing']
+        predict_tension = hparams['predict_tension']
         self.variance_prediction_list = []
         if predict_energy:
             self.variance_prediction_list.append('energy')
         if predict_breathiness:
             self.variance_prediction_list.append('breathiness')
+        if predict_voicing:
+            self.variance_prediction_list.append('voicing')
+        if predict_tension:
+            self.variance_prediction_list.append('tension')
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
         super()._finish_init()
@@ -118,15 +131,25 @@ class VarianceTask(BaseTask):
             self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))
             self.register_validation_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
         if self.predict_pitch:
-            self.pitch_loss = DiffusionNoiseLoss(
-                loss_type=hparams['diff_loss_type'],
-            )
+            if self.diffusion_type == 'ddpm':
+                self.pitch_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+            elif self.diffusion_type == 'reflow':
+                self.pitch_loss = RectifiedFlowLoss(
+                    loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+                )
+            else:
+                raise ValueError(f'Unknown diffusion type: {self.diffusion_type}')
             self.register_validation_loss('pitch_loss')
             self.register_validation_metric('pitch_acc', RawCurveAccuracy(tolerance=0.5))
         if self.predict_variances:
-            self.var_loss = DiffusionNoiseLoss(
-                loss_type=hparams['diff_loss_type'],
-            )
+            if self.diffusion_type == 'ddpm':
+                self.var_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+            elif self.diffusion_type == 'reflow':
+                self.var_loss = RectifiedFlowLoss(
+                    loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+                )
+            else:
+                raise ValueError(f'Unknown diffusion type: {self.diffusion_type}')
             self.register_validation_loss('var_loss')
 
     def run_model(self, sample, infer=False):
@@ -147,6 +170,8 @@ class VarianceTask(BaseTask):
         pitch = sample.get('pitch')  # [B, T_s]
         energy = sample.get('energy')  # [B, T_s]
         breathiness = sample.get('breathiness')  # [B, T_s]
+        voicing = sample.get('voicing')  # [B, T_s]
+        tension = sample.get('tension')  # [B, T_s]
 
         pitch_retake = variance_retake = None
         if (self.predict_pitch or self.predict_variances) and not infer:
@@ -168,7 +193,7 @@ class VarianceTask(BaseTask):
             note_midi=note_midi, note_rest=note_rest,
             note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
             base_pitch=base_pitch, pitch=pitch,
-            energy=energy, breathiness=breathiness,
+            energy=energy, breathiness=breathiness, voicing=voicing, tension=tension,
             pitch_retake=pitch_retake, variance_retake=variance_retake,
             spk_id=spk_ids, infer=infer
         )
@@ -182,17 +207,36 @@ class VarianceTask(BaseTask):
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
-            nonpadding = (mel2ph > 0).unsqueeze(-1) if mel2ph is not None else None
+            non_padding = (mel2ph > 0).unsqueeze(-1) if mel2ph is not None else None
             if pitch_pred is not None:
-                (pitch_x_recon, pitch_noise) = pitch_pred
-                losses['pitch_loss'] = self.lambda_pitch_loss * self.pitch_loss(
-                    pitch_x_recon, pitch_noise, nonpadding=nonpadding
-                )
+                if self.diffusion_type == 'ddpm':
+                    pitch_x_recon, pitch_noise = pitch_pred
+                    pitch_loss = self.pitch_loss(
+                        pitch_x_recon, pitch_noise, non_padding=non_padding
+                    )
+                elif self.diffusion_type == 'reflow':
+                    pitch_v_pred, pitch_v_gt, t = pitch_pred
+                    pitch_loss = self.pitch_loss(
+                        pitch_v_pred, pitch_v_gt, t=t, non_padding=non_padding
+                    )
+                else:
+                    raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
+                losses['pitch_loss'] = self.lambda_pitch_loss * pitch_loss
             if variances_pred is not None:
-                (variance_x_recon, variance_noise) = variances_pred
-                losses['var_loss'] = self.lambda_var_loss * self.var_loss(
-                    variance_x_recon, variance_noise, nonpadding=nonpadding
-                )
+                if self.diffusion_type == 'ddpm':
+                    var_x_recon, var_noise = variances_pred
+                    var_loss = self.var_loss(
+                        var_x_recon, var_noise, non_padding=non_padding
+                    )
+                elif self.diffusion_type == 'reflow':
+                    var_v_pred, var_v_gt, t = variances_pred
+                    var_loss = self.var_loss(
+                        var_v_pred, var_v_gt, t=t, non_padding=non_padding
+                    )
+                else:
+                    raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
+                losses['var_loss'] = self.lambda_var_loss * var_loss
+
             return losses
 
     def _validation_step(self, sample, batch_idx):
@@ -200,6 +244,7 @@ class VarianceTask(BaseTask):
         if min(sample['indices']) < hparams['num_valid_plots']:
             def sample_get(key, idx, abs_idx):
                 return sample[key][idx][:self.valid_dataset.metadata[key][abs_idx]].unsqueeze(0)
+
             dur_preds, pitch_preds, variances_preds = self.run_model(sample, infer=True)
             for i in range(len(sample['indices'])):
                 data_idx = sample['indices'][i]
@@ -243,7 +288,6 @@ class VarianceTask(BaseTask):
                             curve_name=name
                         )
         return losses, sample['size']
-
 
     ############
     # validation plots

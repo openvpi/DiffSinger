@@ -1,11 +1,5 @@
 # task
 task_cls: null
-seed: 1234
-save_codes:
-  - configs
-  - modules
-  - training
-  - utils
 
 #############
 # dataset
@@ -36,7 +30,6 @@ enc_layers: 4
 num_heads: 2
 enc_ffn_kernel_size: 9
 ffn_act: gelu
-ffn_padding: 'SAME'
 use_spk_id: false
 
 ###########
@@ -67,8 +60,6 @@ max_batch_frames: 32000
 max_batch_size: 100000
 max_val_batch_frames: 60000
 max_val_batch_size: 1
-train_set_name: 'train'
-valid_set_name: 'valid'
 pe: 'parselmouth'
 pe_ckpt: ''
 f0_min: 65

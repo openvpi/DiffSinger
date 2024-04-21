@@ -29,7 +29,7 @@ def locate_dictionary():
     """
     assert 'dictionary' in hparams or 'g2p_dictionary' in hparams, \
         'Please specify a dictionary file in your config.'
-    config_dict_path = pathlib.Path(hparams.get('dictionary', hparams.get('g2p_dictionary')))
+    config_dict_path = pathlib.Path(hparams['dictionary'])
     if config_dict_path.exists():
         return config_dict_path
     work_dir = pathlib.Path(hparams['work_dir'])

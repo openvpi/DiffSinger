@@ -1,13 +1,14 @@
 import os
 import sys
 
+import librosa
 import numpy as np
 import resampy
 import torch
 import torchcrepe
 import tqdm
 
-from utils.binarizer_utils import get_pitch_parselmouth
+from utils.binarizer_utils import get_pitch_parselmouth, get_mel_torch
 from modules.vocoders.nsf_hifigan import NsfHifiGAN
 from utils.infer_utils import save_wav
 from utils.hparams import set_hparams, hparams
@@ -60,8 +61,18 @@ os.makedirs(out_path, exist_ok=True)
 for filename in tqdm.tqdm(os.listdir(in_path)):
     if not filename.endswith('.wav'):
         continue
-    wav, mel = vocoder.wav2spec(os.path.join(in_path, filename))
-    f0, _ = get_pitch_parselmouth(wav, len(mel), hparams)
+    wav, _ = librosa.load(os.path.join(in_path, filename), sr=hparams['audio_sample_rate'], mono=True)
+    mel = get_mel_torch(
+        wav, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
+        hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
+        fmin=hparams['fmin'], fmax=hparams['fmax'], mel_base=hparams['mel_base'],
+        device=device
+    )
+
+    f0, _ = get_pitch_parselmouth(
+        wav, samplerate=hparams['audio_sample_rate'], length=len(mel),
+        hop_size=hparams['hop_size']
+    )
 
     wav_out = vocoder.spec2wav(mel, f0=f0)
     save_wav(wav_out, os.path.join(out_path, filename), hparams['audio_sample_rate'])

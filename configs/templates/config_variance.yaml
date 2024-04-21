@@ -19,17 +19,30 @@ binary_data_dir: data/xxx/binary
 binarization_args:
   num_workers: 0
 
+use_spk_id: false
+num_spk: 1
+# NOTICE: before enabling variance modules, please read the docs at
+# https://github.com/openvpi/DiffSinger/tree/main/docs/BestPractices.md#mutual-influence-between-variance-modules
+predict_dur: false
+predict_pitch: false
+# NOTICE: before enabling variance predictions, please read the docs at
+# https://github.com/openvpi/DiffSinger/tree/main/docs/BestPractices.md#choosing-variance-parameters
+predict_energy: false
+predict_breathiness: false
+predict_voicing: false
+predict_tension: false
+
 energy_db_min: -96.0
 energy_db_max: -12.0
+
 breathiness_db_min: -96.0
 breathiness_db_max: -20.0
 
-use_spk_id: false
-num_spk: 1
-predict_dur: true
-predict_pitch: true
-predict_energy: false
-predict_breathiness: false
+voicing_db_min: -96.0
+voicing_db_max: -12.0
+
+tension_logit_min: -10.0
+tension_logit_max: 10.0
 
 hidden_size: 256
 dur_prediction_args:
@@ -51,6 +64,8 @@ melody_encoder_args:
 use_glide_embed: false
 glide_types: [up, down]
 glide_embed_scale: 11.313708498984760  # sqrt(128)
+
+diffusion_type: reflow
 
 pitch_prediction_args:
   pitd_norm_min: -8.0
@@ -76,16 +91,16 @@ optimizer_args:
   lr: 0.0006
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR
-  step_size: 12000
+  step_size: 10000
   gamma: 0.75
 max_batch_frames: 80000
 max_batch_size: 48
-max_updates: 288000
+max_updates: 160000
 
 num_valid_plots: 10
 val_check_interval: 2000
 num_ckpt_keep: 5
-permanent_ckpt_start: 180000
+permanent_ckpt_start: 80000
 permanent_ckpt_interval: 10000
 pl_trainer_devices: 'auto'
 pl_trainer_precision: '16-mixed'

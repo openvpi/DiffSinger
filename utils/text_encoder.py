@@ -1,17 +1,7 @@
 import numpy as np
 
-from utils.hparams import hparams
-
 PAD = '<PAD>'
 PAD_INDEX = 0
-
-
-def strip_ids(ids, ids_to_strip):
-    """Strip ids_to_strip from the end ids."""
-    ids = list(ids)
-    while ids and ids[-1] in ids_to_strip:
-        ids.pop()
-    return ids
 
 
 class TokenTextEncoder:
@@ -26,30 +16,25 @@ class TokenTextEncoder:
         Args:
             vocab_list: If not None, a list of elements of the vocabulary.
         """
-        self.num_reserved_ids = hparams.get('num_pad_tokens', 3)
-        assert self.num_reserved_ids > 0, 'num_pad_tokens must be positive'
         self.vocab_list = sorted(vocab_list)
 
     def encode(self, sentence):
         """Converts a space-separated string of phones to a list of ids."""
         phones = sentence.strip().split() if isinstance(sentence, str) else sentence
-        return [self.vocab_list.index(ph) + self.num_reserved_ids if ph != PAD else PAD_INDEX for ph in phones]
+        return [self.vocab_list.index(ph) + 1 if ph != PAD else PAD_INDEX for ph in phones]
 
     def decode(self, ids, strip_padding=False):
         if strip_padding:
             ids = np.trim_zeros(ids)
         ids = list(ids)
         return ' '.join([
-            self.vocab_list[_id - self.num_reserved_ids] if _id >= self.num_reserved_ids else PAD
+            self.vocab_list[_id - 1] if _id >= 1 else PAD
             for _id in ids
         ])
 
-    def pad(self):
-        pass
-
     @property
     def vocab_size(self):
-        return len(self.vocab_list) + self.num_reserved_ids
+        return len(self.vocab_list) + 1
 
     def __len__(self):
         return self.vocab_size
@@ -64,5 +49,5 @@ class TokenTextEncoder:
         filename: Full path of the file to store the vocab to.
         """
         with open(filename, 'w', encoding='utf8') as f:
-            [print(PAD, file=f) for _ in range(self.num_reserved_ids)]
+            print(PAD, file=f)
             [print(tok, file=f) for tok in self.vocab_list]

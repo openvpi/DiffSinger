@@ -15,7 +15,7 @@ test_prefixes: [
 ]
 
 vocoder: NsfHifiGAN
-vocoder_ckpt: checkpoints/nsf_hifigan/model
+vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
 audio_sample_rate: 44100
 audio_num_mel_bins: 128
 hop_size: 512            # Hop size.
@@ -39,44 +39,52 @@ augmentation_args:
   random_time_stretching:
     enabled: false
     range: [0.5, 2.]
-    domain: log  # or linear
     scale: 0.75
 
 raw_data_dir: 'data/opencpop/raw'
 binary_data_dir: 'data/opencpop/binary'
 binarizer_cls: preprocessing.acoustic_binarizer.AcousticBinarizer
 dictionary: dictionaries/opencpop-extension.txt
-num_pad_tokens: 1
-spec_min: [-5]
+spec_min: [-12]
 spec_max: [0]
-mel_vmin: -6. #-6.
-mel_vmax: 1.5
-interp_uv: true
+mel_vmin: -14.
+mel_vmax: 4.
+mel_base: 'e'
 energy_smooth_width: 0.12
 breathiness_smooth_width: 0.12
+voicing_smooth_width: 0.12
+tension_smooth_width: 0.12
 
 use_spk_id: false
-f0_embed_type: continuous
 use_energy_embed: false
 use_breathiness_embed: false
+use_voicing_embed: false
+use_tension_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 
+diffusion_type: reflow
+time_scale_factor: 1000
 timesteps: 1000
 max_beta: 0.02
 rel_pos: true
+sampling_algorithm: euler
+sampling_steps: 20
 diff_accelerator: ddim
-pndm_speedup: 10
+diff_speedup: 10
 hidden_size: 256
 residual_layers: 20
 residual_channels: 512
 dilation_cycle_length: 4  # *
-diff_decoder_type: 'wavenet'
-diff_loss_type: l2
+backbone_type: 'wavenet'
+main_loss_type: l2
+main_loss_log_norm: false
 schedule_type: 'linear'
 
 # shallow diffusion
 use_shallow_diffusion: true
+T_start: 0.4
+T_start_infer: 0.4
 K_step: 400
 K_step_infer: 400
 
@@ -99,19 +107,18 @@ num_sanity_val_steps: 1
 optimizer_args:
   lr: 0.0006
 lr_scheduler_args:
-  step_size: 30000
-  gamma: 0.5
+  step_size: 10000
+  gamma: 0.75
 max_batch_frames: 50000
 max_batch_size: 64
 dataset_size_key: 'lengths'
 val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
-max_updates: 200000
+max_updates: 160000
 num_ckpt_keep: 5
-permanent_ckpt_start: 120000
+permanent_ckpt_start: 80000
 permanent_ckpt_interval: 20000
-
 
 finetune_enabled: false
 finetune_ckpt_path: null

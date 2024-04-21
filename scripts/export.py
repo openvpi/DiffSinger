@@ -1,13 +1,13 @@
 import os
+import pathlib
 import re
 import sys
-from pathlib import Path
 from typing import List
 
 import click
 import torch
 
-root_dir = Path(__file__).parent.parent.resolve()
+root_dir = pathlib.Path(__file__).resolve().parent.parent
 os.environ['PYTHONPATH'] = str(root_dir)
 sys.path.insert(0, str(root_dir))
 
@@ -24,9 +24,10 @@ def find_exp(exp):
                 exp = subdir.name
                 break
         else:
-            assert False, \
-                f'There are no matching exp starting with \'{exp}\' in \'checkpoints\' folder. ' \
+            raise click.BadParameter(
+                f'There are no matching exp starting with \'{exp}\' in \'checkpoints\' folder. '
                 'Please specify \'--exp\' as the folder name or prefix.'
+            )
     else:
         print(f'| found ckpt by name: {exp}')
     return exp
@@ -68,21 +69,46 @@ def main():
 
 
 @main.command(help='Export DiffSinger acoustic model to ONNX format.')
-@click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
-@click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
-@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
-@click.option('--freeze_gender', type=float, metavar='<value>',
-              help='(for random pitch shifting) Freeze gender value into the model.')
-@click.option('--freeze_velocity', is_flag=True,
-              help='(for random time stretching) Freeze default velocity value into the model.')
-@click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
-              help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
-@click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
-              help='(for multi-speaker models) Freeze one speaker or speaker mix into the model.')
+@click.option(
+    '--exp', type=click.STRING,
+    required=True, metavar='EXP', callback=lambda ctx, param, value: find_exp(value),
+    help='Choose an experiment to export.'
+)
+@click.option(
+    '--ckpt', type=click.IntRange(min=0),
+    required=False, metavar='STEPS',
+    help='Checkpoint training steps.'
+)
+@click.option(
+    '--out', type=click.Path(
+        dir_okay=True, file_okay=False,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    required=False,
+    help='Output directory for the artifacts.'
+)
+@click.option(
+    '--freeze_gender', type=click.FloatRange(min=-1, max=1),
+    help='(for random pitch shifting) Freeze gender value into the model.'
+)
+@click.option(
+    '--freeze_velocity', is_flag=True,
+    help='(for random time stretching) Freeze default velocity value into the model.'
+)
+@click.option(
+    '--export_spk', type=click.STRING,
+    required=False, multiple=True,
+    help='(for multi-speaker models) Export one or more speaker or speaker mixture keys.'
+)
+@click.option(
+    '--freeze_spk', type=click.STRING,
+    required=False,
+    help='(for multi-speaker models) Freeze one speaker or speaker mixture into the model.'
+)
 def acoustic(
         exp: str,
         ckpt: int = None,
-        out: str = None,
+        out: pathlib.Path = None,
         freeze_gender: float = 0.,
         freeze_velocity: bool = False,
         export_spk: List[str] = None,
@@ -92,14 +118,8 @@ def acoustic(
     if export_spk and freeze_spk:
         print('--export_spk is exclusive to --freeze_spk.')
         exit(-1)
-    if freeze_gender is not None:
-        assert -1. <= freeze_gender <= 1., 'Frozen gender must be in [-1, 1].'
-    exp = find_exp(exp)
     if out is None:
         out = root_dir / 'artifacts' / exp
-    else:
-        out = Path(out)
-    out = out.resolve()
     export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
@@ -130,17 +150,42 @@ def acoustic(
 
 
 @main.command(help='Export DiffSinger variance model to ONNX format.')
-@click.option('--exp', type=str, required=True, metavar='<exp>', help='Choose an experiment to export.')
-@click.option('--ckpt', type=int, required=False, metavar='<steps>', help='Checkpoint training steps.')
-@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
-@click.option('--freeze_glide', is_flag=True,
-              help='Freeze default glide embedding into the model.')
-@click.option('--freeze_expr', is_flag=True,
-              help='Freeze default pitch expressiveness factor into the model.')
-@click.option('--export_spk', type=str, required=False, multiple=True, metavar='<mix>',
-              help='(for multi-speaker models) Export one or more speaker or speaker mix keys.')
-@click.option('--freeze_spk', type=str, required=False, metavar='<mix>',
-              help='(for multi-speaker models) Freeze one speaker or speaker mix into the model.')
+@click.option(
+    '--exp', type=click.STRING,
+    required=True, metavar='EXP', callback=lambda ctx, param, value: find_exp(value),
+    help='Choose an experiment to export.'
+)
+@click.option(
+    '--ckpt', type=click.IntRange(min=0),
+    required=False, metavar='STEPS',
+    help='Checkpoint training steps.'
+)
+@click.option(
+    '--out', type=click.Path(
+        dir_okay=True, file_okay=False,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    required=False,
+    help='Output directory for the artifacts.'
+)
+@click.option(
+    '--freeze_glide', is_flag=True,
+    help='Freeze default glide embedding into the model.'
+)
+@click.option(
+    '--freeze_expr', is_flag=True,
+    help='Freeze default pitch expressiveness factor into the model.'
+)
+@click.option(
+    '--export_spk', type=click.STRING,
+    required=False, multiple=True,
+    help='(for multi-speaker models) Export one or more speaker or speaker mixture keys.'
+)
+@click.option(
+    '--freeze_spk', type=click.STRING,
+    required=False,
+    help='(for multi-speaker models) Freeze one speaker or speaker mixture into the model.'
+)
 def variance(
         exp: str,
         ckpt: int = None,
@@ -154,12 +199,8 @@ def variance(
     if export_spk and freeze_spk:
         print('--export_spk is exclusive to --freeze_spk.')
         exit(-1)
-    exp = find_exp(exp)
     if out is None:
         out = root_dir / 'artifacts' / exp
-    else:
-        out = Path(out)
-    out = out.resolve()
     export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
@@ -189,39 +230,48 @@ def variance(
 
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
 @click.option(
-    '--config', type=str, required=True, metavar='<file>',
+    '--config', type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, readable=True,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    required=True,
     help='Specify a configuration file for the vocoder.'
 )
 @click.option(
-    '--ckpt', type=str, required=False, metavar='<file>',
+    '--ckpt', type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, readable=True,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    required=False,
     help='Specify a model path of the vocoder checkpoint.'
 )
-@click.option('--out', type=str, required=False, metavar='<dir>', help='Output directory for the artifacts.')
-@click.option('--name', type=str, required=False, metavar='<name>', default='nsf_hifigan', show_default=False,
-              help='Specify filename (without suffix) of the target model file.')
+@click.option(
+    '--out', type=click.Path(
+        dir_okay=True, file_okay=False,
+        path_type=pathlib.Path, resolve_path=True
+    ),
+    required=False,
+    help='Output directory for the artifacts.'
+)
+@click.option(
+    '--name', type=click.STRING,
+    required=False, default='nsf_hifigan', show_default=False,
+    help='Specify filename (without suffix) of the target model file.'
+)
 def nsf_hifigan(
-        config: str,
-        ckpt: str = None,
-        out: str = None,
+        config: pathlib.Path,
+        ckpt: pathlib.Path = None,
+        out: pathlib.Path = None,
         name: str = None
 ):
     # Check arguments
-    if not Path(config).resolve().exists():
-        raise FileNotFoundError(f'{config} is not a valid config path.')
-    if ckpt is not None:
-        ckpt = Path(ckpt).resolve()
-        if not ckpt.exists():
-            raise FileNotFoundError(f'{ckpt} is not a valid model path.')
     if out is None:
         out = root_dir / 'artifacts' / 'nsf_hifigan'
-    else:
-        out = Path(out)
-    out = out.resolve()
 
     # Load configurations
-    set_hparams(config)
+    set_hparams(config.as_posix())
     if ckpt is None:
-        model_path = Path(hparams['vocoder_ckpt']).resolve()
+        model_path = pathlib.Path(hparams['vocoder_ckpt']).resolve()
     else:
         model_path = ckpt
 

@@ -5,7 +5,7 @@ from typing import List, Tuple
 import torch
 from torch import Tensor
 
-from modules.diffusion.ddpm import (
+from modules.core import (
     GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion
 )
 
@@ -16,6 +16,16 @@ def extract(a, t):
 
 # noinspection PyMethodOverriding
 class GaussianDiffusionONNX(GaussianDiffusion):
+    @property
+    def backbone(self):
+        return self.denoise_fn
+
+    # We give up the setter for the property `backbone` because this will cause TorchScript to fail
+    # @backbone.setter
+    @torch.jit.unused
+    def set_backbone(self, value):
+        self.denoise_fn = value
+
     def q_sample(self, x_start, t, noise):
         return (
                 extract(self.sqrt_alphas_cumprod, t) * x_start +
@@ -28,7 +38,9 @@ class GaussianDiffusionONNX(GaussianDiffusion):
                 extract(self.sqrt_recip_alphas_cumprod, t) * x -
                 extract(self.sqrt_recipm1_alphas_cumprod, t) * x_pred
         )
-        x_recon = torch.clamp(x_recon, min=-1., max=1.)
+        # This is previously inherited from original DiffSinger repository
+        # and disabled due to some loudness issues when speedup = 1.
+        # x_recon = torch.clamp(x_recon, min=-1., max=1.)
 
         model_mean = (
                 extract(self.posterior_mean_coef1, t) * x_recon +
@@ -149,7 +161,7 @@ class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
     def __init__(self, vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  timesteps=1000, k_step=1000,
-                 denoiser_type=None, denoiser_args=None,
+                 backbone_type=None, backbone_args=None,
                  betas=None):
         self.vmin = vmin
         self.vmax = vmax
@@ -158,7 +170,7 @@ class PitchDiffusionONNX(GaussianDiffusionONNX, PitchDiffusion):
         super(PitchDiffusion, self).__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas
         )
 
@@ -178,7 +190,7 @@ class MultiVarianceDiffusionONNX(GaussianDiffusionONNX, MultiVarianceDiffusion):
             self, ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, timesteps=1000, k_step=1000,
-            denoiser_type=None, denoiser_args=None,
+            backbone_type=None, backbone_args=None,
             betas=None
     ):
         assert len(ranges) == len(clamps)
@@ -192,7 +204,7 @@ class MultiVarianceDiffusionONNX(GaussianDiffusionONNX, MultiVarianceDiffusion):
         super(MultiVarianceDiffusion, self).__init__(
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
-            denoiser_type=denoiser_type, denoiser_args=denoiser_args,
+            backbone_type=backbone_type, backbone_args=backbone_args,
             betas=betas
         )
 

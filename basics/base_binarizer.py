@@ -173,7 +173,6 @@ class BaseBinarizer:
         self._train_item_names, self._valid_item_names = self.split_train_valid_set(self.item_names)
 
         if self.binarization_args['shuffle']:
-            random.seed(hparams['seed'])
             random.shuffle(self.item_names)
 
         self.binary_data_dir.mkdir(parents=True, exist_ok=True)
