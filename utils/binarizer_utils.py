@@ -150,7 +150,7 @@ class DecomposedWaveform:
         t = np.arange(0, wav_frames) * time_step
         self._f0_world = f0
         self._sp = pw.cheaptrick(x, f0, t, samplerate, fft_size=fft_size)  # extract smoothed spectrogram
-        self._ap = pw.d4c(x, f0, t, samplerate, fft_size=fft_size)  # extract aperiodicity
+        self._ap = pw.d4c(x, f0, t, samplerate, fft_size=fft_size, threshold=0.25)  # extract aperiodicity
 
     def _kth_harmonic(self, k: int) -> np.ndarray:
         """
