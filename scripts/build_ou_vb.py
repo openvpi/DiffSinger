@@ -151,7 +151,7 @@ def main(acoustic_onnx_folder, acoustic_config, variance_onnx_folder, variance_c
         phonemes_data = yaml.safe_load(ph_type)
 
     vowel_types = set(phonemes_data.get("vowel", []))
-    semivowel_types = set(phonemes_data.get("semi_vowel", []))
+    semivowel_types = set(phonemes_data.get("liquid", []))
 
     entries = []
     vowel_data = []
@@ -167,11 +167,11 @@ def main(acoustic_onnx_folder, acoustic_config, variance_onnx_folder, variance_c
     with open(phoneme_dict_path, "r", encoding = "utf-8") as f:
         for line in f:
             phoneme, _ = line.strip().split("\t")
-            phoneme_type = "vowel" if phoneme in vowel_types else ("semivowel" if phoneme in semivowel_types else "stop")
+            phoneme_type = "vowel" if phoneme in vowel_types else ("liquid" if phoneme in semivowel_types else "stop")
             entry = {"symbol": phoneme, "type": phoneme_type}
             if phoneme_type == "vowel":
                 vowel_data.append(entry)
-            elif phoneme_type == "semivowel":
+            elif phoneme_type == "liquid":
                 semivowel_data.append(entry)
             else:
                 stop_data.append(entry)
