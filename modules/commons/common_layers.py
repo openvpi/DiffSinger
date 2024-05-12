@@ -171,8 +171,6 @@ class EncSALayer(nn.Module):
             x = self.layer_norm2(x)
             x = self.ffn(x)
             x = F.dropout(x, self.dropout, training=self.training)
-            x = residual + x
-            x = x * (1 - encoder_padding_mask.float()).transpose(0, 1)[..., None]
         elif self.tf_enc_mode == 'parallel':
             # transformer-parallel from GPT-J
             x_attn, _, = self.self_attn(
@@ -185,9 +183,10 @@ class EncSALayer(nn.Module):
             x_ffn = self.ffn(x)
             x_ffn = F.dropout(x_ffn, self.dropout, training=self.training)
             
-            x = (x_attn + x_ffn) + residual
-            x = x * (1 - encoder_padding_mask.float()).transpose(0, 1)[..., None]
+            x = x_attn + x_ffn
         else:
            raise ValueError(f'{tf_enc_mode} is not a valid encoder model type')
-
+        x = residual + x
+        x = x * (1 - encoder_padding_mask.float()).transpose(0, 1)[..., None]
+        
         return x
