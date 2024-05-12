@@ -190,4 +190,3 @@ class EncSALayer(nn.Module):
         x = x * (1 - encoder_padding_mask.float()).transpose(0, 1)[..., None]
         
         return x
-
