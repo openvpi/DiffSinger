@@ -19,6 +19,8 @@ binarization_args:
   num_workers: 0
 pe: parselmouth
 pe_ckpt: null
+hnsep: vr
+hnsep_ckpt: checkpoints/vr/model.pt
 vocoder: NsfHifiGAN
 vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
 

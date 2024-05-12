@@ -26,8 +26,8 @@ from utils.binarizer_utils import (
     get_mel_torch,
     get_mel2ph_torch,
     get_energy_librosa,
-    get_breathiness_pyworld,
-    get_voicing_pyworld,
+    get_breathiness,
+    get_voicing,
     get_tension_base_harmonic,
 )
 from utils.hparams import hparams
@@ -146,7 +146,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         if self.need_breathiness:
             # get ground truth breathiness
-            breathiness = get_breathiness_pyworld(
+            breathiness = get_breathiness(
                 dec_waveform, None, None, length=length
             )
 
@@ -161,7 +161,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         if self.need_voicing:
             # get ground truth voicing
-            voicing = get_voicing_pyworld(
+            voicing = get_voicing(
                 dec_waveform, None, None, length=length
             )
 

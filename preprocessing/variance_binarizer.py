@@ -18,8 +18,8 @@ from utils.binarizer_utils import (
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
-    get_breathiness_pyworld,
-    get_voicing_pyworld,
+    get_breathiness,
+    get_voicing,
     get_tension_base_harmonic,
 )
 from utils.hparams import hparams
@@ -406,7 +406,7 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if breathiness is None:
-                breathiness = get_breathiness_pyworld(
+                breathiness = get_breathiness(
                     dec_waveform, None, None, length=length
                 )
                 breathiness_from_wav = True
@@ -437,7 +437,7 @@ class VarianceBinarizer(BaseBinarizer):
                         align_length=length
                     )
             if voicing is None:
-                voicing = get_voicing_pyworld(
+                voicing = get_voicing(
                     dec_waveform, None, None, length=length
                 )
                 voicing_from_wav = True

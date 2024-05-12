@@ -19,6 +19,9 @@ binary_data_dir: data/xxx/binary
 binarization_args:
   num_workers: 0
 
+hnsep: vr
+hnsep_ckpt: checkpoints/vr/model.pt
+
 use_spk_id: false
 num_spk: 1
 # NOTICE: before enabling variance modules, please read the docs at
