@@ -44,13 +44,14 @@ class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
         self.sep_model = load_sep_model(model_path, self._device)
     
     def _infer(self):
-        x = torch.from_numpy(self._waveform).to(self._device).reshape(1, 1, -1)
-        if not self.sep_model.is_mono:
-            x = x.repeat(1, 2, 1)
-        x = self.sep_model.predict_fromaudio(x)
-        x = torch.mean(x, dim=1)
-        self._harmonic_part = x.squeeze().cpu().numpy()
-        self._aperiodic_part = self._waveform - self._harmonic_part
+        with torch.no_grad():
+            x = torch.from_numpy(self._waveform).to(self._device).reshape(1, 1, -1)
+            if not self.sep_model.is_mono:
+                x = x.repeat(1, 2, 1)
+            x = self.sep_model.predict_fromaudio(x)
+            x = torch.mean(x, dim=1)
+            self._harmonic_part = x.squeeze().cpu().numpy()
+            self._aperiodic_part = self._waveform - self._harmonic_part
         
     def harmonic(self, k: int = None) -> np.ndarray:
         """
