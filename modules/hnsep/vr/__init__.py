@@ -5,6 +5,8 @@ import os
 from modules.hnsep.pw import DecomposedWaveformPyWorld
 from .nets import CascadedNet
 
+SEP_MODEL = None
+
 class DotDict(dict):
     def __getattr__(*args):         
         val = dict.get(*args)         
@@ -41,7 +43,10 @@ class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
     ):
         super().__init__(waveform, samplerate, f0, hop_size=hop_size, fft_size=fft_size, 
                             win_size=win_size, base_harmonic_radius=base_harmonic_radius, device=device)
-        self.sep_model = load_sep_model(model_path, self._device)
+        global SEP_MODEL
+        if SEP_MODEL is None:
+            SEP_MODEL = load_sep_model(model_path, self._device)
+        self.sep_model = SEP_MODEL
     
     def _infer(self):
         with torch.no_grad():
