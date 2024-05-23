@@ -61,9 +61,9 @@ max_batch_size: 100000
 max_val_batch_frames: 60000
 max_val_batch_size: 1
 pe: 'parselmouth'
-pe_ckpt: ''
+pe_ckpt: null
 hnsep: 'world'
-hnsep_ckpt: ''
+hnsep_ckpt: null
 f0_min: 65
 f0_max: 1100
 num_valid_plots: 10

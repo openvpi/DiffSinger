@@ -1,12 +1,12 @@
-from typing import Union, Dict
+from typing import Union
 
 import librosa
 import numpy as np
 import parselmouth
-import pyworld as pw
 import torch
-from modules.hnsep import DecomposedWaveform
+
 from modules.nsf_hifigan.nvSTFT import STFT
+from utils.decomposed_waveform import DecomposedWaveform
 from utils.pitch_utils import interp_f0
 
 

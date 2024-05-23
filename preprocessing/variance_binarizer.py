@@ -14,7 +14,6 @@ from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from utils.binarizer_utils import (
-    DecomposedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel2ph_torch,
     get_energy_librosa,
@@ -22,6 +21,7 @@ from utils.binarizer_utils import (
     get_voicing,
     get_tension_base_harmonic,
 )
+from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.pitch_utils import interp_f0
@@ -384,10 +384,11 @@ class VarianceBinarizer(BaseBinarizer):
 
             processed_input['energy'] = energy
 
-        # create a DeconstructedWaveform object for further feature extraction
+        # create a DecomposedWaveform object for further feature extraction
         dec_waveform = DecomposedWaveform(
             waveform, samplerate=hparams['audio_sample_rate'], f0=f0 * ~uv,
-            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
+            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
+            algorithm=hparams['hnsep']
         ) if waveform is not None else None
 
         # Below: extract breathiness

@@ -1,12 +1,68 @@
-import torch
+from typing import Dict
+
 import numpy as np
 import pyworld as pw
-import torch.nn.functional as F
+import torch
+from torch.nn import functional as F
+
+from modules.hnsep.vr import load_sep_model
+from utils import hparams
 from utils.pitch_utils import interp_f0
 
 
-class DecomposedWaveformPyWorld:
-    def __init__(
+class DecomposedWaveform:
+    def __new__(
+            cls, waveform, samplerate, f0,
+            *,
+            hop_size=None, fft_size=None, win_size=None,
+            algorithm='world', device=None
+    ):
+        if algorithm == 'world':
+            obj = object.__new__(DecomposedWaveformPyWorld)
+            # noinspection PyProtectedMember
+            obj._init(
+                waveform=waveform, samplerate=samplerate, f0=f0,
+                hop_size=hop_size, fft_size=fft_size, win_size=win_size,
+                device=device
+            )
+        elif algorithm == 'vr':
+            obj = object.__new__(DecomposedWaveformVocalRemover)
+            hnsep_ckpt = hparams['hnsep_ckpt']
+            # noinspection PyProtectedMember
+            obj._init(
+                waveform=waveform, samplerate=samplerate, f0=f0, hop_size=hop_size,
+                fft_size=fft_size, win_size=win_size, model_path=hnsep_ckpt,
+                device=device
+            )
+        else:
+            raise ValueError(f" [x] Unknown harmonic-noise separator: {algorithm}")
+        return obj
+
+    @property
+    def samplerate(self):
+        raise NotImplementedError()
+
+    @property
+    def hop_size(self):
+        raise NotImplementedError()
+
+    @property
+    def fft_size(self):
+        raise NotImplementedError()
+
+    @property
+    def win_size(self):
+        raise NotImplementedError()
+
+    def harmonic(self, k: int = None) -> np.ndarray:
+        raise NotImplementedError()
+
+    def aperiodic(self) -> np.ndarray:
+        raise NotImplementedError()
+
+
+class DecomposedWaveformPyWorld(DecomposedWaveform):
+    def _init(
             self, waveform, samplerate, f0,  # basic parameters
             *,
             hop_size=None, fft_size=None, win_size=None, base_harmonic_radius=3.5,  # analysis parameters
@@ -145,6 +201,7 @@ class DecomposedWaveformPyWorld:
             return self._harmonic_part
         if self._sp is None or self._ap is None:
             self._world_extraction()
+        # noinspection PyAttributeOutsideInit
         self._harmonic_part = pw.synthesize(
             self._f0_world,
             np.clip(self._sp * (1 - self._ap * self._ap), a_min=1e-16, a_max=None),  # clip to avoid zeros
@@ -162,8 +219,61 @@ class DecomposedWaveformPyWorld:
             return self._aperiodic_part
         if self._sp is None or self._ap is None:
             self._world_extraction()
+        # noinspection PyAttributeOutsideInit
         self._aperiodic_part = pw.synthesize(
             self._f0_world, self._sp * self._ap * self._ap, np.ones_like(self._ap),
             self._samplerate, frame_period=self._time_step * 1000
         ).astype(np.float32)  # synthesize the aperiodic part using the parameters
+        return self._aperiodic_part
+
+
+SEP_MODEL = None
+
+
+class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
+    def _init(
+            self, waveform, samplerate, f0,
+            hop_size=None, fft_size=None, win_size=None, base_harmonic_radius=3.5,
+            model_path=None, device=None
+    ):
+        super()._init(
+            waveform, samplerate, f0, hop_size=hop_size, fft_size=fft_size,
+            win_size=win_size, base_harmonic_radius=base_harmonic_radius, device=device
+        )
+        global SEP_MODEL
+        if SEP_MODEL is None:
+            SEP_MODEL = load_sep_model(model_path, self._device)
+        self.sep_model = SEP_MODEL
+
+    def _infer(self):
+        with torch.no_grad():
+            x = torch.from_numpy(self._waveform).to(self._device).reshape(1, 1, -1)
+            if not self.sep_model.is_mono:
+                x = x.repeat(1, 2, 1)
+            x = self.sep_model.predict_fromaudio(x)
+            x = torch.mean(x, dim=1)
+            self._harmonic_part = x.squeeze().cpu().numpy()
+            self._aperiodic_part = self._waveform - self._harmonic_part
+
+    def harmonic(self, k: int = None) -> np.ndarray:
+        """
+        Extract the full harmonic part, or the Kth harmonic if `k` is not None, from the waveform.
+        :param k: an integer representing the harmonic index, starting from 0
+        :return: full_harmonics float32[T] or kth_harmonic float32[T]
+        """
+        if k is not None:
+            return self._kth_harmonic(k)
+        if self._harmonic_part is not None:
+            return self._harmonic_part
+        self._infer()
+        return self._harmonic_part
+
+    def aperiodic(self) -> np.ndarray:
+        """
+        Extract the aperiodic part from the waveform.
+        :return: aperiodic_part float32[T]
+        """
+        if self._aperiodic_part is not None:
+            return self._aperiodic_part
+        self._infer()
         return self._aperiodic_part

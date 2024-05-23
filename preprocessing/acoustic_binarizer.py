@@ -21,7 +21,6 @@ from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from modules.pe import initialize_pe
 from utils.binarizer_utils import (
-    DecomposedWaveform,
     SinusoidalSmoothingConv1d,
     get_mel_torch,
     get_mel2ph_torch,
@@ -30,6 +29,7 @@ from utils.binarizer_utils import (
     get_voicing,
     get_tension_base_harmonic,
 )
+from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
 
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -138,10 +138,11 @@ class AcousticBinarizer(BaseBinarizer):
 
             processed_input['energy'] = energy.cpu().numpy()
 
-        # create a DeconstructedWaveform object for further feature extraction
+        # create a DecomposedWaveform object for further feature extraction
         dec_waveform = DecomposedWaveform(
             waveform, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
-            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size']
+            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
+            algorithm=hparams['hnsep']
         )
 
         if self.need_breathiness:
