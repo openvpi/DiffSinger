@@ -38,7 +38,7 @@ class Conv2DBNActiv(nn.Module):
             activ()
         )
 
-    def __call__(self, x):
+    def forward(self, x):
         return self.conv(x)
 
 
@@ -49,7 +49,7 @@ class Encoder(nn.Module):
         self.conv1 = Conv2DBNActiv(nin, nout, ksize, stride, pad, activ=activ)
         self.conv2 = Conv2DBNActiv(nout, nout, ksize, 1, pad, activ=activ)
 
-    def __call__(self, x):
+    def forward(self, x):
         h = self.conv1(x)
         h = self.conv2(h)
 
@@ -64,7 +64,7 @@ class Decoder(nn.Module):
         # self.conv2 = Conv2DBNActiv(nout, nout, ksize, 1, pad, activ=activ)
         self.dropout = nn.Dropout2d(0.1) if dropout else None
 
-    def __call__(self, x, skip=None):
+    def forward(self, x, skip=None):
         x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=True)
 
         if skip is not None:
@@ -80,12 +80,22 @@ class Decoder(nn.Module):
         return h
 
 
+class Mean(nn.Module):
+    def __init__(self, dim, keepdims=False):
+        super(Mean, self).__init__()
+        self.dim = dim
+        self.keepdims = keepdims
+
+    def forward(self, x):
+        return x.mean(self.dim, keepdims=self.keepdims)
+
+
 class ASPPModule(nn.Module):
 
     def __init__(self, nin, nout, dilations=(4, 8, 12), activ=nn.ReLU, dropout=False):
         super(ASPPModule, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, None)),
+            Mean(dim=-2, keepdims=True),  # nn.AdaptiveAvgPool2d((1, None)),
             Conv2DBNActiv(nin, nout, 1, 1, 0, activ=activ)
         )
         self.conv2 = Conv2DBNActiv(
@@ -107,7 +117,8 @@ class ASPPModule(nn.Module):
 
     def forward(self, x):
         _, _, h, w = x.size()
-        feat1 = F.interpolate(self.conv1(x), size=(h, w), mode='bilinear', align_corners=True)
+        # feat1 = F.interpolate(self.conv1(x), size=(h, w), mode='bilinear', align_corners=True)
+        feat1 = self.conv1(x).repeat(1, 1, h, 1)
         feat2 = self.conv2(x)
         feat3 = self.conv3(x)
         feat4 = self.conv4(x)

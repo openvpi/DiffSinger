@@ -23,7 +23,7 @@ class BaseNet(nn.Module):
         self.lstm_dec2 = layers.LSTMModule(nout * 2, nin_lstm, nout_lstm)
         self.dec1 = layers.Decoder(nout * (1 + 2) + 1, nout * 1, 3, 1, 1)
 
-    def __call__(self, x):
+    def forward(self, x):
         e1 = self.enc1(x)
         e2 = self.enc2(e1)
         e3 = self.enc3(e2)
@@ -49,8 +49,7 @@ class CascadedNet(nn.Module):
         self.hop_length = hop_length
         self.is_complex = is_complex
         self.is_mono = is_mono
-        #self.register_buffer("window", torch.hann_window(n_fft))
-        self.window = None
+        self.register_buffer("window", torch.hann_window(n_fft), persistent=False)
         self.max_bin = n_fft // 2
         self.output_bin = n_fft // 2 + 1
         self.nin_lstm = self.max_bin // 2
@@ -59,7 +58,7 @@ class CascadedNet(nn.Module):
         nin = 4 if is_complex else 2
         if is_mono:
             nin = nin // 2
-        
+
         self.stg1_low_band_net = nn.Sequential(
             BaseNet(nin, nout // 2, self.nin_lstm // 2, nout_lstm),
             layers.Conv2DBNActiv(nout // 2, nout // 4, 1, 1, 0)
@@ -146,10 +145,8 @@ class CascadedNet(nn.Module):
             assert pred.size()[3] > 0
 
         return pred
-    
+
     def audio2spec(self, x, use_pad=False):
-        if self.window is None:
-            self.window = torch.hann_window(self.n_fft).to(x.device)
         B, C, T = x.shape
         x = x.reshape(B * C, T)
         if use_pad:
@@ -157,48 +154,44 @@ class CascadedNet(nn.Module):
             T_pad = (32 * ((n_frames - 1) // 32 + 1) - 1) * self.hop_length - T
             nl_pad = T_pad // 2 // self.hop_length
             Tl_pad = nl_pad * self.hop_length
-            x = F.pad(x, (Tl_pad , T_pad - Tl_pad))
+            x = F.pad(x, (Tl_pad, T_pad - Tl_pad))
         spec = torch.stft(
-                    x, 
-                    n_fft=self.n_fft,
-                    hop_length=self.hop_length,
-                    return_complex=True,
-                    window=self.window,
-                    pad_mode='constant')
+            x,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            return_complex=True,
+            window=self.window,
+            pad_mode='constant')
         spec = spec.reshape(B, C, spec.shape[-2], spec.shape[-1])
         return spec
-    
+
     def spec2audio(self, x):
-        if self.window is None:
-            self.window = torch.hann_window(self.n_fft).to(x.device)
         B, C, N, T = x.shape
         x = x.reshape(-1, N, T)
         x = torch.istft(x, self.n_fft, self.hop_length, window=self.window)
         x = x.reshape(B, C, -1)
         return x
-        
-    def predict_fromaudio(self, x):
-        if self.window is None:
-            self.window = torch.hann_window(self.n_fft).to(x.device)
+
+    def predict_from_audio(self, x):
         B, C, T = x.shape
         x = x.reshape(B * C, T)
         n_frames = T // self.hop_length + 1
         T_pad = (32 * (n_frames // 32 + 1) - 1) * self.hop_length - T
         nl_pad = T_pad // 2 // self.hop_length
         Tl_pad = nl_pad * self.hop_length
-        x = F.pad(x, (Tl_pad , T_pad - Tl_pad))
+        x = F.pad(x, (Tl_pad, T_pad - Tl_pad))
         spec = torch.stft(
-                    x, 
-                    n_fft=self.n_fft,
-                    hop_length=self.hop_length,
-                    return_complex=True,
-                    window=self.window,
-                    pad_mode='constant')
+            x,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            return_complex=True,
+            window=self.window,
+            pad_mode='constant')
         spec = spec.reshape(B, C, spec.shape[-2], spec.shape[-1])
         mask = self.forward(spec)
         spec_pred = spec * mask
         spec_pred = spec_pred.reshape(B * C, spec.shape[-2], spec.shape[-1])
         x_pred = torch.istft(spec_pred, self.n_fft, self.hop_length, window=self.window)
-        x_pred = x_pred[:, Tl_pad : Tl_pad + T]
+        x_pred = x_pred[:, Tl_pad: Tl_pad + T]
         x_pred = x_pred.reshape(B, C, T)
         return x_pred

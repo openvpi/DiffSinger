@@ -250,7 +250,7 @@ class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
             x = torch.from_numpy(self._waveform).to(self._device).reshape(1, 1, -1)
             if not self.sep_model.is_mono:
                 x = x.repeat(1, 2, 1)
-            x = self.sep_model.predict_fromaudio(x)
+            x = self.sep_model.predict_from_audio(x)
             x = torch.mean(x, dim=1)
             self._harmonic_part = x.squeeze().cpu().numpy()
             self._aperiodic_part = self._waveform - self._harmonic_part
