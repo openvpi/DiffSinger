@@ -149,7 +149,7 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         f0 = self._f0 * (k + 1)
         pad_size = int(n_samples // hop_size) - len(f0) + 1
         if pad_size > 0:
-            np.pad(f0, (0, pad_size), mode='constant', constant_values=(f0[0], f0[-1]))
+            f0 = np.pad(f0, (0, pad_size), mode='constant', constant_values=(f0[0], f0[-1]))
         
         f0, _ = interp_f0(f0, uv=f0 == 0)
         f0 = torch.from_numpy(f0).to(device)[None, :, None]  # [B, n_frames, 1]
