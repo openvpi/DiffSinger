@@ -145,9 +145,12 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         device = self._device
 
         waveform = torch.from_numpy(self.harmonic()).unsqueeze(0).to(device)  # [B, n_samples]
-        n_samples = waveform.shape[1]
-        pad_size = (int(n_samples // hop_size) - len(self._f0) + 1) // 2
-        f0 = self._f0[pad_size:] * (k + 1)
+        n_samples = waveform.shape[1]       
+        f0 = self._f0 * (k + 1)
+        pad_size = int(n_samples // hop_size) - len(f0) + 1
+        if pad_size > 0:
+            np.pad(f0, (0, pad_size), mode='constant', constant_values=(f0[0], f0[-1]))
+        
         f0, _ = interp_f0(f0, uv=f0 == 0)
         f0 = torch.from_numpy(f0).to(device)[None, :, None]  # [B, n_frames, 1]
         n_f0_frames = f0.shape[1]
