@@ -841,7 +841,7 @@ Harmonic-noise separation algorithm type.
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>parselmouth</td>
+<tr><td align="center"><b>default</b></td><td>world</td>
 <tr><td align="center"><b>constraints</b></td><td>Choose from 'world', 'vr'.</td>
 </tbody></table>
 

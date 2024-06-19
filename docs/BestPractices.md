@@ -323,7 +323,7 @@ Harmonic-noise separation is the process of separating the harmonic part and the
 
 #### WORLD
 
-WORLD is the default harmonic-noise separator in this repository based on Masanori Morise's [WORLD](https://github.com/mmorise/World), a free software for high-quality speech analysis, manipulation and synthesis. It uses CPU (no CUDA required) but runs relatively slow.
+This algorithm uses Masanori Morise's [WORLD](https://github.com/mmorise/World), a free software for high-quality speech analysis, manipulation and synthesis. It uses CPU (no CUDA required) but runs relatively slow.
 
 To use WORLD, simply include the following line in your configuration file:
 
