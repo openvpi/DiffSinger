@@ -832,6 +832,30 @@ Dimension of hidden layers of FastSpeech2, token and parameter embeddings, and d
 <tr><td align="center"><b>default</b></td><td>256</td>
 </tbody></table>
 
+### hnsep
+
+Harmonic-noise separation algorithm type.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>parselmouth</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'world', 'vr'.</td>
+</tbody></table>
+
+### hnsep_ckpt
+
+Checkpoint or model path of NN-based harmonic-noise separator.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
+
 ### hop_size
 
 Hop size or step length (in number of waveform samples) of mel and feature extraction.
@@ -1195,7 +1219,7 @@ Optimizer class name
 
 ### pe
 
-Pitch extractor type.
+Pitch extraction algorithm type.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>all</td>

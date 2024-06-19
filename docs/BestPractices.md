@@ -56,9 +56,11 @@ The pre-trained vocoder can be fine-tuned on your target dataset. It is highly r
 
 Another unrecommended option: train a ultra-lightweight [DDSP vocoder](https://github.com/yxlllc/pc-ddsp) first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 
-#### Pitch extractors
+#### Feature extractors or auxiliary models
 
-RMVPE is the recommended pitch extractor of this repository, which is an NN-based algorithm and requires a pre-trained model. For more information about pitch extractors and how to configure them, see [pitch extraction](#pitch-extraction).
+RMVPE is the recommended pitch extractor of this repository, which is an NN-based algorithm and requires a pre-trained model. For more information about pitch extractors and how to configure them, see [feature extraction](#pitch-extraction).
+
+Vocal Remover (VR) is the recommended harmonic-noise separator of this repository, which is an NN-based algorithm and requires a pre-trained model. For more information about harmonic-noise separators and how to configure them, see [feature extraction](#harmonic-noise-separation).
 
 ## Overview: training acoustic models
 
@@ -264,7 +266,11 @@ According to the experiment results and the analysis above, the suggested proced
 2. Train the pitch predictor and the variance predictor separately or together.
 3. If interested, compare across different combinations in step 2 and choose the best.
 
-## Pitch extraction
+## Feature extraction
+
+Feature extraction is the process of extracting low-level features from the recordings, which are needed as inputs for the acoustic models, or as outputs for the variance models.
+
+### Pitch extraction
 
 A pitch extractor estimates pitch (F0 sequence) from given recordings. F0 (fundamental frequency) is one of the most important components of singing voice that is needed by both acoustic models and variance models.
 
@@ -273,7 +279,7 @@ pe: parselmouth  # pitch extractor type
 pe_ckpt: checkpoints/xxx/model.pt  # pitch extractor model path (if it requires any)
 ```
 
-### Parselmouth
+#### Parselmouth
 
 [Parselmouth](https://github.com/YannickJadoul/Parselmouth) is the default pitch extractor in this repository. It is based on DSP algorithms, runs fast on CPU and can get accurate F0 on clean and normal recordings.
 
@@ -283,7 +289,7 @@ To use parselmouth, simply include the following line in your configuration file
 pe: parselmouth
 ```
 
-### RMVPE
+#### RMVPE (recommended)
 
 [RMVPE](https://github.com/Dream-High/RMVPE) (Robust Model for Vocal Pitch Estimation) is the state-of-the-art NN-based pitch estimation model for singing voice. It runs slower than parselmouth, consumes more memory, however uses CUDA to accelerate computation (if available) and produce better results on noisy recordings and edge cases.
 
@@ -294,9 +300,9 @@ pe: rmvpe
 pe_ckpt: checkpoints/rmvpe/model.pt
 ```
 
-### Harvest
+#### Harvest
 
-[Harvest](https://github.com/mmorise/World) (Harvest: A high-performance fundamental frequency estimator from speech signals) is the recommended pitch extractor from Masanori Morise's WORLD, a free software for high-quality speech analysis, manipulation and synthesis. It is a state-of-the-art algorithmic pitch estimator designed for speech, but has seen use in singing voice synthesis. It runs the slowest compared to the others, but provides very accurate F0 on clean and normal recordings compared to parselmouth.
+Harvest (Harvest: A high-performance fundamental frequency estimator from speech signals) is the recommended pitch extractor from Masanori Morise's [WORLD](https://github.com/mmorise/World), a free software for high-quality speech analysis, manipulation and synthesis. It is a state-of-the-art algorithmic pitch estimator designed for speech, but has seen use in singing voice synthesis. It runs the slowest compared to the others, but provides very accurate F0 on clean and normal recordings compared to parselmouth.
 
 To use Harvest, simply include the following line in your configuration file:
 
@@ -309,6 +315,31 @@ pe: harvest
 ```yaml
 f0_min: 65  # Minimum F0 to detect
 f0_max: 800  # Maximum F0 to detect
+```
+
+### Harmonic-noise separation
+
+Harmonic-noise separation is the process of separating the harmonic part and the aperiodic part of the singing voice. These parts are the fundamental components for variance parameters including breathiness, voicing and tension to be calculated from.
+
+#### WORLD
+
+WORLD is the default harmonic-noise separator in this repository based on Masanori Morise's [WORLD](https://github.com/mmorise/World), a free software for high-quality speech analysis, manipulation and synthesis. It uses CPU (no CUDA required) but runs relatively slow.
+
+To use WORLD, simply include the following line in your configuration file:
+
+```yaml
+hnsep: world
+```
+
+#### Vocal Remover (recommended)
+
+Vocal Remover (VR) is originally a popular NN-based algorithm for music source separation that removes the vocal part from the music. This repository uses a specially trained model for harmonic-noise separation. VR extracts much cleaner harmonic parts, utilizes CUDA to accelerate computation (if available) and runs much faster than WORLD. However, it consumes more memory and should not be used with too many parallel workers.
+
+To enable VR, download its pre-trained checkpoint from [here](https://github.com/yxlllc/vocal-remover/releases), extract it into the `checkpoints/` folder and edit the configuration file:
+
+```yaml
+hnsep: vr
+hnsep_ckpt: checkpoints/vr/model.pt
 ```
 
 ## Shallow diffusion
