@@ -21,9 +21,9 @@ class LYNXNetDecoderLayer(nn.Module):
         activation (str): Activation Function for conv module
     """
 
-    def __init__(self, dim, expansion_factor, kernel_size=31, in_norm=False, activation='SiLU'):
+    def __init__(self, dim, expansion_factor, kernel_size=31, in_norm=False, activation='SiLU', dropout=0.):
         super().__init__()
-        self.convmodule = LYNXConvModule(dim=dim, expansion_factor=expansion_factor, kernel_size=kernel_size, in_norm=in_norm, activation=activation)
+        self.convmodule = LYNXConvModule(dim=dim, expansion_factor=expansion_factor, kernel_size=kernel_size, in_norm=in_norm, activation=activation, dropout=dropout)
 
     def forward(self, x) -> torch.Tensor:
         residual = x
@@ -36,7 +36,7 @@ class LYNXNetDecoderLayer(nn.Module):
 class LYNXNetDecoder(nn.Module):
     def __init__(
             self, in_dims, out_dims, /, *,
-            num_channels=512, num_layers=6, kernel_size=31, dropout_rate=None
+            num_channels=512, num_layers=6, kernel_size=31, dropout_rate=0.
     ):
         super().__init__()
         self.input_projection = nn.Conv1d(in_dims, num_channels, 1)
@@ -46,7 +46,8 @@ class LYNXNetDecoder(nn.Module):
                     expansion_factor=2, 
                     kernel_size=kernel_size, 
                     in_norm=False, 
-                    activation='SiLU') for _ in range(num_layers)
+                    activation='SiLU', 
+                    dropout=dropout_rate) for _ in range(num_layers)
         )
         self.output_projection = nn.Conv1d(num_channels, out_dims, kernel_size=1)
 

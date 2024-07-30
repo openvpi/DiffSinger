@@ -54,10 +54,10 @@ class LYNXConvModule(nn.Module):
         pad = kernel_size // 2
         return (pad, pad - (kernel_size + 1) % 2)
 
-    def __init__(self, dim, expansion_factor, kernel_size=31, in_norm=False, activation='PReLU'):
+    def __init__(self, dim, expansion_factor, kernel_size=31, in_norm=False, activation='PReLU', dropout=0.):
         super().__init__()
         inner_dim = dim * expansion_factor
-        normalize = nn.LayerNorm(dim) if in_norm or dim > 512 else nn.Identity()
+        _normalize = nn.LayerNorm(dim) if in_norm or dim > 512 else nn.Identity()
         activation_classes = {
             'SiLU': nn.SiLU,
             'ReLU': nn.ReLU,
@@ -66,17 +66,22 @@ class LYNXConvModule(nn.Module):
         activation = activation if activation is not None else 'PReLU'
         if activation not in activation_classes:
             raise ValueError(f'{activation} is not a valid activation')
-        activation = activation_classes[activation]()
+        _activation = activation_classes[activation]()
         padding = self.calc_same_padding(kernel_size)
+        if float(dropout) > 0.:
+            _dropout = nn.Dropout(dropout)
+        else:
+            _dropout = nn.Identity()
         self.net = nn.Sequential(
-            normalize,
+            _normalize,
             Transpose((1, 2)),
             nn.Conv1d(dim, inner_dim * 2, 1),
             SwiGLU(dim=1),
             nn.Conv1d(inner_dim, inner_dim, kernel_size=kernel_size, padding=padding[0], groups=inner_dim),
-            activation,
+            _activation,
             nn.Conv1d(inner_dim, dim, 1),
-            Transpose((1, 2))
+            Transpose((1, 2)),
+            _dropout
         )
 
     def forward(self, x):
@@ -84,11 +89,11 @@ class LYNXConvModule(nn.Module):
 
 
 class LYNXNetResidualLayer(nn.Module):
-    def __init__(self, dim_cond, dim, expansion_factor, kernel_size=31, in_norm=False, activation='PReLU'):
+    def __init__(self, dim_cond, dim, expansion_factor, kernel_size=31, in_norm=False, activation='PReLU', dropout=0.):
         super().__init__()
         self.diffusion_projection = nn.Conv1d(dim, dim, 1)
         self.conditioner_projection = nn.Conv1d(dim_cond, dim, 1)
-        self.convmodule = LYNXConvModule(dim=dim, expansion_factor=expansion_factor, kernel_size=kernel_size, in_norm=in_norm, activation=activation)
+        self.convmodule = LYNXConvModule(dim=dim, expansion_factor=expansion_factor, kernel_size=kernel_size, in_norm=in_norm, activation=activation, dropout=dropout)
 
     def forward(self, x, conditioner, diffusion_step):
         res_x = x.transpose(1, 2)
@@ -102,7 +107,7 @@ class LYNXNetResidualLayer(nn.Module):
 
 
 class LYNXNet(nn.Module):
-    def __init__(self, in_dims, n_feats, *, n_layers=6, n_chans=512, n_dilates=2, in_norm=False, activation='PReLU'):
+    def __init__(self, in_dims, n_feats, *, n_layers=6, n_chans=512, n_dilates=2, in_norm=False, activation='PReLU', dropout=0.):
         """
         LYNXNet(Linear Gated Depthwise Separable Convolution Network)
         TIPS:You can control the style of the generated results by modifying the 'activation', 
@@ -126,7 +131,8 @@ class LYNXNet(nn.Module):
                     expansion_factor=n_dilates, 
                     kernel_size=31, 
                     in_norm=in_norm, 
-                    activation=activation
+                    activation=activation, 
+                    dropout=dropout
                 )
                 for i in range(n_layers)
             ]
