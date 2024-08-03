@@ -130,7 +130,7 @@ class SineGen(torch.nn.Module):
         uv = uv * (f0 > self.voiced_threshold)
         return uv
 
-    def _f02sine(self, f0, upp, dim):
+    def _f02sine(self, f0, upp):
         """ f0: (batchsize, length, dim)
             where dim indicates fundamental tone and overtones
         """
@@ -155,7 +155,7 @@ class SineGen(torch.nn.Module):
         output uv: tensor(batchsize=1, length, 1)
         """
         f0 = f0.unsqueeze(-1)
-        sine_waves = self._f02sine(f0, upp, self.dim + 1) * self.sine_amp
+        sine_waves = self._f02sine(f0, upp) * self.sine_amp
         uv = (f0 > self.voiced_threshold).float()
         uv = F.interpolate(uv.transpose(2, 1), scale_factor=upp, mode='nearest').transpose(2, 1)
         noise_amp = uv * self.noise_std + (1 - uv) * self.sine_amp / 3
