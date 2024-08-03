@@ -135,9 +135,9 @@ class SineGen(torch.nn.Module):
             where dim indicates fundamental tone and overtones
         """
         rad = f0 / self.sampling_rate * torch.arange(1, upp + 1, device=f0.device)
-        rad2 = torch.fmod(rad[:, :-1, -1:].float() + 0.5, 1.0) - 0.5
+        rad2 = torch.fmod(rad[..., -1:].float() + 0.5, 1.0) - 0.5
         rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0)
-        rad += F.pad(rad_acc, (0, 0, 1, 0))
+        rad += F.pad(rad_acc, (0, 0, 1, -1))
         rad = rad.reshape(f0.shape[0], -1, 1)
         rad = torch.multiply(rad, torch.arange(1, self.dim + 1, device=f0.device).reshape(1, 1, -1))
         rand_ini = torch.rand(1, 1, self.dim, device=f0.device)
