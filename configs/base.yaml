@@ -56,6 +56,7 @@ log_interval: 100
 num_sanity_val_steps: 1  # steps of validation at the beginning
 val_check_interval: 2000
 max_updates: 120000
+max_epochs: 1000 #Default is 1000. If the training reaches the maximum number of epochs and the number of training steps is still low, please increase this value.
 max_batch_frames: 32000
 max_batch_size: 100000
 max_val_batch_frames: 60000
