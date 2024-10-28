@@ -441,6 +441,7 @@ class BaseTask(pl.LightningModule):
             check_val_every_n_epoch=None,
             log_every_n_steps=1,
             max_steps=hparams['max_updates'],
+            max_epochs=hparams['max_epochs'], #Without this parameter, the training will stop after reaching 1000 epochs.
             use_distributed_sampler=False,
             num_sanity_val_steps=hparams['num_sanity_val_steps'],
             accumulate_grad_batches=hparams['accumulate_grad_batches']
