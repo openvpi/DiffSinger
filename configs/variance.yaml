@@ -124,6 +124,7 @@ dataset_size_key: 'lengths'
 val_check_interval: 2000
 num_valid_plots: 10
 max_updates: 160000
+max_epochs: 1000 #Default is 1000. If the training reaches the maximum number of epochs and the number of training steps is still low, please increase this value.
 num_ckpt_keep: 5
 permanent_ckpt_start: 80000
 permanent_ckpt_interval: 10000
