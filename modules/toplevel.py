@@ -153,7 +153,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
             self.pitch_backbone_type = compat.get_backbone_type(hparams, nested_config=pitch_hparams)
-            self.pitch_backbone_args = compat.get_backbone_args(hparams, backbone_type=self.pitch_backbone_type)
+            self.pitch_backbone_args = compat.get_backbone_args(pitch_hparams, backbone_type=self.pitch_backbone_type)
             if self.diffusion_type == 'ddpm':
                 self.pitch_predictor = PitchDiffusion(
                     vmin=pitch_hparams['pitd_norm_min'],
