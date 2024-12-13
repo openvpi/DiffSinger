@@ -87,6 +87,7 @@ pitch_prediction_args:
 # backbone_args:
 #   num_layers: 6
 #   num_channels: 512
+#   dropout_rate: 0.1
 
 variances_prediction_args:
   total_repeat_bins: 48
@@ -99,6 +100,7 @@ variances_prediction_args:
 # backbone_args:
 #   num_layers: 6
 #   num_channels: 384
+#   dropout_rate: 0.1
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
