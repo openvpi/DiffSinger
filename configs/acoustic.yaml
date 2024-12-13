@@ -78,7 +78,8 @@ backbone_args:
   num_channels: 1024
   num_layers: 6
   kernel_size: 31
-  dropout_rate: 0.0
+  dropout_rate: 0.1
+  strong_cond: true
 main_loss_type: l2
 main_loss_log_norm: false
 schedule_type: 'linear'
