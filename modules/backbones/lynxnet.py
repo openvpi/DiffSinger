@@ -45,7 +45,7 @@ class LYNXConvModule(nn.Module):
         pad = kernel_size // 2
         return pad, pad - (kernel_size + 1) % 2
 
-    def __init__(self, dim, expansion_factor, kernel_size=31, activation='PReLU', dropout=0.1):
+    def __init__(self, dim, expansion_factor, kernel_size=31, activation='PReLU', dropout=0.0):
         super().__init__()
         inner_dim = dim * expansion_factor
         activation_classes = {
@@ -63,7 +63,7 @@ class LYNXConvModule(nn.Module):
         else:
             _dropout = nn.Identity()
         self.net = nn.Sequential(
-            nn.LayerNorm(dim, eps=1e-6),
+            nn.LayerNorm(dim),
             Transpose((1, 2)),
             nn.Conv1d(dim, inner_dim * 2, 1),
             SwiGLU(dim=1),
@@ -79,7 +79,7 @@ class LYNXConvModule(nn.Module):
 
 
 class LYNXNetResidualLayer(nn.Module):
-    def __init__(self, dim_cond, dim, expansion_factor, kernel_size=31, activation='PReLU', dropout=0.1):
+    def __init__(self, dim_cond, dim, expansion_factor, kernel_size=31, activation='PReLU', dropout=0.0):
         super().__init__()
         self.diffusion_projection = nn.Conv1d(dim, dim, 1)
         self.conditioner_projection = nn.Conv1d(dim_cond, dim, 1)
@@ -102,7 +102,7 @@ class LYNXNetResidualLayer(nn.Module):
 
 class LYNXNet(nn.Module):
     def __init__(self, in_dims, n_feats, *, num_layers=6, num_channels=512, expansion_factor=2, kernel_size=31,
-                 activation='PReLU', dropout=0.1, strong_cond=False):
+                 activation='PReLU', dropout=0.0, strong_cond=False):
         """
         LYNXNet(Linear Gated Depthwise Separable Convolution Network)
         TIPS:You can control the style of the generated results by modifying the 'activation', 
@@ -133,7 +133,7 @@ class LYNXNet(nn.Module):
                 for i in range(num_layers)
             ]
         )
-        self.norm = nn.LayerNorm(num_channels, eps=1e-6)
+        self.norm = nn.LayerNorm(num_channels)
         self.output_projection = Conv1d(num_channels, in_dims * n_feats, kernel_size=1)
         self.strong_cond = strong_cond
         nn.init.zeros_(self.output_projection.weight)
