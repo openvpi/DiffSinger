@@ -88,6 +88,7 @@ pitch_prediction_args:
 #   num_layers: 6
 #   num_channels: 512
 #   dropout_rate: 0.1
+#   strong_cond: true
 
 variances_prediction_args:
   total_repeat_bins: 48
