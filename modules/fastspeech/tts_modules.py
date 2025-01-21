@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from rotary_embedding_torch import RotaryEmbedding
+from modules.commons.rotary_embedding_torch import RotaryEmbedding
 from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
 
