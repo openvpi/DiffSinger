@@ -3,6 +3,7 @@
 # See instructions at https://pytorch.org/get-started/locally/
 
 click
+einops
 h5py
 librosa<0.10.0
 lightning~=2.3.0
