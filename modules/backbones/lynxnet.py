@@ -6,24 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU
+from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Conv1d, Transpose
 from utils.hparams import hparams
-
-
-class Conv1d(torch.nn.Conv1d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
-
-
-class Transpose(nn.Module):
-    def __init__(self, dims):
-        super().__init__()
-        assert len(dims) == 2, 'dims must be a tuple of two dimensions'
-        self.dims = dims
-
-    def forward(self, x):
-        return x.transpose(*self.dims)
 
 
 class LYNXConvModule(nn.Module):
@@ -150,7 +134,7 @@ class LYNXNet(nn.Module):
         # post-norm
         x = self.norm(x.transpose(1, 2)).transpose(1, 2)
 
-        # MLP and GLU
+        # output_projection
         x = self.output_projection(x)  # [B, 128, T]
 
         if self.n_feats == 1:

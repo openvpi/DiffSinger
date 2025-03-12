@@ -85,12 +85,11 @@ pitch_prediction_args:
     num_layers: 20
     num_channels: 256
     dilation_cycle_length: 5
-# backbone_type: 'lynxnet'
+# backbone_type: 'lynxnet2'
 # backbone_args:
 #   num_layers: 6
 #   num_channels: 512
 #   dropout_rate: 0.0
-#   strong_cond: true
 
 variances_prediction_args:
   total_repeat_bins: 48
@@ -99,12 +98,11 @@ variances_prediction_args:
     num_layers: 10
     num_channels: 192
     dilation_cycle_length: 4
-# backbone_type: 'lynxnet'
+# backbone_type: 'lynxnet2'
 # backbone_args:
 #   num_layers: 6
 #   num_channels: 384
 #   dropout_rate: 0.0
-#   strong_cond: true
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
