@@ -25,6 +25,7 @@ class NSFHiFiGANExporter(BaseExporter):
         super().__init__(device=device, cache_dir=cache_dir)
         self.model_path = model_path
         self.model_name = model_name
+        self.vocoder_pitch_controllable = False
         self.model = self.build_model()
         self.model_class_name = remove_suffix(self.model.__class__.__name__, 'ONNX')
         self.model_cache_path = (self.cache_dir / self.model_name).with_suffix('.onnx')
@@ -38,6 +39,7 @@ class NSFHiFiGANExporter(BaseExporter):
             "See https://github.com/openvpi/DiffSinger/releases/tag/v2.3.0 for more details."
         )
         model = NSFHiFiGANONNX(config).eval().to(self.device)
+        self.vocoder_pitch_controllable = config.get("pc_aug", False)
         load_ckpt(model.generator, str(self.model_path),
                   prefix_in_ckpt=None, key_in_ckpt='generator',
                   strict=True, device=self.device)
@@ -73,6 +75,10 @@ class NSFHiFiGANExporter(BaseExporter):
                 'mel_fmax': hparams['fmax'] if hparams['fmax'] is not None else hparams['audio_sample_rate'] / 2,
                 'mel_base': 'e',
                 'mel_scale': 'slaney',
+                'pitch_controllable': self.vocoder_pitch_controllable,
+                # Some old vocoder versions may have severe performance issues on CUDA;
+                # the issues were fixed in newer versions, and this flag is to distinguish them
+                'force_on_cpu': False,
             }, fw, sort_keys=False)
         print(f'| export configs => {config_path} **PLEASE EDIT BEFORE USE**')
 
