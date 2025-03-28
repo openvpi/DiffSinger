@@ -14,6 +14,7 @@ class PhonemeDictionary:
             extra_phonemes: List[str] = None,
             merged_groups: List[List[str]] = None
     ):
+        # Step 1: Collect all phonemes
         all_phonemes = {'AP', 'SP'}
         if extra_phonemes:
             for ph in extra_phonemes:
@@ -43,47 +44,36 @@ class PhonemeDictionary:
                             all_phonemes.add(f'{lang}/{phoneme}')
                         else:
                             all_phonemes.add(phoneme)
+        # Step 2: Parse merged phoneme groups
         if merged_groups is None:
             merged_groups = []
         else:
-            if self._multi_langs:
-                for group in merged_groups:
-                    for phoneme in group:
-                        if '/' not in phoneme:
-                            raise ValueError(
-                                f"Invalid phoneme tag '{phoneme}' in merged group: "
-                                "should specify language by '<lang>/' prefix."
-                            )
+            _merged_groups = []
+            for group in merged_groups:
+                _group = []
+                for phoneme in group:
+                    if '/' in phoneme:
                         lang, name = phoneme.split('/', maxsplit=1)
                         if lang not in dictionaries:
                             raise ValueError(
                                 f"Invalid phoneme tag '{phoneme}' in merged group: "
                                 f"unrecognized language name '{lang}'."
                             )
-                        unique_name = phoneme if self._multi_langs else name
-                        if unique_name not in all_phonemes:
-                            raise ValueError(
-                                f"Invalid phoneme tag '{phoneme}' in merged group: "
-                                f"not found in phoneme set."
-                            )
-                merged_groups = [set(phones) for phones in merged_groups if len(phones) > 1]
-            else:
-                _merged_groups = []
-                for group in merged_groups:
-                    _group = []
-                    for phoneme in group:
-                        if '/' in phoneme:
-                            lang, name = phoneme.split('/', maxsplit=1)
-                            if lang not in dictionaries:
-                                raise ValueError(
-                                    f"Invalid phoneme tag '{phoneme}' in merged group: "
-                                    f"unrecognized language name '{lang}'."
-                                )
-                            _group.append(name)
+                        if self._multi_langs:
+                            element = phoneme
                         else:
-                            _group.append(phoneme)
-                    _merged_groups.append(_group)
-                merged_groups = [set(phones) for phones in _merged_groups if len(phones) > 1]
+                            element = name
+                    else:
+                        element = phoneme
+                    if element not in all_phonemes:
+                        raise ValueError(
+                            f"Invalid phoneme tag '{phoneme}' in merged group: "
+                            f"not found in phoneme set."
+                        )
+                    _group.append(element)
+                _merged_groups.append(_group)
+            merged_groups = [set(phones) for phones in _merged_groups if len(phones) > 1]
+        # Step 3: Build phoneme index
         merged_phonemes_inverted_index = {}
         for idx, group in enumerate(merged_groups):
             other_idx = None
