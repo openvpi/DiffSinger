@@ -25,6 +25,11 @@ class PhonemeDictionary:
                             f"Invalid phoneme tag '{ph}' in extra phonemes: "
                             f"unrecognized language name '{lang}'."
                         )
+                    if name in all_phonemes:
+                        raise ValueError(
+                            f"Invalid phoneme tag '{ph}' in extra phonemes: "
+                            f"short name conflicts with existing tag."
+                        )
                 all_phonemes.add(ph)
         self._multi_langs = len(dictionaries) > 1
         for lang, dict_path in dictionaries.items():
