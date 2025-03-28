@@ -1,6 +1,81 @@
 # Best Practices
 
-## Materials for training and using models
+## Fundamental concepts and materials
+
+### Configuration files
+
+A configuration file is a YAML file that defines enabled features, model hyperparameters and controls the behavior of the binarizer, trainer and inference. Almost all settings and controls in this repository, including the practices in this guidance, are achieved through configuration files.
+
+For more information of the configuration system and configurable attributes, see [Configuration Schemas](ConfigurationSchemas.md).
+
+### Languages
+
+Each language you are dealing with should have a unique tag in the configuration file. **We highly recommend using ISO 639 language codes as language tags.** For example, `zh` and `zho` stands for Chinese (`cmn` specifically for Mandarin Chinese), `ja` and `jpn` for Japanese, `en` and `eng` for English, `yue` for Cantonese (Yue). You can download a complete language code table from https://iso639-3.sil.org/code_tables/download_tables.
+
+### Phonemes
+
+Phonemes are the fundamental part of dictionaries and labels. There are two types of phonemes: language-specific phonemes and global phonemes.
+
+**Language-specific phonemes:** If there are multiple languages, all language-specific phonemes will be prefixed with its language name. For example: `zh/a`, `ja/o`, `en/eh`. These are called the **full name** of the phonemes, while `a`, `o`, `eh` are called the **short name** which has definite meaning only in a specific language context. If there is only one language, the short names can be used to determine each phoneme.
+
+**Global phonemes:** Some phonemes do not belong to any language. There are two reserved global phoneme tags: `SP` for space, and `AP` for aspiration. There can also be other user-defined tags (`EP`, `GS`, `VF`, etc.). These tags will not be prefixed with language, and are prior when identifying phoneme names.
+
+Extra phonemes, including user-defined global phonemes and additional language-specific phonemes that are not present in the dictionaries, can be defined in a list in the configuration file (full names should be used):
+
+```yaml
+extra_phonemes: ['EP', 'ja/cl']
+```
+
+The phoneme set expands rapidly with the number of languages. There are actually many similar phonemes that can be merged. Define the merging groups in your configuration file (full names should be used):
+
+```yaml
+merged_phoneme_groups:
+  - [zh/i, ja/i, en/iy]
+  - [zh/s, ja/s, en/s]
+  - [ja/cl, SP]  # global phonemes can also be merged
+  # ... (other groups omitted for brevity)
+use_lang_id: true  # whether to use language embedding; only take effects if there are cross-lingual phonemes
+```
+
+Merging phonemes does not mean that they are exactly the same for the dictionary. For those cross-lingual merged phonemes, Setting `use_lang_id` to true will still distinguish them by language IDs.
+
+#### Phoneme naming principles
+
+- Short names of language-specific phonemes should not conflict with global phoneme names, including reserved ones.
+- `/` cannot be used because it is already used for splitting the language tag and the short name.
+- `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
+- Other special characters, including but not limited to `@`, `#`, `&`, `|`, `<`, `>`, is not recommended because they may be used as special tags in the future format changes.
+- ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
+
+### Dictionaries
+
+Each language should have a corresponding dictionary. Define languages and dictionaries in your configuration file:
+
+```yaml
+dictionaries:
+  zh: dictionaries/opencpop-extension.txt
+  ja: dictionaries/japanese_dict_full.txt
+  en: dictionaries/ds_cmudict-07b.txt
+num_lang: 3  # number of languages; should be >= number of defined languages
+```
+
+Each dictionary is a *.txt* file, in which each line represents a mapping rule from one syllable to its phoneme sequence. The syllable and the phonemes are split by `tab`, and the phonemes are split by `space`:
+
+```
+<syllable>	<phoneme1> <phoneme2> ...
+```
+
+#### Syllable naming principles
+
+- Try to use a standard writing or pronouncing system. For example, pinyin for Mandarin Chinese, romaji for Japanese and English words for English.
+- `AP` and `SP` cannot be used because they are reserved tags when using DiffSinger in editors.
+- `/` cannot be used because it is already used for splitting the language tag and the short name.
+- `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
+- Syllable names is not recommended to start with `.` because this may have special meanings in the future editors.
+- Other special characters, including but not limited to `@`, `#`, `&`, `|`, `<`, `>`, is not recommended because they may be used as special tags in the future format changes.
+- ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
+
+There are some example dictionaries in the [dictionaries/](../dictionaries) folder.
 
 ### Datasets
 
@@ -13,30 +88,39 @@ A dataset mainly includes recordings and transcriptions, which is called a _raw 
     - ... (more recording files)
   - transcriptions.csv
 
-In the example above, the _my_raw_data_ folder is the root directory of a raw dataset.
+In the example above, the _my_raw_data_ directory is the root directory of a raw dataset.
 
 The _transcriptions.csv_ file contains all labels of the recordings. The common column of the CSV file is `name`, which represents all recording items by their filenames **without extension**. Elements of sequence attributes should be split by `space`. Other required columns may vary according to the category of the model you are training, and will be introduced in the following sections.
 
-### Dictionaries
+Each dataset should have a main language. If you have many recordings in multiple languages, it is recommended to separate them by language (you can merge their speaker IDs in the configuration). In each dataset, the main language is set as the language context, and phoneme labels in transcriptions.csv do not need a prefix (short name). It is also valid if there are phonemes from other languages, but all of them should be prefixed with their actual language (full name). Global phonemes should not be prefixed in any datasets.
 
-A dictionary is a .txt file, in which each line represents a mapping rule from one syllable to its phoneme sequence. The syllable and the phonemes are split by `tab`, and the phonemes are split by `space`:
+You can define your datasets in the configuration file like this:
 
+```yaml
+datasets:  # define all raw datasets
+  - raw_data_dir: data/spk1-zh/raw  # path to the root of a raw dataset
+    speaker: speaker1  # speaker name
+    spk_id: 0  # optional; use this to merge two datasets; otherwise automatically assigned
+    language: zh  # language tag (main language) of this dataset
+    test_prefixes:  # optional; validation samples from this dataset
+      - wav1
+      - wav2
+  - raw_data_dir: data/spk1-en/raw
+    speaker: speaker1
+    spk_id: 0  # specify the same speaker ID to merge into the previous one
+    language: en
+    test_prefixes:
+      - wav1
+      - wav2
+  - raw_data_dir: data/spk2/raw
+    speaker: speaker2
+    language: ja
+    test_prefixes:
+      - wav1
+      - wav2
+  # ... (other datasets omitted for brevity)
+num_spk: 2  # number of languages; should be > maximum speaker ID
 ```
-<syllable>	<phoneme1> <phoneme2> ...
-```
-
-Syllable names and phoneme names can be customized, but with the following limitations/suggestions:
-
-- `SP` (rest), `AP` (breath) and `<PAD>` (padding) cannot be used because they are reserved.
-- `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
-- Special characters including but not limited to `@`, `#`, `&`, `|`, `/`, `<`, `>`, etc. should be avoided because they may be used as special tags in the future format changes. Using them now is okay, and all modifications will be notified in advance.
-- ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
-
-There are some preset dictionaries in the [dictionaries/](../dictionaries) folder. For the guidance of using a custom dictionary, see [Using custom dictionaries](#using-custom-dictionaries).
-
-### Configuration files
-
-A configuration file is a YAML file that defines enabled features, model hyperparameters and controls the behavior of the binarizer, trainer and inference. For more information of the configuration system and configurable attributes, see [Configuration Schemas](ConfigurationSchemas.md).
 
 ### DS files
 
@@ -54,7 +138,7 @@ The [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) 
 
 The pre-trained vocoder can be fine-tuned on your target dataset. It is highly recommended to do so because fine-tuned vocoder can generate much better results on specific (seen) datasets while does not need much computing resources. See the [vocoder training and fine-tuning repository](https://github.com/openvpi/SingingVocoders) for detailed instructions. After you get the fine-tuned vocoder checkpoint, you can configure it by `vocoder_ckpt` key in your configuration file. The fine-tuned NSF-HiFiGAN vocoder checkpoints can be exported to ONNX format like other DiffSinger user models for further production purposes.
 
-Another unrecommended option: train a ultra-lightweight [DDSP vocoder](https://github.com/yxlllc/pc-ddsp) first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
+Another unrecommended option: train an ultra-lightweight [DDSP vocoder](https://github.com/yxlllc/pc-ddsp) first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 
 #### Feature extractors or auxiliary models
 
@@ -107,57 +191,6 @@ Functionalities of variance models are defined by their outputs. There are three
 - Multi-Variance Predictor: jointly predicts other variance parameters. See `predict_energy` and `predict_breathiness` in the configuration schemas.
 
 There may be some mutual influence between the modules above when they are enabled together. See [mutual influence between variance modules](#mutual-influence-between-variance-modules) for more details.
-
-## Using custom dictionaries
-
-This section is about using a custom grapheme-to-phoneme dictionary for any language(s).
-
-### Add a dictionary
-
-Assume that you have made a dictionary file named `my_dict.txt`. Edit your  configuration file:
-
-```yaml
-dictionary: my_dict.txt
-```
-
-Then you can binarize your data as normal. The phonemes in your dataset must cover, and must only cover the phonemes appeared in your dictionary. Otherwise, the binarizer will raise an error:
-
-```
-AssertionError: transcriptions and dictionary mismatch.
- (+) ['E', 'En', 'i0', 'ir']
- (-) ['AP', 'SP']
-```
-
-This means there are 4 unexpected symbols in the data labels (`ir`, `i0`, `E`, `En`) and 2 missing phonemes that are not covered by the data labels (`AP`, `SP`).
-
-Once the coverage checks passed, a phoneme distribution summary will be saved into your binary data directory. Below is an example.
-
-![phoneme-distribution](resources/phoneme-distribution.jpg)
-
-During the binarization process, each phoneme will be assigned with a unique phoneme ID according the order of their names. There are one padding index (marked as `<PAD`) before all real phonemes IDs.
-
-The dictionary used to binarize the dataset will be copied to the binary data directory by the binarizer, and will be copied again to the experiment directory by the trainer. When exported to ONNX, the dictionary and the phoneme sequence ordered by IDs will be saved to the artifact directory. You do not need to carry the original dictionary file for training and inference.
-
-### Preset dictionaries
-
-There are currently some preset dictionaries for you to use directly:
-
-|     dictionary     |        filename        | description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-|:------------------:|:----------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|      Opencpop      |      opencpop.txt      | The original dictionary used by the Opencpop mandarin singing dataset that is fully aligned with the pinyin writing system. We copied the dictionary from [here](http://wenet.org.cn/opencpop/resources/annotationformat/), removed 5 syllables that has no occurrence in the data labels (`hm`, `hng`, `m`, `n` and `ng`) and added some aliases for some syllables (e.g. `jv` for `ju`). Due to pronunciation issues, this dictionary is deprecated and remained only for backward compatibility. |
-| Opencpop extension | opencpop-extension.txt | The modified version of the opencpop dictionary, with stricter phoneme division rules for some pinyin syllables. For example, `ci` is mapped to `c i0` and `chi` is mapped to `ch ir` to distinguish with `bi` (`b i`). This dictionary is now used as the default dictionary for mandarin Chinese. There are also many new syllables for more phoneme combinations.                                                                                                                                |
-
-### Submit or propose a new dictionary
-
-You can submit or propose a new dictionary by raising a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions). Any dictionary to be formally supported in the main branch must match the following principles:
-
-- Only monolingual dictionaries are accepted for now. Support for multilingual dictionaries will be designed in the future.
-- All syllables and phonemes in the dictionary should have linguistic meanings. Style tags (vocal fry, falsetto, etc.) should not appear in the dictionary.
-- Its syllables should be standard spelling or phonetic transcriptions (like pinyin in mandarin Chinese and romaji in Japanese) for easy integration with G2P modules.
-- Its phonemes should cover all (or almost all) possible pronunciations in that language.
-- Every syllable and every phoneme should have one, and only one certain pronunciation, in all or almost all situations in that language. Some slight context-based pronunciation differences are allowed as the networks can learn.
-- Most native speakers/singers of that language should be able to easily cover all phonemes in the dictionary. This means the dictionary should not contain extremely rare or highly customized phonemes of some dialects or accents.
-- It should not bring too much difficulty and complexity to the data labeling workflow, and it should be easy to use for end users of voicebanks.
 
 ## Build variance datasets with DS files
 
