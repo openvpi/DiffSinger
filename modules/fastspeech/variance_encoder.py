@@ -8,7 +8,7 @@ from modules.commons.common_layers import (
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
-from utils.text_encoder import PAD_INDEX
+from utils.phoneme_utils import PAD_INDEX
 
 
 class FastSpeech2Variance(nn.Module):
@@ -16,8 +16,11 @@ class FastSpeech2Variance(nn.Module):
         super().__init__()
         self.predict_dur = hparams['predict_dur']
         self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
+        self.use_lang_id = hparams['use_lang_id']
 
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
+        if self.use_lang_id:
+            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
         if self.predict_dur:
             self.onset_embed = Embedding(2, hparams['hidden_size'])
@@ -46,7 +49,12 @@ class FastSpeech2Variance(nn.Module):
                 dur_loss_type=dur_hparams['loss_type']
             )
 
-    def forward(self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, spk_embed=None, infer=True):
+    def forward(
+            self, txt_tokens, midi, ph2word,
+            ph_dur=None, word_dur=None,
+            spk_embed=None, languages=None,
+            infer=True
+    ):
         """
         :param txt_tokens: (train, infer) [B, T_ph]
         :param midi: (train, infer) [B, T_ph]
@@ -54,6 +62,7 @@ class FastSpeech2Variance(nn.Module):
         :param ph_dur: (train, [infer]) [B, T_ph]
         :param word_dur: (infer) [B, T_w]
         :param spk_embed: (train) [B, T_ph, H]
+        :param languages (train, infer) [B, T_ph]
         :param infer: whether inference
         :return: encoder_out, ph_dur_pred
         """
@@ -69,11 +78,14 @@ class FastSpeech2Variance(nn.Module):
                 )[:, 1:]  # [B, T_ph] => [B, T_w]
             word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
             word_dur_embed = self.word_dur_embed(word_dur.float()[:, :, None])
-
-            encoder_out = self.encoder(txt_embed, onset_embed + word_dur_embed, txt_tokens == 0)
+            extra_embed = onset_embed + word_dur_embed
         else:
             ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
-            encoder_out = self.encoder(txt_embed, ph_dur_embed, txt_tokens == 0)
+            extra_embed = ph_dur_embed
+        if self.use_lang_id:
+            lang_embed = self.lang_embed(languages)
+            extra_embed += lang_embed
+        encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
 
         if self.predict_dur:
             midi_embed = self.midi_embed(midi)  # => [B, T_ph, H]

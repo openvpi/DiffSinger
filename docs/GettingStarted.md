@@ -14,9 +14,9 @@ DiffSinger requires Python 3.8 or later. We strongly recommend you create a virt
    pip install -r requirements.txt
    ```
 
-### Materials and assets
+### Concepts and materials
 
-Some essential materials and assets are needed before continuing with this repository. See [materials for training and using models](BestPractices.md#materials-for-training-and-using-models) for detailed instructions.
+Before you proceed, it is necessary to understand some fundamental concepts in this repository and prepare some materials and assets. See [fundamental concepts and materials](BestPractices.md#fundamental-concepts-and-materials) for detailed information.
 
 ## Configuration
 

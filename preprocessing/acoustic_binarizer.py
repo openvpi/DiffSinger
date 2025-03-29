@@ -36,6 +36,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = [
     'spk_id',
     'mel',
+    'languages',
     'tokens',
     'mel2ph',
     'f0',
@@ -67,17 +68,26 @@ class AcousticBinarizer(BaseBinarizer):
             "See https://github.com/openvpi/DiffSinger/releases/tag/v2.3.0 for more details."
         )
 
-    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk_id):
+    def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang):
         meta_data_dict = {}
         with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8') as f:
             for utterance_label in csv.DictReader(f):
                 item_name = utterance_label['name']
                 temp_dict = {
                     'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
-                    'ph_seq': utterance_label['ph_seq'].split(),
+                    'spk_id': self.spk_map[spk],
+                    'spk_name': spk,
+                    'lang_seq': [
+                        (
+                            self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                            if self.phoneme_dictionary.is_cross_lingual(p)
+                            else 0
+                        )
+                        for p in utterance_label['ph_seq'].split()
+                    ],
+                    'ph_seq': self.phoneme_dictionary.encode(utterance_label['ph_seq'], lang=lang),
                     'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
-                    'spk_id': spk_id,
-                    'spk_name': self.speakers[ds_id],
+                    'ph_text': utterance_label['ph_seq'],
                 }
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
@@ -85,7 +95,7 @@ class AcousticBinarizer(BaseBinarizer):
                     f'Negative ph_dur found in \'{item_name}\'.'
                 meta_data_dict[f'{ds_id}:{item_name}'] = temp_dict
 
-        self.items.update(meta_data_dict)
+        return meta_data_dict
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
@@ -106,8 +116,10 @@ class AcousticBinarizer(BaseBinarizer):
             'seconds': seconds,
             'length': length,
             'mel': mel,
-            'tokens': np.array(self.phone_encoder.encode(meta_data['ph_seq']), dtype=np.int64),
+            'languages': np.array(meta_data['lang_seq'], dtype=np.int64),
+            'tokens': np.array(meta_data['ph_seq'], dtype=np.int64),
             'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
+            'ph_text': meta_data['ph_text'],
         }
 
         # get ground truth dur

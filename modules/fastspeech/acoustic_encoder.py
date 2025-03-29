@@ -8,13 +8,16 @@ from modules.commons.common_layers import (
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
-from utils.text_encoder import PAD_INDEX
+from utils.phoneme_utils import PAD_INDEX
 
 
 class FastSpeech2Acoustic(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
+        self.use_lang_id = hparams.get('use_lang_id', False)
+        if self.use_lang_id:
+            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -79,12 +82,18 @@ class FastSpeech2Acoustic(nn.Module):
     def forward(
             self, txt_tokens, mel2ph, f0,
             key_shift=None, speed=None,
-            spk_embed_id=None, **kwargs
+            spk_embed_id=None, languages=None,
+            **kwargs
     ):
         txt_embed = self.txt_embed(txt_tokens)
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
         dur_embed = self.dur_embed(dur[:, :, None])
-        encoder_out = self.encoder(txt_embed, dur_embed, txt_tokens == 0)
+        if self.use_lang_id:
+            lang_embed = self.lang_embed(languages)
+            extra_embed = dur_embed + lang_embed
+        else:
+            extra_embed = dur_embed
+        encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
 
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])

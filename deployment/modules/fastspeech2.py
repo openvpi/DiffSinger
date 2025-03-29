@@ -9,7 +9,7 @@ from modules.commons.common_layers import NormalInitEmbedding as Embedding
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
-from utils.text_encoder import PAD_INDEX
+from utils.phoneme_utils import PAD_INDEX
 
 f0_bin = 256
 f0_max = 1100.0
@@ -41,8 +41,15 @@ class LengthRegulator(nn.Module):
 
 
 class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
-    def __init__(self, vocab_size):
+    def __init__(self, vocab_size, cross_lingual_token_idx=None):
         super().__init__(vocab_size=vocab_size)
+        self.register_buffer(
+            'cross_lingual_token_idx',
+            torch.LongTensor(cross_lingual_token_idx),
+            persistent=False
+        )  # [N,]
+        if len(cross_lingual_token_idx) == 0:
+            self.use_lang_id = False
 
         # for temporary compatibility; will be completely removed in the future
         self.f0_embed_type = hparams.get('f0_embed_type', 'continuous')
@@ -56,14 +63,29 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
 
     # noinspection PyMethodOverriding
-    def forward(self, tokens, durations, f0, variances: dict, gender=None, velocity=None, spk_embed=None):
+    def forward(
+            self, tokens, durations,
+            f0, variances: dict,
+            gender=None, velocity=None,
+            spk_embed=None,
+            languages=None
+    ):
         txt_embed = self.txt_embed(tokens)
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         f0 = f0 * (mel2ph > 0)
         mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
         dur_embed = self.dur_embed(durations.float()[:, :, None])
-        encoded = self.encoder(txt_embed, dur_embed, tokens == PAD_INDEX)
+        if self.use_lang_id:
+            lang_mask = torch.any(
+                tokens[..., None] == self.cross_lingual_token_idx[None, None],
+                dim=-1
+            )
+            lang_embed = self.lang_embed(languages * lang_mask)
+            extra_embed = dur_embed + lang_embed
+        else:
+            extra_embed = dur_embed
+        encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)
 
@@ -109,25 +131,49 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
 
 
 class FastSpeech2VarianceONNX(FastSpeech2Variance):
-    def __init__(self, vocab_size):
+    def __init__(self, vocab_size, cross_lingual_token_idx=None):
         super().__init__(vocab_size=vocab_size)
+        self.register_buffer(
+            'cross_lingual_token_idx',
+            torch.LongTensor(cross_lingual_token_idx),
+            persistent=False
+        )
+        if len(cross_lingual_token_idx) == 0:
+            self.use_lang_id = False
         self.lr = LengthRegulator()
 
-    def forward_encoder_word(self, tokens, word_div, word_dur):
+    def forward_encoder_word(self, tokens, word_div, word_dur, languages=None):
         txt_embed = self.txt_embed(tokens)
         ph2word = self.lr(word_div)
         onset = ph2word > F.pad(ph2word, [1, -1])
         onset_embed = self.onset_embed(onset.long())
         ph_word_dur = torch.gather(F.pad(word_dur, [1, 0]), 1, ph2word)
         word_dur_embed = self.word_dur_embed(ph_word_dur.float()[:, :, None])
+        extra_embed = onset_embed + word_dur_embed
+        if self.use_lang_id:
+            lang_mask = torch.any(
+                tokens[..., None] == self.cross_lingual_token_idx[None, None],
+                dim=-1
+            )
+            lang_embed = self.lang_embed(languages * lang_mask)
+            extra_embed += lang_embed
         x_masks = tokens == PAD_INDEX
-        return self.encoder(txt_embed, onset_embed + word_dur_embed, x_masks), x_masks
+        return self.encoder(txt_embed, extra_embed, x_masks), x_masks
 
-    def forward_encoder_phoneme(self, tokens, ph_dur):
+    def forward_encoder_phoneme(self, tokens, ph_dur, languages=None):
         txt_embed = self.txt_embed(tokens)
         ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
+        if self.use_lang_id:
+            lang_mask = torch.any(
+                tokens[..., None] == self.cross_lingual_token_idx[None, None],
+                dim=-1
+            )
+            lang_embed = self.lang_embed(languages * lang_mask)
+            extra_embed = ph_dur_embed + lang_embed
+        else:
+            extra_embed = ph_dur_embed
         x_masks = tokens == PAD_INDEX
-        return self.encoder(txt_embed, ph_dur_embed, x_masks), x_masks
+        return self.encoder(txt_embed, extra_embed, x_masks), x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)

@@ -35,6 +35,7 @@ class AcousticDataset(BaseDataset):
         self.need_key_shift = hparams['use_key_shift_embed']
         self.need_speed = hparams['use_speed_embed']
         self.need_spk_id = hparams['use_spk_id']
+        self.need_lang_id = hparams['use_lang_id']
 
     def collater(self, samples):
         batch = super().collater(samples)
@@ -60,6 +61,9 @@ class AcousticDataset(BaseDataset):
         if self.need_spk_id:
             spk_ids = torch.LongTensor([s['spk_id'] for s in samples])
             batch['spk_ids'] = spk_ids
+        if self.need_lang_id:
+            languages = utils.collate_nd([s['languages'] for s in samples], 0)
+            batch['languages'] = languages
         return batch
 
 
@@ -92,7 +96,7 @@ class AcousticTask(BaseTask):
 
     def _build_model(self):
         return DiffSingerAcoustic(
-            vocab_size=len(self.phone_encoder),
+            vocab_size=len(self.phoneme_dictionary),
             out_dims=hparams['audio_num_mel_bins']
         )
 
@@ -128,9 +132,14 @@ class AcousticTask(BaseTask):
             spk_embed_id = sample['spk_ids']
         else:
             spk_embed_id = None
+        if hparams['use_lang_id']:
+            languages = sample['languages']
+        else:
+            languages = None
         output: ShallowDiffusionOutput = self.model(
             txt_tokens, mel2ph=mel2ph, f0=f0, **variances,
-            key_shift=key_shift, speed=speed, spk_embed_id=spk_embed_id,
+            key_shift=key_shift, speed=speed,
+            spk_embed_id=spk_embed_id, languages=languages,
             gt_mel=target, infer=infer
         )
 

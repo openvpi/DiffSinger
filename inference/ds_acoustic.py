@@ -1,12 +1,11 @@
-from collections import OrderedDict
-
-import tqdm
 import json
 import pathlib
+from collections import OrderedDict
+from typing import Dict
 
 import numpy as np
 import torch
-from typing import Dict
+import tqdm
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
@@ -16,8 +15,7 @@ from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
 from utils.hparams import hparams
 from utils.infer_utils import cross_fade, resample_align_curve, save_wav
-from utils.phoneme_utils import build_phoneme_list
-from utils.text_encoder import TokenTextEncoder
+from utils.phoneme_utils import load_phoneme_dictionary
 
 
 class DiffSingerAcousticInfer(BaseSVSInfer):
@@ -37,12 +35,16 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             if hparams.get('use_tension_embed', False):
                 self.variances_to_embed.add('tension')
 
-            self.ph_encoder = TokenTextEncoder(vocab_list=build_phoneme_list())
+            self.phoneme_dictionary = load_phoneme_dictionary()
             if hparams['use_spk_id']:
                 with open(pathlib.Path(hparams['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
                     self.spk_map = json.load(f)
                 assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
                 assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
+            lang_map_fn = pathlib.Path(hparams['work_dir']) / 'lang_map.json'
+            if lang_map_fn.exists():
+                with open(lang_map_fn, 'r', encoding='utf8') as f:
+                    self.lang_map = json.load(f)
             self.model = self.build_model(ckpt_steps=ckpt_steps)
             self.lr = LengthRegulator().to(self.device)
         if load_vocoder:
@@ -50,7 +52,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
 
     def build_model(self, ckpt_steps=None):
         model = DiffSingerAcoustic(
-            vocab_size=len(self.ph_encoder),
+            vocab_size=len(self.phoneme_dictionary),
             out_dims=hparams['audio_num_mel_bins']
         ).eval().to(self.device)
         load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps,
@@ -73,7 +75,28 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         """
         batch = {}
         summary = OrderedDict()
-        txt_tokens = torch.LongTensor([self.ph_encoder.encode(param['ph_seq'])]).to(self.device)  # => [B, T_txt]
+
+        lang = param.get('lang')
+        if lang is None:
+            assert len(self.lang_map) <= 1, (
+                "This is a multilingual model. "
+                "Please specify a language by --lang option."
+            )
+        else:
+            assert lang in self.lang_map, f'Unrecognized language name: \'{lang}\'.'
+        if hparams.get('use_lang_id', False):
+            languages = torch.LongTensor([
+                (
+                    self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
+                    if self.phoneme_dictionary.is_cross_lingual(p)
+                    else 0
+                )
+                for p in param['ph_seq'].split()
+            ]).to(self.device)  # => [B, T_txt]
+            batch['languages'] = languages
+        txt_tokens = torch.LongTensor([
+            self.phoneme_dictionary.encode(param['ph_seq'], lang=lang)
+        ]).to(self.device)  # => [B, T_txt]
         batch['tokens'] = txt_tokens
 
         ph_dur = torch.from_numpy(np.array(param['ph_dur'].split(), np.float32)).to(self.device)
@@ -175,9 +198,11 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         else:
             spk_mix_embed = None
         mel_pred: ShallowDiffusionOutput = self.model(
-            txt_tokens, mel2ph=sample['mel2ph'], f0=sample['f0'], **variances,
+            txt_tokens,  languages=sample.get('languages'),
+            mel2ph=sample['mel2ph'], f0=sample['f0'], **variances,
             key_shift=sample.get('key_shift'), speed=sample.get('speed'),
-            spk_mix_embed=spk_mix_embed, infer=True
+            spk_mix_embed=spk_mix_embed,
+            infer=True
         )
         return mel_pred.diff_out
 

@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, Literal
 
 import onnx
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
@@ -51,6 +51,42 @@ def model_override_io_shapes(
         _override_shapes(model.graph.output, output_shapes)
 
 
+def model_reorder_io_list(
+        model: ModelProto,
+        input_or_output: Literal['input', 'output'],
+        target_name: str,
+        insert_after_name: str,
+):
+    """
+    Reorder the input of the model graph by moving the target input after the specified input (in-place operation).
+    If the given names are not found, the operation will be ignored.
+    :param model: model to perform the operation on
+    :param input_or_output: 'input' or 'output' to specify the list to reorder
+    :param target_name: the name of the input to be reordered
+    :param insert_after_name: the name of the input to be inserted after (None for the first)
+    """
+    def _reorder_input(input_list: RepeatedCompositeFieldContainer[ValueInfoProto]):
+        nonlocal input_or_output
+        target_idx = -1
+        insert_after_idx = -1
+        for i, value_info in enumerate(input_list):
+            if value_info.name == target_name:
+                target_idx = i
+            if value_info.name == insert_after_name:
+                insert_after_idx = i
+        if target_idx != -1 and insert_after_idx != -1:
+            target = input_list.pop(target_idx)
+            input_list.insert(insert_after_idx + 1, target)
+            _verbose(f'| reorder {input_or_output}: \'{target_name}\' after \'{insert_after_name}\'')
+
+    if input_or_output == 'input':
+        _reorder_input(model.graph.input)
+    elif input_or_output == 'output':
+        _reorder_input(model.graph.output)
+    else:
+        raise ValueError('Argument \'input_or_output\' should be either \'input\' or \'output\'.')
+
+
 def model_add_prefixes(
         model: ModelProto,
         initializer_prefix=None,
@@ -97,7 +133,7 @@ def model_add_prefixes(
                 new_name = initializer_prefix + initializer.name
                 _verbose('| add prefix:', initializer.name, '->', new_name)
                 initializer.name = new_name
-        
+
         for value_info in subgraph.value_info:
             if dim_prefix is not None:
                 for dim in value_info.type.tensor_type.shape.dim:
@@ -114,7 +150,7 @@ def model_add_prefixes(
             new_name = value_info_prefix + value_info.name
             _verbose('| add prefix:', value_info.name, '->', new_name)
             value_info.name = new_name
-        
+
         if node_prefix is not None:
             for node in subgraph.node:
                 if ignored_pattern is not None and re.match(ignored_pattern, node.name):
@@ -122,7 +158,7 @@ def model_add_prefixes(
                 new_name = node_prefix + node.name
                 _verbose('| add prefix:', node.name, '->', new_name)
                 node.name = new_name
-        
+
         for node in subgraph.node:
             # For 'If' and 'Loop' nodes, add prefixes recursively
             if node.op_type == 'If':
@@ -134,7 +170,7 @@ def model_add_prefixes(
                     if attr.name == 'body':
                         body = onnx.helper.get_attribute_value(attr)
                         _add_prefixes_recursive(body)
-            
+
             # For each node, rename its inputs and outputs
             for io_list in [node.input, node.output]:
                 for i, io_value in enumerate(io_list):

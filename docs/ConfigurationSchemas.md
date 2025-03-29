@@ -379,15 +379,84 @@ The key that indexes the binarized metadata to be used as the `sizes` when batch
 <tr><td align="center"><b>default</b></td><td>lengths</td>
 </tbody></table>
 
-### dictionary
+### datasets
 
-Path to the word-phoneme mapping dictionary file. Training data must fully cover phonemes in the dictionary.
+List of dataset configs for preprocessing.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>type</b></td><td>List[dict]</td>
+</tbody></table>
+
+### datasets[].language
+
+Language context of this dataset. Must be a key of [dictionaries](#dictionaries).
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
+
+### datasets[].raw_data_dir
+
+Path to this dataset including wave files, transcriptions, etc.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
+
+### datasets[].speaker
+
+The name of speaker of this dataset. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+</tbody></table>
+
+### datasets[].spk_id
+
+The speaker ID assigned to this dataset. Will be automatically assigned if not given. IDs can be duplicate or discontinuous to merge multiple datasets to one speaker.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+</tbody></table>
+
+### datasets[].test_prefixes
+
+List of data item names or name prefixes in this dataset for the validation set. For each string `s` in the list:
+
+- If `s` equals to an actual item name, add that item to validation set.
+- If `s` does not equal to any item names, add all items whose names start with `s` to validation set.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>all</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+</tbody></table>
+
+### dictionaries
+
+Map of language names and their corresponding dictionary file paths. The phonemes in these dictionaries will be combined as the final phoneme set and have their phoneme IDs. Training data must fully cover all phoneme IDs.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>Dict[str, str]</td>
+<tr><td align="center"><b>default</b></td><td>{}</td>
 </tbody></table>
 
 ### diff_accelerator
@@ -653,6 +722,18 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted ener
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
 <tr><td align="center"><b>default</b></td><td>0.12</td>
+</tbody></table>
+
+### extra_phonemes
+
+Extra phonemes to be added to the phoneme set. This list can be used to define custom global phoneme tags besides `AP` and `SP`, or to contain phonemes that are not present in any of the dictionaries.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+<tr><td align="center"><b>default</b></td><td>[]</td>
 </tbody></table>
 
 ### f0_max
@@ -1122,6 +1203,18 @@ Arguments for melody encoder. Available sub-keys: `hidden_size`, `enc_layers`, `
 <tr><td align="center"><b>type</b></td><td>dict</td>
 </tbody></table>
 
+### merged_phoneme_groups
+
+Phoneme groups to merge. Each group is a phoneme name list. The merged phonemes share the same ID and thus the same phoneme embedding.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>list</td>
+<tr><td align="center"><b>default</b></td><td>[]</td>
+</tbody></table>
+
 ### midi_smooth_width
 
 Length of sinusoidal smoothing convolution kernel (in seconds) on the step function representing MIDI sequence for base pitch calculation.
@@ -1168,6 +1261,17 @@ The number of attention heads of `torch.nn.MultiheadAttention` in FastSpeech2 en
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
 <tr><td align="center"><b>default</b></td><td>2</td>
+</tbody></table>
+
+### num_lang
+
+Number of languages. This value is used to allocate language embeddings in the linguistic encoder.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>required</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
 </tbody></table>
 
 ### num_sanity_val_steps
@@ -1499,17 +1603,6 @@ Whether to enable voicing prediction.
 <tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
-### raw_data_dir
-
-Path(s) to the raw dataset including wave files, transcriptions, etc.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>required</td>
-<tr><td align="center"><b>type</b></td><td>str, List[str]</td>
-</tbody></table>
-
 ### rel_pos
 
 Whether to use relative positional encoding in FastSpeech2 module.
@@ -1674,29 +1767,6 @@ Whether to apply the _sorting by similar length_ algorithm described in [sampler
 <tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
-### speakers
-
-The names of speakers in a multi-speaker model. Speaker names are mapped to speaker indexes and stored into spk_map.json when preprocessing.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>required</td>
-<tr><td align="center"><b>type</b></td><td>list</td>
-</tbody></table>
-
-### spk_ids
-
-The IDs of speakers in a multi-speaker model. If an empty list is given, speaker IDs will be automatically generated as $0,1,2,...,N_{spk}-1$. IDs can be duplicate or discontinuous.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>required</td>
-<tr><td align="center"><b>type</b></td><td>List[int]</td>
-<tr><td align="center"><b>default</b></td><td>[]</td>
-</tbody></table>
-
 ### spec_min
 
 Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values.
@@ -1801,22 +1871,6 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted tens
 <tr><td align="center"><b>default</b></td><td>0.12</td>
 </tbody></table>
 
-### test_prefixes
-
-List of data item names or name prefixes for the validation set. For each string `s` in the list:
-
-- If `s` equals to an actual item name, add that item to validation set.
-- If `s` does not equal to any item names, add all items whose names start with `s` to validation set.
-
-For multi-speaker combined datasets, "ds_id:name_prefix" can be used to apply the rules above within data from a specific sub-dataset, where ds_id represents the dataset index.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>required</td>
-<tr><td align="center"><b>type</b></td><td>list</td>
-</tbody></table>
-
 ### time_scale_factor
 
 The scale factor that will be multiplied on the time $t$ of Rectified Flow before embedding into the model.
@@ -1891,6 +1945,18 @@ Whether to embed key shifting values introduced by random pitch shifting augment
 <tr><td align="center"><b>constraints</b></td><td>Must be true if random pitch shifting is enabled.</td>
 </tbody></table>
 
+### use_lang_id
+
+Whether to embed the language ID from a multilingual dataset. This option only takes effect for those cross-lingual phonemes in the merged groups.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
 ### use_melody_encoder
 
 Whether to enable melody encoder for the pitch predictor.
@@ -1941,7 +2007,7 @@ Whether to embed speed values introduced by random time stretching augmentation.
 
 ### use_spk_id
 
-Whether embed the speaker id from a multi-speaker dataset.
+Whether to embed the speaker ID from a multi-speaker dataset.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>

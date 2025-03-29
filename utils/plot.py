@@ -106,7 +106,7 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None, title
     return fig
 
 
-def distribution_to_figure(title, x_label, y_label, items: list, values: list, zoom=0.8):
+def distribution_to_figure(title, x_label, y_label, items: list, values: list, zoom=0.8, rotate=False):
     fig = plt.figure(figsize=(int(len(items) * zoom), 10))
     plt.bar(x=items, height=values)
     plt.tick_params(labelsize=15)
@@ -117,4 +117,6 @@ def distribution_to_figure(title, x_label, y_label, items: list, values: list, z
     plt.title(title, fontsize=30)
     plt.xlabel(x_label, fontsize=20)
     plt.ylabel(y_label, fontsize=20)
+    if rotate:
+        fig.autofmt_xdate(rotation=45)
     return fig

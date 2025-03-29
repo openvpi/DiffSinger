@@ -62,6 +62,11 @@ def main():
     help='Speaker name or mixture of speakers'
 )
 @click.option(
+    '--lang', type=click.STRING,
+    required=False,
+    help='Default language name'
+)
+@click.option(
     '--out', type=click.Path(
         file_okay=False, dir_okay=True, path_type=pathlib.Path
     ),
@@ -112,6 +117,7 @@ def acoustic(
         exp: str,
         ckpt: int,
         spk: str,
+        lang: str,
         out: pathlib.Path,
         title: str,
         num: int,
@@ -195,9 +201,10 @@ def acoustic(
     for param in params:
         if gender is not None and hparams['use_key_shift_embed']:
             param['gender'] = gender
-
         if spk_mix is not None:
             param['spk_mix'] = spk_mix
+        if lang is not None:
+            param['lang'] = lang
 
     from inference.ds_acoustic import DiffSingerAcousticInfer
     infer_ins = DiffSingerAcousticInfer(load_vocoder=not mel, ckpt_steps=ckpt)
@@ -242,6 +249,11 @@ def acoustic(
     help='Speaker name or mixture of speakers'
 )
 @click.option(
+    '--lang', type=click.STRING,
+    required=False,
+    help='Default language name'
+)
+@click.option(
     '--out', type=click.Path(
         file_okay=False, dir_okay=True, path_type=pathlib.Path
     ),
@@ -282,6 +294,7 @@ def variance(
         exp: str,
         ckpt: int,
         spk: str,
+        lang: str,
         predict: Tuple[str],
         out: pathlib.Path,
         title: str,
@@ -344,11 +357,12 @@ def variance(
     for param in params:
         if expr is not None:
             param['expr'] = expr
-
         if spk_mix is not None:
             param['ph_spk_mix_backup'] = param.get('ph_spk_mix')
             param['spk_mix_backup'] = param.get('spk_mix')
             param['ph_spk_mix'] = param['spk_mix'] = spk_mix
+        if lang is not None:
+            param['lang'] = lang
 
     from inference.ds_variance import DiffSingerVarianceInfer
     infer_ins = DiffSingerVarianceInfer(ckpt_steps=ckpt, predictions=set(predict))
