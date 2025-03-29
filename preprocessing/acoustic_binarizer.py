@@ -30,7 +30,6 @@ from utils.binarizer_utils import (
     get_tension_base_harmonic,
 )
 from utils.decomposed_waveform import DecomposedWaveform
-from utils.hparams import hparams
 
 os.environ["OMP_NUM_THREADS"] = "1"
 ACOUSTIC_ITEM_ATTRIBUTES = [
@@ -56,14 +55,14 @@ tension_smooth: SinusoidalSmoothingConv1d = None
 
 
 class AcousticBinarizer(BaseBinarizer):
-    def __init__(self):
-        super().__init__(data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
+    def __init__(self, config):
+        super().__init__(config=config, data_attrs=ACOUSTIC_ITEM_ATTRIBUTES)
         self.lr = LengthRegulator()
-        self.need_energy = hparams['use_energy_embed']
-        self.need_breathiness = hparams['use_breathiness_embed']
-        self.need_voicing = hparams['use_voicing_embed']
-        self.need_tension = hparams['use_tension_embed']
-        assert hparams['mel_base'] == 'e', (
+        self.need_energy = self.config['use_energy_embed']
+        self.need_breathiness = self.config['use_breathiness_embed']
+        self.need_voicing = self.config['use_voicing_embed']
+        self.need_tension = self.config['use_tension_embed']
+        assert self.config['mel_base'] == 'e', (
             "Mel base must be set to \'e\' according to 2nd stage of the migration plan. "
             "See https://github.com/openvpi/DiffSinger/releases/tag/v2.3.0 for more details."
         )
@@ -99,15 +98,15 @@ class AcousticBinarizer(BaseBinarizer):
 
     @torch.no_grad()
     def process_item(self, item_name, meta_data, binarization_args):
-        waveform, _ = librosa.load(meta_data['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
+        waveform, _ = librosa.load(meta_data['wav_fn'], sr=self.config['audio_sample_rate'], mono=True)
         mel = get_mel_torch(
-            waveform, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
-            hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
-            fmin=hparams['fmin'], fmax=hparams['fmax'],
+            waveform, self.config['audio_sample_rate'], num_mel_bins=self.config['audio_num_mel_bins'],
+            hop_size=self.config['hop_size'], win_size=self.config['win_size'], fft_size=self.config['fft_size'],
+            fmin=self.config['fmin'], fmax=self.config['fmax'],
             device=self.device
         )
         length = mel.shape[0]
-        seconds = length * hparams['hop_size'] / hparams['audio_sample_rate']
+        seconds = length * self.config['hop_size'] / self.config['audio_sample_rate']
         processed_input = {
             'name': item_name,
             'wav_fn': meta_data['wav_fn'],
@@ -130,10 +129,10 @@ class AcousticBinarizer(BaseBinarizer):
         # get ground truth f0
         global pitch_extractor
         if pitch_extractor is None:
-            pitch_extractor = initialize_pe()
+            pitch_extractor = initialize_pe(self.config)
         gt_f0, uv = pitch_extractor.get_pitch(
-            waveform, samplerate=hparams['audio_sample_rate'], length=length,
-            hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
+            waveform, samplerate=self.config['audio_sample_rate'], length=length,
+            hop_size=self.config['hop_size'], f0_min=self.config['f0_min'], f0_max=self.config['f0_max'],
             interp_uv=True
         )
         if uv.all():  # All unvoiced
@@ -144,13 +143,13 @@ class AcousticBinarizer(BaseBinarizer):
         if self.need_energy:
             # get ground truth energy
             energy = get_energy_librosa(
-                waveform, length, hop_size=hparams['hop_size'], win_size=hparams['win_size']
+                waveform, length, hop_size=self.config['hop_size'], win_size=self.config['win_size']
             ).astype(np.float32)
 
             global energy_smooth
             if energy_smooth is None:
                 energy_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['energy_smooth_width'] / self.timestep)
+                    round(self.config['energy_smooth_width'] / self.timestep)
                 ).eval().to(self.device)
             energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0]
 
@@ -158,21 +157,21 @@ class AcousticBinarizer(BaseBinarizer):
 
         # create a DecomposedWaveform object for further feature extraction
         dec_waveform = DecomposedWaveform(
-            waveform, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
-            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
-            algorithm=hparams['hnsep']
+            self.config, waveform, samplerate=self.config['audio_sample_rate'], f0=gt_f0 * ~uv,
+            hop_size=self.config['hop_size'], fft_size=self.config['fft_size'], win_size=self.config['win_size'],
+            algorithm=self.config['hnsep']
         )
 
         if self.need_breathiness:
             # get ground truth breathiness
             breathiness = get_breathiness(
-                dec_waveform, None, None, length=length
+                self.config, dec_waveform, None, None, length=length
             )
 
             global breathiness_smooth
             if breathiness_smooth is None:
                 breathiness_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['breathiness_smooth_width'] / self.timestep)
+                    round(self.config['breathiness_smooth_width'] / self.timestep)
                 ).eval().to(self.device)
             breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
 
@@ -181,13 +180,13 @@ class AcousticBinarizer(BaseBinarizer):
         if self.need_voicing:
             # get ground truth voicing
             voicing = get_voicing(
-                dec_waveform, None, None, length=length
+                self.config, dec_waveform, None, None, length=length
             )
 
             global voicing_smooth
             if voicing_smooth is None:
                 voicing_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['voicing_smooth_width'] / self.timestep)
+                    round(self.config['voicing_smooth_width'] / self.timestep)
                 ).eval().to(self.device)
             voicing = voicing_smooth(torch.from_numpy(voicing).to(self.device)[None])[0]
 
@@ -196,13 +195,13 @@ class AcousticBinarizer(BaseBinarizer):
         if self.need_tension:
             # get ground truth tension
             tension = get_tension_base_harmonic(
-                dec_waveform, None, None, length=length, domain='logit'
+                self.config, dec_waveform, None, None, length=length, domain='logit'
             )
 
             global tension_smooth
             if tension_smooth is None:
                 tension_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['tension_smooth_width'] / self.timestep)
+                    round(self.config['tension_smooth_width'] / self.timestep)
                 ).eval().to(self.device)
             tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0]
             if tension.isnan().any():
@@ -212,10 +211,10 @@ class AcousticBinarizer(BaseBinarizer):
 
             processed_input['tension'] = tension.cpu().numpy()
 
-        if hparams['use_key_shift_embed']:
+        if self.config['use_key_shift_embed']:
             processed_input['key_shift'] = 0.
 
-        if hparams['use_speed_embed']:
+        if self.config['use_speed_embed']:
             processed_input['speed'] = 1.
 
         return processed_input
@@ -225,17 +224,17 @@ class AcousticBinarizer(BaseBinarizer):
         aug_list = []
         all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
-        aug_pe = initialize_pe()
+        aug_pe = initialize_pe(self.config)
         if self.augmentation_args['random_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
             key_shift_min, key_shift_max = aug_args['range']
-            assert hparams['use_key_shift_embed'], \
+            assert self.config['use_key_shift_embed'], \
                 'Random pitch shifting augmentation requires use_key_shift_embed == True.'
             assert key_shift_min < 0 < key_shift_max, \
                 'Random pitch shifting augmentation must have a range where min < 0 < max.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
+            aug_ins = SpectrogramStretchAugmentation(self.config, self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
             aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
 
@@ -269,12 +268,12 @@ class AcousticBinarizer(BaseBinarizer):
                 'Fixed pitch shifting augmentation is not compatible with random pitch shifting.'
             assert len(targets) == len(set(targets)), \
                 'Fixed pitch shifting augmentation requires having no duplicate targets.'
-            assert hparams['use_spk_id'], 'Fixed pitch shifting augmentation requires use_spk_id == True.'
-            assert hparams['num_spk'] >= min_num_spk, \
+            assert self.config['use_spk_id'], 'Fixed pitch shifting augmentation requires use_spk_id == True.'
+            assert self.config['num_spk'] >= min_num_spk, \
                 f'Fixed pitch shifting augmentation requires num_spk >= (1 + len(targets)) * (max(spk_ids) + 1).'
             assert scale < 1, 'Fixed pitch shifting augmentation requires scale < 1.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
+            aug_ins = SpectrogramStretchAugmentation(self.config, self.raw_data_dirs, aug_args, pe=aug_pe)
             for i, target in enumerate(targets):
                 aug_item_names = random.choices(all_item_names, k=int(scale * len(all_item_names)))
                 for aug_item_name in aug_item_names:
@@ -296,12 +295,12 @@ class AcousticBinarizer(BaseBinarizer):
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_time_stretching']
             speed_min, speed_max = aug_args['range']
-            assert hparams['use_speed_embed'], \
+            assert self.config['use_speed_embed'], \
                 'Random time stretching augmentation requires use_speed_embed == True.'
             assert 0 < speed_min < 1 < speed_max, \
                 'Random time stretching augmentation must have a range where 0 < min < 1 < max.'
 
-            aug_ins = SpectrogramStretchAugmentation(self.raw_data_dirs, aug_args, pe=aug_pe)
+            aug_ins = SpectrogramStretchAugmentation(self.config, self.raw_data_dirs, aug_args, pe=aug_pe)
             scale = aug_args['scale']
             k_from_raw = int(scale / (1 + total_scale) * len(all_item_names))
             k_from_aug = int(total_scale * scale / (1 + total_scale) * len(all_item_names))

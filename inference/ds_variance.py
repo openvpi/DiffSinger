@@ -20,7 +20,6 @@ from modules.fastspeech.tts_modules import (
 )
 from modules.toplevel import DiffSingerVariance
 from utils import load_ckpt
-from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.phoneme_utils import load_phoneme_dictionary
 from utils.pitch_utils import interp_f0
@@ -28,24 +27,24 @@ from utils.pitch_utils import interp_f0
 
 class DiffSingerVarianceInfer(BaseSVSInfer):
     def __init__(
-            self, device=None, ckpt_steps=None,
+            self, config, device=None, ckpt_steps=None,
             predictions: set = None
     ):
         super().__init__(device=device)
-        self.phoneme_dictionary = load_phoneme_dictionary()
-        if hparams['use_spk_id']:
-            with open(pathlib.Path(hparams['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
+        self.phoneme_dictionary = load_phoneme_dictionary(config)
+        if config['use_spk_id']:
+            with open(pathlib.Path(config['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
                 self.spk_map = json.load(f)
             assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
             assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
-        lang_map_fn = pathlib.Path(hparams['work_dir']) / 'lang_map.json'
+        lang_map_fn = pathlib.Path(config['work_dir']) / 'lang_map.json'
         if lang_map_fn.exists():
             with open(lang_map_fn, 'r', encoding='utf8') as f:
                 self.lang_map = json.load(f)
         self.model: DiffSingerVariance = self.build_model(ckpt_steps=ckpt_steps)
         self.lr = LengthRegulator()
         self.rr = RhythmRegulator()
-        smooth_kernel_size = round(hparams['midi_smooth_width'] / self.timestep)
+        smooth_kernel_size = round(config['midi_smooth_width'] / self.timestep)
         self.smooth = nn.Conv1d(
             in_channels=1,
             out_channels=1,
@@ -60,7 +59,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         smooth_kernel /= smooth_kernel.sum()
         self.smooth.weight.data = smooth_kernel[None, None]
 
-        glide_types = hparams.get('glide_types', [])
+        glide_types = config.get('glide_types', [])
         assert 'none' not in glide_types, 'Type name \'none\' is reserved and should not appear in glide_types.'
         self.glide_map = {
             'none': 0,
@@ -71,16 +70,17 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         }
 
         self.auto_completion_mode = len(predictions) == 0
-        self.global_predict_dur = 'dur' in predictions and hparams['predict_dur']
-        self.global_predict_pitch = 'pitch' in predictions and hparams['predict_pitch']
+        self.global_predict_dur = 'dur' in predictions and config['predict_dur']
+        self.global_predict_pitch = 'pitch' in predictions and config['predict_pitch']
         self.variance_prediction_set = predictions.intersection(VARIANCE_CHECKLIST)
         self.global_predict_variances = len(self.variance_prediction_set) > 0
 
     def build_model(self, ckpt_steps=None):
         model = DiffSingerVariance(
+            config=self.config,
             vocab_size=len(self.phoneme_dictionary)
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps,
+        load_ckpt(model, self.config['work_dir'], ckpt_steps=ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         return model
 
@@ -108,7 +108,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             )
         else:
             assert lang in self.lang_map, f'Unrecognized language name: \'{lang}\'.'
-        if hparams.get('use_lang_id', False):
+        if self.config.get('use_lang_id', False):
             languages = torch.LongTensor([
                 (
                     self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
@@ -159,7 +159,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         summary['frames'] = T_s
         summary['seconds'] = '%.2f' % (T_s * self.timestep)
 
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             ph_spk_mix_id, ph_spk_mix_value = self.load_speaker_mix(
                 param_src=param, summary_dst=summary, mix_mode='token', mix_length=T_ph
             )
@@ -208,7 +208,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         batch['note_midi'] = note_midi
         batch['note_dur'] = note_dur
         batch['note_rest'] = note_rest
-        if hparams.get('use_glide_embed', False) and param.get('note_glide') is not None:
+        if self.config.get('use_glide_embed', False) and param.get('note_glide') is not None:
             batch['note_glide'] = torch.LongTensor(
                 [[self.glide_map.get(x, 0) for x in param['note_glide'].split()]]
             ).to(self.device)
@@ -311,7 +311,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         expr = sample.get('expr')
         pitch = sample.get('pitch')
 
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             ph_spk_mix_id = sample['ph_spk_mix_id']
             ph_spk_mix_value = sample['ph_spk_mix_value']
             spk_mix_id = sample['spk_mix_id']

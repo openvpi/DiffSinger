@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from modules.commons.common_layers import NormalInitEmbedding as Embedding
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
-from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
 f0_bin = 256
@@ -41,8 +40,8 @@ class LengthRegulator(nn.Module):
 
 
 class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
-    def __init__(self, vocab_size, cross_lingual_token_idx=None):
-        super().__init__(vocab_size=vocab_size)
+    def __init__(self, config, vocab_size, cross_lingual_token_idx=None):
+        super().__init__(config=config, vocab_size=vocab_size)
         self.register_buffer(
             'cross_lingual_token_idx',
             torch.LongTensor(cross_lingual_token_idx),
@@ -52,15 +51,15 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             self.use_lang_id = False
 
         # for temporary compatibility; will be completely removed in the future
-        self.f0_embed_type = hparams.get('f0_embed_type', 'continuous')
+        self.f0_embed_type = config.get('f0_embed_type', 'continuous')
         if self.f0_embed_type == 'discrete':
-            self.pitch_embed = Embedding(300, hparams['hidden_size'], PAD_INDEX)
+            self.pitch_embed = Embedding(300, config['hidden_size'], PAD_INDEX)
 
         self.lr = LengthRegulator()
-        if hparams['use_key_shift_embed']:
-            self.shift_min, self.shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
-        if hparams['use_speed_embed']:
-            self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
+        if config['use_key_shift_embed']:
+            self.shift_min, self.shift_max = config['augmentation_args']['random_pitch_shifting']['range']
+        if config['use_speed_embed']:
+            self.speed_min, self.speed_max = config['augmentation_args']['random_time_stretching']['range']
 
     # noinspection PyMethodOverriding
     def forward(
@@ -74,7 +73,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         f0 = f0 * (mel2ph > 0)
-        mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
+        mel2ph = mel2ph[..., None].repeat((1, 1, self.config['hidden_size']))
         dur_embed = self.dur_embed(durations.float()[:, :, None])
         if self.use_lang_id:
             lang_mask = torch.any(
@@ -104,7 +103,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             ], dim=-1).sum(-1)
             condition += variance_embeds
 
-        if hparams['use_key_shift_embed']:
+        if self.config['use_key_shift_embed']:
             if hasattr(self, 'frozen_key_shift'):
                 key_shift_embed = self.key_shift_embed(self.frozen_key_shift[:, None, None])
             else:
@@ -114,7 +113,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
             condition += key_shift_embed
 
-        if hparams['use_speed_embed']:
+        if self.config['use_speed_embed']:
             if velocity is not None:
                 velocity = torch.clip(velocity, min=self.speed_min, max=self.speed_max)
                 speed_embed = self.speed_embed(velocity[:, :, None])
@@ -122,7 +121,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 speed_embed = self.speed_embed(torch.FloatTensor([1.]).to(condition.device)[:, None, None])
             condition += speed_embed
 
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             if hasattr(self, 'frozen_spk_embed'):
                 condition += self.frozen_spk_embed
             else:
@@ -131,8 +130,8 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
 
 
 class FastSpeech2VarianceONNX(FastSpeech2Variance):
-    def __init__(self, vocab_size, cross_lingual_token_idx=None):
-        super().__init__(vocab_size=vocab_size)
+    def __init__(self, config, vocab_size, cross_lingual_token_idx=None):
+        super().__init__(config=config, vocab_size=vocab_size)
         self.register_buffer(
             'cross_lingual_token_idx',
             torch.LongTensor(cross_lingual_token_idx),
@@ -178,7 +177,7 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)
         dur_cond = encoder_out + midi_embed
-        if hparams['use_spk_id'] and spk_embed is not None:
+        if self.config['use_spk_id'] and spk_embed is not None:
             dur_cond += spk_embed
         ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
         return ph_dur

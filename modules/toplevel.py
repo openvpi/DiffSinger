@@ -20,7 +20,6 @@ from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncoder
-from utils.hparams import hparams
 
 
 class ShallowDiffusionOutput:
@@ -34,49 +33,52 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
     def category(self):
         return 'acoustic'
 
-    def __init__(self, vocab_size, out_dims):
+    def __init__(self, config, vocab_size, out_dims):
         CategorizedModule.__init__(self)
-        ParameterAdaptorModule.__init__(self)
+        ParameterAdaptorModule.__init__(self, config)
         self.fs2 = FastSpeech2Acoustic(
+            config=config,
             vocab_size=vocab_size
         )
 
-        self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
-        self.shallow_args = hparams.get('shallow_diffusion_args', {})
+        self.use_shallow_diffusion = config.get('use_shallow_diffusion', False)
+        self.shallow_args = config.get('shallow_diffusion_args', {})
         if self.use_shallow_diffusion:
             self.train_aux_decoder = self.shallow_args['train_aux_decoder']
             self.train_diffusion = self.shallow_args['train_diffusion']
             self.aux_decoder_grad = self.shallow_args['aux_decoder_grad']
             self.aux_decoder = AuxDecoderAdaptor(
-                in_dims=hparams['hidden_size'], out_dims=out_dims, num_feats=1,
-                spec_min=hparams['spec_min'], spec_max=hparams['spec_max'],
+                in_dims=config['hidden_size'], out_dims=out_dims, num_feats=1,
+                spec_min=config['spec_min'], spec_max=config['spec_max'],
                 aux_decoder_arch=self.shallow_args['aux_decoder_arch'],
                 aux_decoder_args=self.shallow_args['aux_decoder_args']
             )
-        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
-        self.backbone_type = compat.get_backbone_type(hparams)
-        self.backbone_args = compat.get_backbone_args(hparams, self.backbone_type)
+        self.diffusion_type = config.get('diffusion_type', 'ddpm')
+        self.backbone_type = compat.get_backbone_type(config)
+        self.backbone_args = compat.get_backbone_args(config, self.backbone_type)
         if self.diffusion_type == 'ddpm':
             self.diffusion = GaussianDiffusion(
+                config=config,
                 out_dims=out_dims,
                 num_feats=1,
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
+                timesteps=config['timesteps'],
+                k_step=config['K_step'],
                 backbone_type=self.backbone_type,
                 backbone_args=self.backbone_args,
-                spec_min=hparams['spec_min'],
-                spec_max=hparams['spec_max']
+                spec_min=config['spec_min'],
+                spec_max=config['spec_max']
             )
         elif self.diffusion_type == 'reflow':
             self.diffusion = RectifiedFlow(
+                config=config,
                 out_dims=out_dims,
                 num_feats=1,
-                t_start=hparams['T_start'],
-                time_scale_factor=hparams['time_scale_factor'],
+                t_start=config['T_start'],
+                time_scale_factor=config['time_scale_factor'],
                 backbone_type=self.backbone_type,
                 backbone_args=self.backbone_args,
-                spec_min=hparams['spec_min'],
-                spec_max=hparams['spec_max']
+                spec_min=config['spec_min'],
+                spec_max=config['spec_max']
             )
         else:
             raise NotImplementedError(self.diffusion_type)
@@ -127,54 +129,57 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
     def category(self):
         return 'variance'
 
-    def __init__(self, vocab_size):
+    def __init__(self, config, vocab_size):
         CategorizedModule.__init__(self)
-        ParameterAdaptorModule.__init__(self)
-        self.predict_dur = hparams['predict_dur']
-        self.predict_pitch = hparams['predict_pitch']
+        ParameterAdaptorModule.__init__(self, config)
+        self.predict_dur = config['predict_dur']
+        self.predict_pitch = config['predict_pitch']
 
-        self.use_spk_id = hparams['use_spk_id']
+        self.use_spk_id = config['use_spk_id']
         if self.use_spk_id:
-            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+            self.spk_embed = Embedding(config['num_spk'], config['hidden_size'])
 
         self.fs2 = FastSpeech2Variance(
+            config=config,
             vocab_size=vocab_size
         )
         self.rr = RhythmRegulator()
         self.lr = LengthRegulator()
-        self.diffusion_type = hparams.get('diffusion_type', 'ddpm')
+        self.diffusion_type = config.get('diffusion_type', 'ddpm')
         if self.predict_pitch:
-            self.use_melody_encoder = hparams.get('use_melody_encoder', False)
+            self.use_melody_encoder = config.get('use_melody_encoder', False)
             if self.use_melody_encoder:
-                self.melody_encoder = MelodyEncoder(enc_hparams=hparams['melody_encoder_args'])
-                self.delta_pitch_embed = Linear(1, hparams['hidden_size'])
+                self.melody_encoder = MelodyEncoder(enc_hparams=config['melody_encoder_args'])
+                self.delta_pitch_embed = Linear(1, config['hidden_size'])
             else:
-                self.base_pitch_embed = Linear(1, hparams['hidden_size'])
+                self.base_pitch_embed = Linear(1, config['hidden_size'])
 
-            self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
-            pitch_hparams = hparams['pitch_prediction_args']
-            self.pitch_backbone_type = compat.get_backbone_type(hparams, nested_config=pitch_hparams)
+            self.pitch_retake_embed = Embedding(2, config['hidden_size'])
+            pitch_hparams = config['pitch_prediction_args']
+            self.pitch_backbone_type = compat.get_backbone_type(config, nested_config=pitch_hparams)
             self.pitch_backbone_args = compat.get_backbone_args(pitch_hparams, backbone_type=self.pitch_backbone_type)
             if self.diffusion_type == 'ddpm':
                 self.pitch_predictor = PitchDiffusion(
+                    config=config,
                     vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
                     cmin=pitch_hparams['pitd_clip_min'],
                     cmax=pitch_hparams['pitd_clip_max'],
                     repeat_bins=pitch_hparams['repeat_bins'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
+                    timesteps=config['timesteps'],
+                    k_step=config['K_step'],
                     backbone_type=self.pitch_backbone_type,
                     backbone_args=self.pitch_backbone_args
                 )
             elif self.diffusion_type == 'reflow':
                 self.pitch_predictor = PitchRectifiedFlow(
+                    config=config,
                     vmin=pitch_hparams['pitd_norm_min'],
                     vmax=pitch_hparams['pitd_norm_max'],
                     cmin=pitch_hparams['pitd_clip_min'],
                     cmax=pitch_hparams['pitd_clip_max'],
                     repeat_bins=pitch_hparams['repeat_bins'],
-                    time_scale_factor=hparams['time_scale_factor'],
+                    time_scale_factor=config['time_scale_factor'],
                     backbone_type=self.pitch_backbone_type,
                     backbone_args=self.pitch_backbone_args
                 )
@@ -182,9 +187,9 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
 
         if self.predict_variances:
-            self.pitch_embed = Linear(1, hparams['hidden_size'])
+            self.pitch_embed = Linear(1, config['hidden_size'])
             self.variance_embeds = nn.ModuleDict({
-                v_name: Linear(1, hparams['hidden_size'])
+                v_name: Linear(1, config['hidden_size'])
                 for v_name in self.variance_prediction_list
             })
 
@@ -230,7 +235,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             mel2ph = F.pad(mel2ph, [0, base_pitch.shape[1] - mel2ph.shape[1]])
 
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
-        mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
+        mel2ph_ = mel2ph[..., None].repeat([1, 1, self.config['hidden_size']])
         condition = torch.gather(encoder_out, 1, mel2ph_)
 
         if self.use_spk_id:
@@ -243,7 +248,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                     glide=note_glide
                 )
                 melody_encoder_out = F.pad(melody_encoder_out, [0, 0, 1, 0])
-                mel2note_ = mel2note[..., None].repeat([1, 1, hparams['hidden_size']])
+                mel2note_ = mel2note[..., None].repeat([1, 1, self.config['hidden_size']])
                 melody_condition = torch.gather(melody_encoder_out, 1, mel2note_)
                 pitch_cond = condition + melody_condition
             else:

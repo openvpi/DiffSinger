@@ -14,7 +14,7 @@ import tqdm
 
 from inference.ds_acoustic import DiffSingerAcousticInfer
 from utils.infer_utils import cross_fade, save_wav
-from utils.hparams import set_hparams, hparams
+from utils.config_utils import read_full_config
 
 parser = argparse.ArgumentParser(description='Run DiffSinger vocoder')
 parser.add_argument('mel', type=str, help='Path to the input file')
@@ -28,26 +28,16 @@ args = parser.parse_args()
 
 mel = pathlib.Path(args.mel)
 name = mel.stem if not args.title else args.title
-config = None
-if args.exp:
-    config = root_dir / 'checkpoints' / args.exp / 'config.yaml'
-elif args.config:
-    config = pathlib.Path(args.config)
-else:
-    assert False, 'Either argument \'--exp\' or \'--config\' should be specified.'
+if args.exp is None and args.config is None:
+    raise AssertionError('Either argument \'--exp\' or \'--config\' should be specified.')
 
-sys.argv = [
-    sys.argv[0],
-    '--config',
-    str(config)
-]
-set_hparams(print_hparams=False)
+config, _ = read_full_config(args.config, args.exp)
 
 cls = getattr(args, 'class')
 if cls:
-    hparams['vocoder'] = cls
+    config['vocoder'] = cls
 if args.ckpt:
-    hparams['vocoder_ckpt'] = args.ckpt
+    config['vocoder_ckpt'] = args.ckpt
 
 
 out = args.out
@@ -60,8 +50,8 @@ mel_seq = torch.load(mel)
 assert isinstance(mel_seq, list), 'Not a valid mel sequence.'
 assert len(mel_seq) > 0, 'Mel sequence is empty.'
 
-sample_rate = hparams['audio_sample_rate']
-infer_ins = DiffSingerAcousticInfer(load_model=False)
+sample_rate = config['audio_sample_rate']
+infer_ins = DiffSingerAcousticInfer(config=config, load_model=False)
 
 
 def run_vocoder(path: pathlib.Path):

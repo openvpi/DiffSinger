@@ -15,19 +15,18 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data.distributed import Sampler
 
 import utils
-from utils.hparams import hparams
 
 
 # ==========LR schedulers==========
 
 class RSQRTSchedule(object):
-    def __init__(self, optimizer):
+    def __init__(self, config, optimizer):
         super().__init__()
         self.optimizer = optimizer
-        self.constant_lr = hparams['lr']
-        self.warmup_updates = hparams['warmup_updates']
-        self.hidden_size = hparams['hidden_size']
-        self.lr = hparams['lr']
+        self.constant_lr = config['lr']
+        self.warmup_updates = config['warmup_updates']
+        self.hidden_size = config['hidden_size']
+        self.lr = config['lr']
         for param_group in optimizer.param_groups:
             param_group['lr'] = self.lr
         self.step(0)
@@ -74,7 +73,7 @@ class WarmupCosineSchedule(LambdaLR):
 class DsBatchSampler(Sampler):
     def __init__(self, dataset, max_batch_frames, max_batch_size, sub_indices=None,
                  num_replicas=None, rank=None,
-                 required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
+                 required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True, sampler_frame_count_grid=6,
                  size_reversed=False, shuffle_sample=False, shuffle_batch=False,
                  disallow_empty_batch=True, pad_batch_assignment=True, seed=0, drop_last=False) -> None:
         if rank >= num_replicas or rank < 0:
@@ -89,6 +88,7 @@ class DsBatchSampler(Sampler):
         self.required_batch_count_multiple = required_batch_count_multiple
         self.batch_by_size = batch_by_size
         self.sort_by_similar_size = sort_by_similar_size
+        self.sampler_frame_count_grid = sampler_frame_count_grid
         self.size_reversed = size_reversed
         self.shuffle_sample = shuffle_sample
         self.shuffle_batch = shuffle_batch
@@ -113,7 +113,7 @@ class DsBatchSampler(Sampler):
                 indices = rng.permutation(len(self.dataset))
 
             if self.sort_by_similar_size:
-                grid = int(hparams['sampler_frame_count_grid'])
+                grid = int(self.sampler_frame_count_grid)
                 assert grid > 0
                 sizes = (np.round(np.array(self.dataset.sizes)[indices] / grid) * grid).clip(grid, None)
                 sizes *= (-1 if self.size_reversed else 1)

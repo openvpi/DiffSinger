@@ -13,35 +13,34 @@ from modules.fastspeech.tts_modules import LengthRegulator
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt
-from utils.hparams import hparams
 from utils.infer_utils import cross_fade, resample_align_curve, save_wav
 from utils.phoneme_utils import load_phoneme_dictionary
 
 
 class DiffSingerAcousticInfer(BaseSVSInfer):
-    def __init__(self, device=None, load_model=True, load_vocoder=True, ckpt_steps=None):
-        super().__init__(device=device)
+    def __init__(self, config, device=None, load_model=True, load_vocoder=True, ckpt_steps=None):
+        super().__init__(config=config, device=device)
         if load_model:
             self.variance_checklist = []
 
             self.variances_to_embed = set()
 
-            if hparams.get('use_energy_embed', False):
+            if config.get('use_energy_embed', False):
                 self.variances_to_embed.add('energy')
-            if hparams.get('use_breathiness_embed', False):
+            if config.get('use_breathiness_embed', False):
                 self.variances_to_embed.add('breathiness')
-            if hparams.get('use_voicing_embed', False):
+            if config.get('use_voicing_embed', False):
                 self.variances_to_embed.add('voicing')
-            if hparams.get('use_tension_embed', False):
+            if config.get('use_tension_embed', False):
                 self.variances_to_embed.add('tension')
 
-            self.phoneme_dictionary = load_phoneme_dictionary()
-            if hparams['use_spk_id']:
-                with open(pathlib.Path(hparams['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
+            self.phoneme_dictionary = load_phoneme_dictionary(config)
+            if config['use_spk_id']:
+                with open(pathlib.Path(config['work_dir']) / 'spk_map.json', 'r', encoding='utf8') as f:
                     self.spk_map = json.load(f)
                 assert isinstance(self.spk_map, dict) and len(self.spk_map) > 0, 'Invalid or empty speaker map!'
                 assert len(self.spk_map) == len(set(self.spk_map.values())), 'Duplicate speaker id in speaker map!'
-            lang_map_fn = pathlib.Path(hparams['work_dir']) / 'lang_map.json'
+            lang_map_fn = pathlib.Path(config['work_dir']) / 'lang_map.json'
             if lang_map_fn.exists():
                 with open(lang_map_fn, 'r', encoding='utf8') as f:
                     self.lang_map = json.load(f)
@@ -52,18 +51,19 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
 
     def build_model(self, ckpt_steps=None):
         model = DiffSingerAcoustic(
+            config=self.config,
             vocab_size=len(self.phoneme_dictionary),
-            out_dims=hparams['audio_num_mel_bins']
+            out_dims=self.config['audio_num_mel_bins']
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=ckpt_steps,
+        load_ckpt(model, self.config['work_dir'], ckpt_steps=ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         return model
 
     def build_vocoder(self):
-        if hparams['vocoder'] in VOCODERS:
-            vocoder = VOCODERS[hparams['vocoder']]()
+        if self.config['vocoder'] in VOCODERS:
+            vocoder = VOCODERS[self.config['vocoder']](self.config)
         else:
-            vocoder = VOCODERS[hparams['vocoder'].split('.')[-1]]()
+            vocoder = VOCODERS[self.config['vocoder'].split('.')[-1]](self.config)
         vocoder.to_device(self.device)
         return vocoder
 
@@ -84,7 +84,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             )
         else:
             assert lang in self.lang_map, f'Unrecognized language name: \'{lang}\'.'
-        if hparams.get('use_lang_id', False):
+        if self.config.get('use_lang_id', False):
             languages = torch.LongTensor([
                 (
                     self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
@@ -110,7 +110,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
         summary['frames'] = length
         summary['seconds'] = '%.2f' % (length * self.timestep)
 
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             spk_mix_id, spk_mix_value = self.load_speaker_mix(
                 param_src=param, summary_dst=summary, mix_mode='frame', mix_length=length
             )
@@ -134,8 +134,8 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 )).to(self.device)[None]
                 summary[v_name] = 'manual'
 
-        if hparams['use_key_shift_embed']:
-            shift_min, shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
+        if self.config['use_key_shift_embed']:
+            shift_min, shift_max = self.config['augmentation_args']['random_pitch_shifting']['range']
             gender = param.get('gender')
             if gender is None:
                 gender = 0.
@@ -158,13 +158,13 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     min=shift_min, max=shift_max
                 )
 
-        if hparams['use_speed_embed']:
+        if self.config['use_speed_embed']:
             if param.get('velocity') is None:
                 summary['velocity'] = 'default'
                 batch['speed'] = torch.FloatTensor([1.]).to(self.device)[:, None]  # => [B=1, T=1]
             else:
                 summary['velocity'] = 'manual'
-                speed_min, speed_max = hparams['augmentation_args']['random_time_stretching']['range']
+                speed_min, speed_max = self.config['augmentation_args']['random_time_stretching']['range']
                 speed_seq = resample_align_curve(
                     np.array(param['velocity'].split(), np.float32),
                     original_timestep=float(param['velocity_timestep']),
@@ -187,7 +187,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             v_name: sample.get(v_name)
             for v_name in self.variances_to_embed
         }
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             spk_mix_id = sample['spk_mix_id']
             spk_mix_value = sample['spk_mix_value']
             # perform mixing on spk embed
@@ -250,7 +250,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                     })
                 else:
                     waveform_pred = self.run_vocoder(mel_pred, f0=batch['f0'])[0].cpu().numpy()
-                    silent_length = round(param.get('offset', 0) * hparams['audio_sample_rate']) - current_length
+                    silent_length = round(param.get('offset', 0) * self.config['audio_sample_rate']) - current_length
                     if silent_length >= 0:
                         result = np.append(result, np.zeros(silent_length))
                         result = np.append(result, waveform_pred)
@@ -268,4 +268,4 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
                 torch.save(result, save_path)
             else:
                 print(f'| save audio: {save_path}')
-                save_wav(result, save_path, hparams['audio_sample_rate'])
+                save_wav(result, save_path, self.config['audio_sample_rate'])

@@ -8,7 +8,6 @@ from librosa.filters import mel as librosa_mel_fn
 
 from basics.base_vocoder import BaseVocoder
 from modules.vocoders.registry import register_vocoder
-from utils.hparams import hparams
 
 
 class DotDict(dict):
@@ -36,9 +35,10 @@ def load_model(model_path: pathlib.Path, device='cpu'):
 
 @register_vocoder
 class DDSP(BaseVocoder):
-    def __init__(self, device='cpu'):
+    def __init__(self, config, device='cpu'):
+        self.config = config
         self.device = device
-        model_path = pathlib.Path(hparams['vocoder_ckpt'])
+        model_path = pathlib.Path(config['vocoder_ckpt'])
         assert model_path.exists(), 'DDSP model file is not found!'
         self.model, self.args = load_model(model_path, device=self.device)
 
@@ -49,30 +49,30 @@ class DDSP(BaseVocoder):
         return self.device
 
     def spec2wav_torch(self, mel, f0):  # mel: [B, T, bins] f0: [B, T]
-        if self.args.data.sampling_rate != hparams['audio_sample_rate']:
-            print('Mismatch parameters: hparams[\'audio_sample_rate\']=', hparams['audio_sample_rate'], '!=',
+        if self.args.data.sampling_rate != self.config['audio_sample_rate']:
+            print('Mismatch parameters: config[\'audio_sample_rate\']=', self.config['audio_sample_rate'], '!=',
                   self.args.data.sampling_rate, '(vocoder)')
-        if self.args.data.n_mels != hparams['audio_num_mel_bins']:
-            print('Mismatch parameters: hparams[\'audio_num_mel_bins\']=', hparams['audio_num_mel_bins'], '!=',
+        if self.args.data.n_mels != self.config['audio_num_mel_bins']:
+            print('Mismatch parameters: config[\'audio_num_mel_bins\']=', self.config['audio_num_mel_bins'], '!=',
                   self.args.data.n_mels, '(vocoder)')
-        if self.args.data.n_fft != hparams['fft_size']:
-            print('Mismatch parameters: hparams[\'fft_size\']=', hparams['fft_size'], '!=', self.args.data.n_fft,
+        if self.args.data.n_fft != self.config['fft_size']:
+            print('Mismatch parameters: config[\'fft_size\']=', self.config['fft_size'], '!=', self.args.data.n_fft,
                   '(vocoder)')
-        if self.args.data.win_length != hparams['win_size']:
-            print('Mismatch parameters: hparams[\'win_size\']=', hparams['win_size'], '!=', self.args.data.win_length,
+        if self.args.data.win_length != self.config['win_size']:
+            print('Mismatch parameters: config[\'win_size\']=', self.config['win_size'], '!=', self.args.data.win_length,
                   '(vocoder)')
-        if self.args.data.block_size != hparams['hop_size']:
-            print('Mismatch parameters: hparams[\'hop_size\']=', hparams['hop_size'], '!=', self.args.data.block_size,
+        if self.args.data.block_size != self.config['hop_size']:
+            print('Mismatch parameters: config[\'hop_size\']=', self.config['hop_size'], '!=', self.args.data.block_size,
                   '(vocoder)')
-        if self.args.data.mel_fmin != hparams['fmin']:
-            print('Mismatch parameters: hparams[\'fmin\']=', hparams['fmin'], '!=', self.args.data.mel_fmin,
+        if self.args.data.mel_fmin != self.config['fmin']:
+            print('Mismatch parameters: config[\'fmin\']=', self.config['fmin'], '!=', self.args.data.mel_fmin,
                   '(vocoder)')
-        if self.args.data.mel_fmax != hparams['fmax']:
-            print('Mismatch parameters: hparams[\'fmax\']=', hparams['fmax'], '!=', self.args.data.mel_fmax,
+        if self.args.data.mel_fmax != self.config['fmax']:
+            print('Mismatch parameters: config[\'fmax\']=', self.config['fmax'], '!=', self.args.data.mel_fmax,
                   '(vocoder)')
         with torch.no_grad():
             mel = mel.to(self.device)
-            mel_base = hparams.get('mel_base', 10)
+            mel_base = self.config.get('mel_base', 10)
             if mel_base != 'e':
                 assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
             else:
@@ -84,30 +84,30 @@ class DDSP(BaseVocoder):
         return signal
 
     def spec2wav(self, mel, f0):
-        if self.args.data.sampling_rate != hparams['audio_sample_rate']:
-            print('Mismatch parameters: hparams[\'audio_sample_rate\']=', hparams['audio_sample_rate'], '!=',
+        if self.args.data.sampling_rate != self.config['audio_sample_rate']:
+            print('Mismatch parameters: config[\'audio_sample_rate\']=', self.config['audio_sample_rate'], '!=',
                   self.args.data.sampling_rate, '(vocoder)')
-        if self.args.data.n_mels != hparams['audio_num_mel_bins']:
-            print('Mismatch parameters: hparams[\'audio_num_mel_bins\']=', hparams['audio_num_mel_bins'], '!=',
+        if self.args.data.n_mels != self.config['audio_num_mel_bins']:
+            print('Mismatch parameters: config[\'audio_num_mel_bins\']=', self.config['audio_num_mel_bins'], '!=',
                   self.args.data.n_mels, '(vocoder)')
-        if self.args.data.n_fft != hparams['fft_size']:
-            print('Mismatch parameters: hparams[\'fft_size\']=', hparams['fft_size'], '!=', self.args.data.n_fft,
+        if self.args.data.n_fft != self.config['fft_size']:
+            print('Mismatch parameters: config[\'fft_size\']=', self.config['fft_size'], '!=', self.args.data.n_fft,
                   '(vocoder)')
-        if self.args.data.win_length != hparams['win_size']:
-            print('Mismatch parameters: hparams[\'win_size\']=', hparams['win_size'], '!=', self.args.data.win_length,
+        if self.args.data.win_length != self.config['win_size']:
+            print('Mismatch parameters: config[\'win_size\']=', self.config['win_size'], '!=', self.args.data.win_length,
                   '(vocoder)')
-        if self.args.data.block_size != hparams['hop_size']:
-            print('Mismatch parameters: hparams[\'hop_size\']=', hparams['hop_size'], '!=', self.args.data.block_size,
+        if self.args.data.block_size != self.config['hop_size']:
+            print('Mismatch parameters: config[\'hop_size\']=', self.config['hop_size'], '!=', self.args.data.block_size,
                   '(vocoder)')
-        if self.args.data.mel_fmin != hparams['fmin']:
-            print('Mismatch parameters: hparams[\'fmin\']=', hparams['fmin'], '!=', self.args.data.mel_fmin,
+        if self.args.data.mel_fmin != self.config['fmin']:
+            print('Mismatch parameters: config[\'fmin\']=', self.config['fmin'], '!=', self.args.data.mel_fmin,
                   '(vocoder)')
-        if self.args.data.mel_fmax != hparams['fmax']:
-            print('Mismatch parameters: hparams[\'fmax\']=', hparams['fmax'], '!=', self.args.data.mel_fmax,
+        if self.args.data.mel_fmax != self.config['fmax']:
+            print('Mismatch parameters: config[\'fmax\']=', self.config['fmax'], '!=', self.args.data.mel_fmax,
                   '(vocoder)')
         with torch.no_grad():
             mel = torch.FloatTensor(mel).unsqueeze(0).to(self.device)
-            mel_base = hparams.get('mel_base', 10)
+            mel_base = self.config.get('mel_base', 10)
             if mel_base != 'e':
                 assert mel_base in [10, '10'], "mel_base must be 'e', '10' or 10."
             else:

@@ -7,40 +7,39 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
-from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
 
 class FastSpeech2Variance(nn.Module):
-    def __init__(self, vocab_size):
+    def __init__(self, config, vocab_size):
         super().__init__()
-        self.predict_dur = hparams['predict_dur']
-        self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
-        self.use_lang_id = hparams['use_lang_id']
+        self.predict_dur = config['predict_dur']
+        self.linguistic_mode = 'word' if config['predict_dur'] else 'phoneme'
+        self.use_lang_id = config['use_lang_id']
 
-        self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
+        self.txt_embed = Embedding(vocab_size, config['hidden_size'], PAD_INDEX)
         if self.use_lang_id:
-            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
+            self.lang_embed = Embedding(config['num_lang'] + 1, config['hidden_size'], padding_idx=0)
 
         if self.predict_dur:
-            self.onset_embed = Embedding(2, hparams['hidden_size'])
-            self.word_dur_embed = Linear(1, hparams['hidden_size'])
+            self.onset_embed = Embedding(2, config['hidden_size'])
+            self.word_dur_embed = Linear(1, config['hidden_size'])
         else:
-            self.ph_dur_embed = Linear(1, hparams['hidden_size'])
+            self.ph_dur_embed = Linear(1, config['hidden_size'])
 
         self.encoder = FastSpeech2Encoder(
-            hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
-            ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
-            dropout=hparams['dropout'], num_heads=hparams['num_heads'],
-            use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False)
+            hidden_size=config['hidden_size'], num_layers=config['enc_layers'],
+            ffn_kernel_size=config['enc_ffn_kernel_size'], ffn_act=config['ffn_act'],
+            dropout=config['dropout'], num_heads=config['num_heads'],
+            use_pos_embed=config['use_pos_embed'], rel_pos=config.get('rel_pos', False), 
+            use_rope=config.get('use_rope', False)
         )
 
-        dur_hparams = hparams['dur_prediction_args']
+        dur_hparams = config['dur_prediction_args']
         if self.predict_dur:
-            self.midi_embed = Embedding(128, hparams['hidden_size'])
+            self.midi_embed = Embedding(128, config['hidden_size'])
             self.dur_predictor = DurationPredictor(
-                in_dims=hparams['hidden_size'],
+                in_dims=config['hidden_size'],
                 n_chans=dur_hparams['hidden_size'],
                 n_layers=dur_hparams['num_layers'],
                 dropout_rate=dur_hparams['dropout'],
@@ -100,11 +99,12 @@ class FastSpeech2Variance(nn.Module):
 
 
 class MelodyEncoder(nn.Module):
-    def __init__(self, enc_hparams: dict):
+    def __init__(self, config: dict):
         super().__init__()
+        enc_hparams = config['melody_encoder_args']
 
         def get_hparam(key):
-            return enc_hparams.get(key, hparams.get(key))
+            return enc_hparams.get(key, config.get(key))
 
         # MIDI inputs
         hidden_size = get_hparam('hidden_size')
@@ -112,11 +112,11 @@ class MelodyEncoder(nn.Module):
         self.note_dur_embed = Linear(1, hidden_size)
 
         # ornament inputs
-        self.use_glide_embed = hparams['use_glide_embed']
-        self.glide_embed_scale = hparams['glide_embed_scale']
+        self.use_glide_embed = config['use_glide_embed']
+        self.glide_embed_scale = config['glide_embed_scale']
         if self.use_glide_embed:
             # 0: none, 1: up, 2: down
-            self.note_glide_embed = Embedding(len(hparams['glide_types']) + 1, hidden_size, padding_idx=0)
+            self.note_glide_embed = Embedding(len(config['glide_types']) + 1, hidden_size, padding_idx=0)
 
         self.encoder = FastSpeech2Encoder(
             hidden_size=hidden_size, num_layers=get_hparam('enc_layers'),
@@ -125,7 +125,7 @@ class MelodyEncoder(nn.Module):
             use_pos_embed=get_hparam('use_pos_embed'), rel_pos=get_hparam('rel_pos'),
             use_rope=get_hparam('use_rope')
         )
-        self.out_proj = Linear(hidden_size, hparams['hidden_size'])
+        self.out_proj = Linear(hidden_size, config['hidden_size'])
 
     def forward(self, note_midi, note_rest, note_dur, glide=None):
         """

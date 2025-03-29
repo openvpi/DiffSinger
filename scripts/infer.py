@@ -12,6 +12,8 @@ root_dir = Path(__file__).resolve().parent.parent
 os.environ['PYTHONPATH'] = str(root_dir)
 sys.path.insert(0, str(root_dir))
 
+from utils.config_utils import read_full_config, print_config
+
 
 def find_exp(exp):
     if not (root_dir / 'checkpoints' / exp).exists():
@@ -151,55 +153,49 @@ def acoustic(
             name += key_suffix
         print(f'| key transition: {key:+d}')
 
-    sys.argv = [
-        sys.argv[0],
-        '--exp_name',
-        exp,
-        '--infer'
-    ]
-    from utils.hparams import set_hparams, hparams
-    set_hparams()
+    config, config_chain = read_full_config(exp_name=exp, infer=True)
+    print_config(config, config_chain)
 
     # Check for vocoder path
-    assert mel or (root_dir / hparams['vocoder_ckpt']).exists(), \
-        f'Vocoder ckpt \'{hparams["vocoder_ckpt"]}\' not found. ' \
+    assert mel or (root_dir / config['vocoder_ckpt']).exists(), \
+        f'Vocoder ckpt \'{config["vocoder_ckpt"]}\' not found. ' \
         f'Please put it to the checkpoints directory to run inference.'
 
     # For compatibility:
     # migrate timesteps, K_step, K_step_infer, diff_speedup to time_scale_factor, T_start, T_start_infer, sampling_steps
-    if 'diff_speedup' not in hparams and 'pndm_speedup' in hparams:
-        hparams['diff_speedup'] = hparams['pndm_speedup']
-    if 'T_start' not in hparams:
-        hparams['T_start'] = 1 - hparams['K_step'] / hparams['timesteps']
-    if 'T_start_infer' not in hparams:
-        hparams['T_start_infer'] = 1 - hparams['K_step_infer'] / hparams['timesteps']
-    if 'sampling_steps' not in hparams:
-        if hparams['use_shallow_diffusion']:
-            hparams['sampling_steps'] = hparams['K_step_infer'] // hparams['diff_speedup']
+    if 'diff_speedup' not in config and 'pndm_speedup' in config:
+        config['diff_speedup'] = config['pndm_speedup']
+    if 'T_start' not in config:
+        config['T_start'] = 1 - config['K_step'] / config['timesteps']
+    if 'T_start_infer' not in config:
+        config['T_start_infer'] = 1 - config['K_step_infer'] / config['timesteps']
+    if 'sampling_steps' not in config:
+        if config['use_shallow_diffusion']:
+            config['sampling_steps'] = config['K_step_infer'] // config['diff_speedup']
         else:
-            hparams['sampling_steps'] = hparams['timesteps'] // hparams['diff_speedup']
-    if 'time_scale_factor' not in hparams:
-        hparams['time_scale_factor'] = hparams['timesteps']
+            config['sampling_steps'] = config['timesteps'] // config['diff_speedup']
+    if 'time_scale_factor' not in config:
+        config['time_scale_factor'] = config['timesteps']
 
     if depth is not None:
-        assert depth <= 1 - hparams['T_start'], (
-            f"Depth should not be larger than 1 - T_start ({1 - hparams['T_start']})"
+        assert depth <= 1 - config['T_start'], (
+            f"Depth should not be larger than 1 - T_start ({1 - config['T_start']})"
         )
-        hparams['K_step_infer'] = round(hparams['timesteps'] * depth)
-        hparams['T_start_infer'] = 1 - depth
+        config['K_step_infer'] = round(config['timesteps'] * depth)
+        config['T_start_infer'] = 1 - depth
     if steps is not None:
-        if hparams['use_shallow_diffusion']:
-            step_size = (1 - hparams['T_start_infer']) / steps
-            if 'K_step_infer' in hparams:
-                hparams['diff_speedup'] = round(step_size * hparams['K_step_infer'])
+        if config['use_shallow_diffusion']:
+            step_size = (1 - config['T_start_infer']) / steps
+            if 'K_step_infer' in config:
+                config['diff_speedup'] = round(step_size * config['K_step_infer'])
         else:
-            if 'timesteps' in hparams:
-                hparams['diff_speedup'] = round(hparams['timesteps'] / steps)
-        hparams['sampling_steps'] = steps
+            if 'timesteps' in config:
+                config['diff_speedup'] = round(config['timesteps'] / steps)
+        config['sampling_steps'] = steps
 
-    spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
+    spk_mix = parse_commandline_spk_mix(spk) if config['use_spk_id'] and spk is not None else None
     for param in params:
-        if gender is not None and hparams['use_key_shift_embed']:
+        if gender is not None and config['use_key_shift_embed']:
             param['gender'] = gender
         if spk_mix is not None:
             param['spk_mix'] = spk_mix
@@ -207,7 +203,7 @@ def acoustic(
             param['lang'] = lang
 
     from inference.ds_acoustic import DiffSingerAcousticInfer
-    infer_ins = DiffSingerAcousticInfer(load_vocoder=not mel, ckpt_steps=ckpt)
+    infer_ins = DiffSingerAcousticInfer(config=config, load_vocoder=not mel, ckpt_steps=ckpt)
     print(f'| Model: {type(infer_ins.model)}')
 
     try:
@@ -330,30 +326,24 @@ def variance(
             name += key_suffix
         print(f'| key transition: {key:+d}')
 
-    sys.argv = [
-        sys.argv[0],
-        '--exp_name',
-        exp,
-        '--infer'
-    ]
-    from utils.hparams import set_hparams, hparams
-    set_hparams()
+    config, config_chain = read_full_config(exp_name=exp, infer=True)
+    print_config(config, config_chain)
 
     # For compatibility:
     # migrate timesteps, K_step, K_step_infer, diff_speedup to time_scale_factor, T_start, T_start_infer, sampling_steps
-    if 'diff_speedup' not in hparams and 'pndm_speedup' in hparams:
-        hparams['diff_speedup'] = hparams['pndm_speedup']
-    if 'sampling_steps' not in hparams:
-        hparams['sampling_steps'] = hparams['timesteps'] // hparams['diff_speedup']
-    if 'time_scale_factor' not in hparams:
-        hparams['time_scale_factor'] = hparams['timesteps']
+    if 'diff_speedup' not in config and 'pndm_speedup' in config:
+        config['diff_speedup'] = config['pndm_speedup']
+    if 'sampling_steps' not in config:
+        config['sampling_steps'] = config['timesteps'] // config['diff_speedup']
+    if 'time_scale_factor' not in config:
+        config['time_scale_factor'] = config['timesteps']
 
     if steps is not None:
-        if 'timesteps' in hparams:
-            hparams['diff_speedup'] = round(hparams['timesteps'] / steps)
-        hparams['sampling_steps'] = steps
+        if 'timesteps' in config:
+            config['diff_speedup'] = round(config['timesteps'] / steps)
+        config['sampling_steps'] = steps
 
-    spk_mix = parse_commandline_spk_mix(spk) if hparams['use_spk_id'] and spk is not None else None
+    spk_mix = parse_commandline_spk_mix(spk) if config['use_spk_id'] and spk is not None else None
     for param in params:
         if expr is not None:
             param['expr'] = expr
@@ -365,7 +355,7 @@ def variance(
             param['lang'] = lang
 
     from inference.ds_variance import DiffSingerVarianceInfer
-    infer_ins = DiffSingerVarianceInfer(ckpt_steps=ckpt, predictions=set(predict))
+    infer_ins = DiffSingerVarianceInfer(config=config, ckpt_steps=ckpt, predictions=set(predict))
     print(f'| Model: {type(infer_ins.model)}')
 
     try:

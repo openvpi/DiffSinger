@@ -5,19 +5,19 @@ import torch
 import modules.compat as compat
 from modules.core.ddpm import MultiVarianceDiffusion
 from utils import filter_kwargs
-from utils.hparams import hparams
 
 VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension']
 
 
 class ParameterAdaptorModule(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
+        self.config = config
         self.variance_prediction_list = []
-        self.predict_energy = hparams.get('predict_energy', False)
-        self.predict_breathiness = hparams.get('predict_breathiness', False)
-        self.predict_voicing = hparams.get('predict_voicing', False)
-        self.predict_tension = hparams.get('predict_tension', False)
+        self.predict_energy = config.get('predict_energy', False)
+        self.predict_breathiness = config.get('predict_breathiness', False)
+        self.predict_voicing = config.get('predict_voicing', False)
+        self.predict_tension = config.get('predict_tension', False)
         if self.predict_energy:
             self.variance_prediction_list.append('energy')
         if self.predict_breathiness:
@@ -34,56 +34,56 @@ class ParameterAdaptorModule(torch.nn.Module):
 
         if self.predict_energy:
             ranges.append((
-                hparams['energy_db_min'],
-                hparams['energy_db_max']
+                self.config['energy_db_min'],
+                self.config['energy_db_max']
             ))
-            clamps.append((hparams['energy_db_min'], 0.))
+            clamps.append((self.config['energy_db_min'], 0.))
 
         if self.predict_breathiness:
             ranges.append((
-                hparams['breathiness_db_min'],
-                hparams['breathiness_db_max']
+                self.config['breathiness_db_min'],
+                self.config['breathiness_db_max']
             ))
-            clamps.append((hparams['breathiness_db_min'], 0.))
+            clamps.append((self.config['breathiness_db_min'], 0.))
 
         if self.predict_voicing:
             ranges.append((
-                hparams['voicing_db_min'],
-                hparams['voicing_db_max']
+                self.config['voicing_db_min'],
+                self.config['voicing_db_max']
             ))
-            clamps.append((hparams['voicing_db_min'], 0.))
+            clamps.append((self.config['voicing_db_min'], 0.))
 
         if self.predict_tension:
             ranges.append((
-                hparams['tension_logit_min'],
-                hparams['tension_logit_max']
+                self.config['tension_logit_min'],
+                self.config['tension_logit_max']
             ))
             clamps.append((
-                hparams['tension_logit_min'],
-                hparams['tension_logit_max']
+                self.config['tension_logit_min'],
+                self.config['tension_logit_max']
             ))
 
-        variances_hparams = hparams['variances_prediction_args']
+        variances_hparams = self.config['variances_prediction_args']
         total_repeat_bins = variances_hparams['total_repeat_bins']
         assert total_repeat_bins % len(self.variance_prediction_list) == 0, \
             f'Total number of repeat bins must be divisible by number of ' \
             f'variance parameters ({len(self.variance_prediction_list)}).'
         repeat_bins = total_repeat_bins // len(self.variance_prediction_list)
-        backbone_type = compat.get_backbone_type(hparams, nested_config=variances_hparams)
+        backbone_type = compat.get_backbone_type(self.config, nested_config=variances_hparams)
         backbone_args = compat.get_backbone_args(variances_hparams, backbone_type=backbone_type)
         kwargs = filter_kwargs(
             {
                 'ranges': ranges,
                 'clamps': clamps,
                 'repeat_bins': repeat_bins,
-                'timesteps': hparams.get('timesteps'),
-                'time_scale_factor': hparams.get('time_scale_factor'),
+                'timesteps': self.config.get('timesteps'),
+                'time_scale_factor': self.config.get('time_scale_factor'),
                 'backbone_type': backbone_type,
                 'backbone_args': backbone_args
             },
             cls
         )
-        return cls(**kwargs)
+        return cls(self.config, **kwargs)
 
     def collect_variance_inputs(self, **kwargs) -> list:
         return [kwargs.get(name) for name in self.variance_prediction_list]

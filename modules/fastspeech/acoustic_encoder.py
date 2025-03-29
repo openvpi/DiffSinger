@@ -7,32 +7,31 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
-from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
 
 class FastSpeech2Acoustic(nn.Module):
-    def __init__(self, vocab_size):
+    def __init__(self, config, vocab_size):
         super().__init__()
-        self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
-        self.use_lang_id = hparams.get('use_lang_id', False)
+        self.txt_embed = Embedding(vocab_size, config['hidden_size'], PAD_INDEX)
+        self.use_lang_id = config.get('use_lang_id', False)
         if self.use_lang_id:
-            self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
-        self.dur_embed = Linear(1, hparams['hidden_size'])
+            self.lang_embed = Embedding(config['num_lang'] + 1, config['hidden_size'], padding_idx=0)
+        self.dur_embed = Linear(1, config['hidden_size'])
         self.encoder = FastSpeech2Encoder(
-            hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
-            ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
-            dropout=hparams['dropout'], num_heads=hparams['num_heads'],
-            use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False)
+            hidden_size=config['hidden_size'], num_layers=config['enc_layers'],
+            ffn_kernel_size=config['enc_ffn_kernel_size'], ffn_act=config['ffn_act'],
+            dropout=config['dropout'], num_heads=config['num_heads'],
+            use_pos_embed=config['use_pos_embed'], rel_pos=config.get('rel_pos', False), 
+            use_rope=config.get('use_rope', False)
         )
 
-        self.pitch_embed = Linear(1, hparams['hidden_size'])
+        self.pitch_embed = Linear(1, config['hidden_size'])
         self.variance_embed_list = []
-        self.use_energy_embed = hparams.get('use_energy_embed', False)
-        self.use_breathiness_embed = hparams.get('use_breathiness_embed', False)
-        self.use_voicing_embed = hparams.get('use_voicing_embed', False)
-        self.use_tension_embed = hparams.get('use_tension_embed', False)
+        self.use_energy_embed = config.get('use_energy_embed', False)
+        self.use_breathiness_embed = config.get('use_breathiness_embed', False)
+        self.use_voicing_embed = config.get('use_voicing_embed', False)
+        self.use_tension_embed = config.get('use_tension_embed', False)
         if self.use_energy_embed:
             self.variance_embed_list.append('energy')
         if self.use_breathiness_embed:
@@ -45,21 +44,21 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_variance_embeds = len(self.variance_embed_list) > 0
         if self.use_variance_embeds:
             self.variance_embeds = nn.ModuleDict({
-                v_name: Linear(1, hparams['hidden_size'])
+                v_name: Linear(1, config['hidden_size'])
                 for v_name in self.variance_embed_list
             })
 
-        self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
+        self.use_key_shift_embed = config.get('use_key_shift_embed', False)
         if self.use_key_shift_embed:
-            self.key_shift_embed = Linear(1, hparams['hidden_size'])
+            self.key_shift_embed = Linear(1, config['hidden_size'])
 
-        self.use_speed_embed = hparams.get('use_speed_embed', False)
+        self.use_speed_embed = config.get('use_speed_embed', False)
         if self.use_speed_embed:
-            self.speed_embed = Linear(1, hparams['hidden_size'])
+            self.speed_embed = Linear(1, config['hidden_size'])
 
-        self.use_spk_id = hparams['use_spk_id']
+        self.use_spk_id = config['use_spk_id']
         if self.use_spk_id:
-            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+            self.spk_embed = Embedding(config['num_spk'], config['hidden_size'])
 
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:

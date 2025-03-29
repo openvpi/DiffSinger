@@ -2,10 +2,8 @@ import json
 import pathlib
 from typing import Dict, List, Union
 
-from utils.hparams import hparams
 
 PAD_INDEX = 0
-
 
 class PhonemeDictionary:
     def __init__(
@@ -178,14 +176,14 @@ class PhonemeDictionary:
 _dictionary = None
 
 
-def load_phoneme_dictionary() -> PhonemeDictionary:
+def load_phoneme_dictionary(config: dict) -> PhonemeDictionary:
     if _dictionary is not None:
         return _dictionary
-    config_dicts = hparams.get('dictionaries')
+    config_dicts = config.get('dictionaries')
     if config_dicts is not None:
         dicts = {}
         for lang, config_dict_path in config_dicts.items():
-            dict_path = pathlib.Path(hparams['work_dir']) / f'dictionary-{lang}.txt'
+            dict_path = pathlib.Path(config['work_dir']) / f'dictionary-{lang}.txt'
             if not dict_path.exists():
                 dict_path = pathlib.Path(config_dict_path)
             if not dict_path.exists():
@@ -194,9 +192,9 @@ def load_phoneme_dictionary() -> PhonemeDictionary:
                 )
             dicts[lang] = dict_path
     else:
-        dict_path = pathlib.Path(hparams['work_dir']) / 'dictionary.txt'
+        dict_path = pathlib.Path(config['work_dir']) / 'dictionary.txt'
         if not dict_path.exists():
-            dict_path = pathlib.Path(hparams['dictionary'])
+            dict_path = pathlib.Path(config['dictionary'])
         if not dict_path.exists():
             raise FileNotFoundError(
                 f"Could not locate dictionary file."
@@ -206,6 +204,6 @@ def load_phoneme_dictionary() -> PhonemeDictionary:
         }
     return PhonemeDictionary(
         dictionaries=dicts,
-        extra_phonemes=hparams.get('extra_phonemes'),
-        merged_groups=hparams.get('merged_phoneme_groups')
+        extra_phonemes=config.get('extra_phonemes'),
+        merged_groups=config.get('merged_phoneme_groups')
     )

@@ -7,18 +7,18 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from modules.backbones import build_backbone
-from utils.hparams import hparams
 
 
 class RectifiedFlow(nn.Module):
-    def __init__(self, out_dims, num_feats=1, t_start=0., time_scale_factor=1000,
+    def __init__(self, config, out_dims, num_feats=1, t_start=0., time_scale_factor=1000,
                  backbone_type=None, backbone_args=None,
                  spec_min=None, spec_max=None):
         super().__init__()
+        self.config = config
         self.velocity_fn: nn.Module = build_backbone(out_dims, num_feats, backbone_type, backbone_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
-        self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
+        self.use_shallow_diffusion = config.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
             assert 0. <= t_start <= 1., 'T_start should be in [0, 1].'
         else:
@@ -104,7 +104,7 @@ class RectifiedFlow(nn.Module):
     @torch.no_grad()
     def inference(self, cond, b=1, x_end=None, device=None):
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
-        t_start = hparams.get('T_start_infer', self.t_start)
+        t_start = self.config.get('T_start_infer', self.t_start)
         if self.use_shallow_diffusion and t_start > 0:
             assert x_end is not None, 'Missing shallow diffusion source.'
             if t_start >= 1.:
@@ -116,8 +116,8 @@ class RectifiedFlow(nn.Module):
             t_start = 0.
             x = noise
 
-        algorithm = hparams['sampling_algorithm']
-        infer_step = hparams['sampling_steps']
+        algorithm = self.config['sampling_algorithm']
+        infer_step = self.config['sampling_steps']
 
         if t_start < 1:
             dt = (1.0 - t_start) / max(1, infer_step)
@@ -131,7 +131,7 @@ class RectifiedFlow(nn.Module):
                 raise ValueError(f'Unsupported algorithm for Rectified Flow: {algorithm}.')
             dts = torch.tensor([dt]).to(x)
             for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
-                          disable=not hparams['infer'], leave=False):
+                          disable=not self.config['infer'], leave=False):
                 x, _ = algorithm_fn(x, t_start + i * dts, dt, cond)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
@@ -145,7 +145,8 @@ class RectifiedFlow(nn.Module):
 
 
 class RepetitiveRectifiedFlow(RectifiedFlow):
-    def __init__(self, vmin: float | int | list, vmax: float | int | list,
+    def __init__(self, config: dict,
+                 vmin: float | int | list, vmax: float | int | list,
                  repeat_bins: int, time_scale_factor=1000,
                  backbone_type=None, backbone_args=None):
         assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)
@@ -154,6 +155,7 @@ class RepetitiveRectifiedFlow(RectifiedFlow):
         spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
         self.repeat_bins = repeat_bins
         super().__init__(
+            config=config,
             out_dims=repeat_bins, num_feats=num_feats,
             time_scale_factor=time_scale_factor,
             backbone_type=backbone_type, backbone_args=backbone_args,
@@ -182,7 +184,8 @@ class RepetitiveRectifiedFlow(RectifiedFlow):
 
 
 class PitchRectifiedFlow(RepetitiveRectifiedFlow):
-    def __init__(self, vmin: float, vmax: float,
+    def __init__(self, config: dict,
+                 vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  time_scale_factor=1000,
                  backbone_type=None, backbone_args=None):
@@ -191,6 +194,7 @@ class PitchRectifiedFlow(RepetitiveRectifiedFlow):
         self.cmin = cmin  # clip min
         self.cmax = cmax  # clip max
         super().__init__(
+            config=config,
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             time_scale_factor=time_scale_factor,
             backbone_type=backbone_type, backbone_args=backbone_args
@@ -205,7 +209,8 @@ class PitchRectifiedFlow(RepetitiveRectifiedFlow):
 
 class MultiVarianceRectifiedFlow(RepetitiveRectifiedFlow):
     def __init__(
-            self, ranges: List[Tuple[float, float]],
+            self, config: dict,
+            ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, time_scale_factor=1000,
             backbone_type=None, backbone_args=None
@@ -219,6 +224,7 @@ class MultiVarianceRectifiedFlow(RepetitiveRectifiedFlow):
         if len(vmax) == 1:
             vmax = vmax[0]
         super().__init__(
+            config=config,
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             time_scale_factor=time_scale_factor,
             backbone_type=backbone_type, backbone_args=backbone_args

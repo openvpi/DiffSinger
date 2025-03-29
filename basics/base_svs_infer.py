@@ -4,7 +4,6 @@ import torch
 from torch import Tensor
 from typing import Tuple, Dict
 
-from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 
 
@@ -23,11 +22,12 @@ class BaseSVSInfer:
             infer from raw inputs to the final outputs
     """
 
-    def __init__(self, device=None):
+    def __init__(self, config, device=None):
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.config = config
         self.device = device
-        self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
+        self.timestep = self.config['hop_size'] / self.config['audio_sample_rate']
         self.spk_map = {}
         self.lang_map = {}
         self.model: torch.nn.Module = None
