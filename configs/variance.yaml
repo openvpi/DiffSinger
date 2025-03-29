@@ -26,6 +26,7 @@ use_lang_id: false
 num_lang: 1
 use_spk_id: false
 num_spk: 1
+
 predict_dur: true
 predict_pitch: true
 predict_energy: false
