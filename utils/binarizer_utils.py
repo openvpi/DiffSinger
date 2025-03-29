@@ -209,6 +209,45 @@ def get_tension_base_harmonic(
     return tension
 
 
+def get_falestto_base_harmonic(
+        waveform: Union[np.ndarray, DecomposedWaveform],
+        samplerate, f0, length,
+        *, hop_size=None, fft_size=None, win_size=None
+):
+    """
+    Definition of falestto: Attenuation ratio from the second harmonic to the fourth harmonic (H2 / (H2 + H4)).
+    Refer to : ACOUSTIC MEASURES OF FALSETTO VOICE (DOI:10.1121/1.4877544)
+    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
+    :param samplerate: sampling rate
+    :param f0: reference f0
+    :param length: Expected number of frames
+    :param hop_size: Frame width, in number of samples
+    :param fft_size: Number of fft bins
+    :param win_size: Window size, in number of samples
+    :return: falestto
+    """
+    if not isinstance(waveform, DecomposedWaveform):
+        waveform = DecomposedWaveform(
+            waveform=waveform, samplerate=samplerate, f0=f0,
+            hop_size=hop_size, fft_size=fft_size, win_size=win_size
+        )
+    waveform_h2 = waveform.harmonic(1)  # H2
+    waveform_h4 = waveform.harmonic(3)  # H4
+    energy_h2 = get_energy_librosa(
+        waveform_h2, length,
+        hop_size=waveform.hop_size, win_size=waveform.win_size,
+        domain='amplitude'
+    )
+    energy_h4 = get_energy_librosa(
+        waveform_h4, length,
+        hop_size=waveform.hop_size, win_size=waveform.win_size,
+        domain='amplitude'
+    )
+    falestto = energy_h2 / (energy_h2 + energy_h4 + 1e-5)
+    falestto = np.clip(falestto, a_min=0, a_max=1)
+    return falestto
+
+
 class SinusoidalSmoothingConv1d(torch.nn.Conv1d):
     def __init__(self, kernel_size):
         super().__init__(
