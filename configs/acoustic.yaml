@@ -46,6 +46,7 @@ energy_smooth_width: 0.12
 breathiness_smooth_width: 0.12
 voicing_smooth_width: 0.12
 tension_smooth_width: 0.12
+falsetto_smooth_width: 0.12
 
 use_lang_id: false
 num_lang: 1
@@ -55,6 +56,7 @@ use_energy_embed: false
 use_breathiness_embed: false
 use_voicing_embed: false
 use_tension_embed: false
+use_falsetto_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 

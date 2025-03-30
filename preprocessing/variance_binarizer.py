@@ -20,6 +20,7 @@ from utils.binarizer_utils import (
     get_breathiness,
     get_voicing,
     get_tension_base_harmonic,
+    get_falestto_base_harmonic,
 )
 from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
@@ -48,6 +49,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
     'voicing',  # frame-level RMS of harmonic parts (dB), float32[T_s,]
     'tension',  # frame-level tension (logit), float32[T_s,]
+    'falsetto',  # frame-level falsetto (ratio), float32[T_s,]
 ]
 DS_INDEX_SEP = '#'
 
@@ -59,6 +61,7 @@ energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
 voicing_smooth: SinusoidalSmoothingConv1d = None
 tension_smooth: SinusoidalSmoothingConv1d = None
+falsetto_smooth: SinusoidalSmoothingConv1d = None
 
 
 class VarianceBinarizer(BaseBinarizer):
@@ -510,6 +513,37 @@ class VarianceBinarizer(BaseBinarizer):
                 tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['tension'] = tension
+
+        # Below: extract falsetto
+        if hparams['predict_falsetto']:
+            falsetto = None
+            falsetto_from_wav = False
+            if self.prefer_ds:
+                falsetto_seq = self.load_attr_from_ds(ds_id, name, 'falsetto', idx=ds_seg_idx)
+                if falsetto_seq is not None:
+                    falsetto = resample_align_curve(
+                        np.array(falsetto_seq.split(), np.float32),
+                        original_timestep=float(self.load_attr_from_ds(
+                            ds_id, name, 'falsetto_timestep', idx=ds_seg_idx
+                        )),
+                        target_timestep=self.timestep,
+                        align_length=length
+                    )
+            if falsetto is None:
+                falsetto = get_falsetto_base_harmonic(
+                    dec_waveform, None, None, length=length
+                )
+                falsetto_from_wav = True
+
+            if falsetto_from_wav:
+                global falsetto_smooth
+                if falsetto_smooth is None:
+                    falsetto_smooth = SinusoidalSmoothingConv1d(
+                        round(hparams['falsetto_smooth_width'] / self.timestep)
+                    ).eval().to(self.device)
+                falsetto = falsetto_smooth(torch.from_numpy(falsetto).to(self.device)[None])[0].cpu().numpy()
+
+            processed_input['falsetto'] = falsetto
 
         return processed_input
 
