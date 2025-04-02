@@ -20,7 +20,7 @@ from utils.binarizer_utils import (
     get_breathiness,
     get_voicing,
     get_tension_base_harmonic,
-    get_falestto_base_harmonic,
+    get_falsetto_base_harmonic,
 )
 from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams

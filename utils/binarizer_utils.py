@@ -209,7 +209,7 @@ def get_tension_base_harmonic(
     return tension
 
 
-def get_falestto_base_harmonic(
+def get_falsetto_base_harmonic(
         waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,
         *, hop_size=None, fft_size=None, win_size=None
