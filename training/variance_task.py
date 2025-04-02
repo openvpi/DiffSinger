@@ -104,7 +104,7 @@ class VarianceTask(BaseTask):
         predict_breathiness = hparams['predict_breathiness']
         predict_voicing = hparams['predict_voicing']
         predict_tension = hparams['predict_tension']
-        predict_tension = hparams['predict_falsetto']
+        predict_falsetto = hparams['predict_falsetto']
         self.variance_prediction_list = []
         if predict_energy:
             self.variance_prediction_list.append('energy')
