@@ -6,13 +6,12 @@ import torch
 from torch.nn import functional as F
 
 from modules.hnsep.vr import load_sep_model
-from utils import hparams
 from utils.pitch_utils import interp_f0
 
 
 class DecomposedWaveform:
     def __new__(
-            cls, waveform, samplerate, f0,
+            cls, config, waveform, samplerate, f0,
             *,
             hop_size=None, fft_size=None, win_size=None,
             algorithm='world', device=None
@@ -21,15 +20,17 @@ class DecomposedWaveform:
             obj = object.__new__(DecomposedWaveformPyWorld)
             # noinspection PyProtectedMember
             obj._init(
+                config=config,
                 waveform=waveform, samplerate=samplerate, f0=f0,
                 hop_size=hop_size, fft_size=fft_size, win_size=win_size,
                 device=device
             )
         elif algorithm == 'vr':
             obj = object.__new__(DecomposedWaveformVocalRemover)
-            hnsep_ckpt = hparams['hnsep_ckpt']
+            hnsep_ckpt = config['hnsep_ckpt']
             # noinspection PyProtectedMember
             obj._init(
+                config=config,
                 waveform=waveform, samplerate=samplerate, f0=f0, hop_size=hop_size,
                 fft_size=fft_size, win_size=win_size, model_path=hnsep_ckpt,
                 device=device
@@ -63,12 +64,13 @@ class DecomposedWaveform:
 
 class DecomposedWaveformPyWorld(DecomposedWaveform):
     def _init(
-            self, waveform, samplerate, f0,  # basic parameters
+            self, config, waveform, samplerate, f0,  # basic parameters
             *,
             hop_size=None, fft_size=None, win_size=None, base_harmonic_radius=3.5,  # analysis parameters
             device=None  # computation parameters
     ):
         # the source components
+        self._config = config
         self._waveform = waveform
         self._samplerate = samplerate
         self._f0 = f0
@@ -235,12 +237,12 @@ SEP_MODEL = None
 
 class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
     def _init(
-            self, waveform, samplerate, f0,
+            self, config, waveform, samplerate, f0,
             hop_size=None, fft_size=None, win_size=None, base_harmonic_radius=3.5,
             model_path=None, device=None
     ):
         super()._init(
-            waveform, samplerate, f0, hop_size=hop_size, fft_size=fft_size,
+            config, waveform, samplerate, f0, hop_size=hop_size, fft_size=fft_size,
             win_size=win_size, base_harmonic_radius=base_harmonic_radius, device=device
         )
         global SEP_MODEL

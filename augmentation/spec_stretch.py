@@ -9,7 +9,6 @@ from basics.base_pe import BasePE
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from modules.fastspeech.tts_modules import LengthRegulator
 from utils.binarizer_utils import get_mel_torch, get_mel2ph_torch
-from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 
 
@@ -18,8 +17,8 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
     This class contains methods for frequency-domain and time-domain stretching augmentation.
     """
 
-    def __init__(self, data_dirs: list, augmentation_args: dict, pe: BasePE = None):
-        super().__init__(data_dirs, augmentation_args)
+    def __init__(self, config, data_dirs: list, augmentation_args: dict, pe: BasePE = None):
+        super().__init__(config, data_dirs, augmentation_args)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.lr = LengthRegulator().to(self.device)
         self.pe = pe
@@ -27,19 +26,19 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
     @require_same_keys
     def process_item(self, item: dict, key_shift=0., speed=1., replace_spk_id=None) -> dict:
         aug_item = deepcopy(item)
-        waveform, _ = librosa.load(aug_item['wav_fn'], sr=hparams['audio_sample_rate'], mono=True)
+        waveform, _ = librosa.load(aug_item['wav_fn'], sr=self.config['audio_sample_rate'], mono=True)
         mel = get_mel_torch(
-            waveform, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
-            hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
-            fmin=hparams['fmin'], fmax=hparams['fmax'],
+            waveform, self.config['audio_sample_rate'], num_mel_bins=self.config['audio_num_mel_bins'],
+            hop_size=self.config['hop_size'], win_size=self.config['win_size'], fft_size=self.config['fft_size'],
+            fmin=self.config['fmin'], fmax=self.config['fmax'],
             keyshift=key_shift, speed=speed, device=self.device
         )
 
         aug_item['mel'] = mel
 
-        if speed != 1. or hparams['use_speed_embed']:
+        if speed != 1. or self.config['use_speed_embed']:
             aug_item['length'] = mel.shape[0]
-            aug_item['speed'] = int(np.round(hparams['hop_size'] * speed)) / hparams['hop_size']  # real speed
+            aug_item['speed'] = int(np.round(self.config['hop_size'] * speed)) / self.config['hop_size']  # real speed
             aug_item['seconds'] /= aug_item['speed']
             aug_item['ph_dur'] /= aug_item['speed']
             aug_item['mel2ph'] = get_mel2ph_torch(
@@ -47,8 +46,8 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
             ).cpu().numpy()
 
             f0, _ = self.pe.get_pitch(
-                waveform, samplerate=hparams['audio_sample_rate'], length=aug_item['length'],
-                hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
+                waveform, samplerate=self.config['audio_sample_rate'], length=aug_item['length'],
+                hop_size=self.config['hop_size'], f0_min=self.config['f0_min'], f0_max=self.config['f0_max'],
                 speed=speed, interp_uv=True
             )
             aug_item['f0'] = f0.astype(np.float32)
@@ -82,7 +81,7 @@ class SpectrogramStretchAugmentation(BaseAugmentation):
                         align_length=aug_item['length']
                     )
 
-        if key_shift != 0. or hparams['use_key_shift_embed']:
+        if key_shift != 0. or self.config['use_key_shift_embed']:
             if replace_spk_id is None:
                 aug_item['key_shift'] = key_shift
             else:

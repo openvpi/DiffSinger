@@ -1,13 +1,11 @@
-from utils import hparams
-
 from .pm import ParselmouthPE
 from .pw import HarvestPE
 from .rmvpe import RMVPE
 
 
-def initialize_pe():
-    pe = hparams['pe']
-    pe_ckpt = hparams['pe_ckpt']
+def initialize_pe(config):
+    pe = config['pe']
+    pe_ckpt = config['pe_ckpt']
     if pe == 'parselmouth':
         return ParselmouthPE()
     elif pe == 'rmvpe':

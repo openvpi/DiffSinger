@@ -14,43 +14,45 @@ from deployment.modules.rectified_flow import (
 )
 from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX, FastSpeech2VarianceONNX
 from modules.toplevel import DiffSingerAcoustic, DiffSingerVariance
-from utils.hparams import hparams
 
 
 class DiffSingerAcousticONNX(DiffSingerAcoustic):
-    def __init__(self, vocab_size, out_dims, cross_lingual_token_idx=None):
-        super().__init__(vocab_size, out_dims)
+    def __init__(self, config, vocab_size, out_dims, cross_lingual_token_idx=None):
+        super().__init__(config, vocab_size, out_dims)
         del self.fs2
         del self.diffusion
         self.fs2 = FastSpeech2AcousticONNX(
+            config=config,
             vocab_size=vocab_size,
             cross_lingual_token_idx=cross_lingual_token_idx
         )
         if self.diffusion_type == 'ddpm':
             self.diffusion = GaussianDiffusionONNX(
+                config=config,
                 out_dims=out_dims,
                 num_feats=1,
-                timesteps=hparams['timesteps'],
-                k_step=hparams['K_step'],
+                timesteps=config['timesteps'],
+                k_step=config['K_step'],
                 backbone_type=self.backbone_type,
                 backbone_args=self.backbone_args,
-                spec_min=hparams['spec_min'],
-                spec_max=hparams['spec_max']
+                spec_min=config['spec_min'],
+                spec_max=config['spec_max']
             )
         elif self.diffusion_type == 'reflow':
             self.diffusion = RectifiedFlowONNX(
+                config=config,
                 out_dims=out_dims,
                 num_feats=1,
-                t_start=hparams['T_start'],
-                time_scale_factor=hparams['time_scale_factor'],
+                t_start=config['T_start'],
+                time_scale_factor=config['time_scale_factor'],
                 backbone_type=self.backbone_type,
                 backbone_args=self.backbone_args,
-                spec_min=hparams['spec_min'],
-                spec_max=hparams['spec_max']
+                spec_min=config['spec_min'],
+                spec_max=config['spec_max']
             )
         else:
             raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
-        self.mel_base = hparams.get('mel_base', '10')
+        self.mel_base = config.get('mel_base', '10')
 
     def ensure_mel_base(self, mel):
         if self.mel_base != 'e':
@@ -130,18 +132,19 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
 
 
 class DiffSingerVarianceONNX(DiffSingerVariance):
-    def __init__(self, vocab_size, cross_lingual_token_idx=None):
-        super().__init__(vocab_size=vocab_size)
+    def __init__(self, config, vocab_size, cross_lingual_token_idx=None):
+        super().__init__(config=config, vocab_size=vocab_size)
         del self.fs2
         self.fs2 = FastSpeech2VarianceONNX(
+            config=config,
             vocab_size=vocab_size,
             cross_lingual_token_idx=cross_lingual_token_idx
         )
-        self.hidden_size = hparams['hidden_size']
+        self.hidden_size = config['hidden_size']
         if self.predict_pitch:
             del self.pitch_predictor
             self.smooth: nn.Conv1d = None
-            pitch_hparams = hparams['pitch_prediction_args']
+            pitch_hparams = config['pitch_prediction_args']
             if self.diffusion_type == 'ddpm':
                 self.pitch_predictor = PitchDiffusionONNX(
                     vmin=pitch_hparams['pitd_norm_min'],
@@ -149,8 +152,8 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                     cmin=pitch_hparams['pitd_clip_min'],
                     cmax=pitch_hparams['pitd_clip_max'],
                     repeat_bins=pitch_hparams['repeat_bins'],
-                    timesteps=hparams['timesteps'],
-                    k_step=hparams['K_step'],
+                    timesteps=config['timesteps'],
+                    k_step=config['K_step'],
                     backbone_type=self.pitch_backbone_type,
                     backbone_args=self.pitch_backbone_args
                 )
@@ -161,7 +164,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                     cmin=pitch_hparams['pitd_clip_min'],
                     cmax=pitch_hparams['pitd_clip_max'],
                     repeat_bins=pitch_hparams['repeat_bins'],
-                    time_scale_factor=hparams['time_scale_factor'],
+                    time_scale_factor=config['time_scale_factor'],
                     backbone_type=self.pitch_backbone_type,
                     backbone_args=self.pitch_backbone_args
                 )
@@ -177,7 +180,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                 raise NotImplementedError(self.diffusion_type)
 
     def build_smooth_op(self, device):
-        smooth_kernel_size = round(hparams['midi_smooth_width'] * hparams['audio_sample_rate'] / hparams['hop_size'])
+        smooth_kernel_size = round(self.config['midi_smooth_width'] * self.config['audio_sample_rate'] / self.config['hop_size'])
         smooth = nn.Conv1d(
             in_channels=1,
             out_channels=1,
@@ -194,7 +197,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         self.smooth = smooth.to(device)
 
     def embed_frozen_spk(self, encoder_out):
-        if hparams['use_spk_id'] and hasattr(self, 'frozen_spk_embed'):
+        if self.config['use_spk_id'] and hasattr(self, 'frozen_spk_embed'):
             encoder_out += self.frozen_spk_embed
         return encoder_out
 
@@ -256,7 +259,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         else:
             base_pitch = base_pitch * retake + pitch * ~retake
             pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
-        if hparams['use_spk_id'] and spk_embed is not None:
+        if self.config['use_spk_id'] and spk_embed is not None:
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
 
@@ -285,7 +288,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
-        if hparams['use_spk_id'] and spk_embed is not None:
+        if self.config['use_spk_id'] and spk_embed is not None:
             variance_cond += spk_embed
         return variance_cond
 

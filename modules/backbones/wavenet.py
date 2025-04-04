@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import SinusoidalPosEmb
-from utils.hparams import hparams
 
 
 class Conv1d(torch.nn.Conv1d):
@@ -49,7 +48,7 @@ class ResidualBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims, n_feats, *, num_layers=20, num_channels=256, dilation_cycle_length=4):
+    def __init__(self, in_dims, n_feats, hidden_size, *, num_layers=20, num_channels=256, dilation_cycle_length=4):
         super().__init__()
         self.in_dims = in_dims
         self.n_feats = n_feats
@@ -62,7 +61,7 @@ class WaveNet(nn.Module):
         )
         self.residual_layers = nn.ModuleList([
             ResidualBlock(
-                encoder_hidden=hparams['hidden_size'],
+                encoder_hidden=hidden_size,
                 residual_channels=num_channels,
                 dilation=2 ** (i % dilation_cycle_length)
             )

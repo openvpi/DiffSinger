@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-import shutil
 import sys
 from typing import Dict
 
@@ -17,11 +16,8 @@ import lightning.pytorch as pl
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
 
 from basics.base_module import CategorizedModule
-from utils.hparams import hparams
 from utils.training_utils import (
-    DsModelCheckpoint, DsTQDMProgressBar,
-    DsBatchSampler, DsTensorBoardLogger,
-    get_latest_checkpoint_path, get_strategy
+    DsBatchSampler, get_latest_checkpoint_path
 )
 from utils.phoneme_utils import load_phoneme_dictionary
 
@@ -55,16 +51,17 @@ class BaseTask(pl.LightningModule):
             postprocess the validation output.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, config, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.max_batch_frames = hparams['max_batch_frames']
-        self.max_batch_size = hparams['max_batch_size']
-        self.max_val_batch_frames = hparams['max_val_batch_frames']
+        self.config = config
+        self.max_batch_frames = self.config['max_batch_frames']
+        self.max_batch_size = self.config['max_batch_size']
+        self.max_val_batch_frames = self.config['max_val_batch_frames']
         if self.max_val_batch_frames == -1:
-            hparams['max_val_batch_frames'] = self.max_val_batch_frames = self.max_batch_frames
-        self.max_val_batch_size = hparams['max_val_batch_size']
+            self.config['max_val_batch_frames'] = self.max_val_batch_frames = self.max_batch_frames
+        self.max_val_batch_size = self.config['max_val_batch_size']
         if self.max_val_batch_size == -1:
-            hparams['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
+            self.config['max_val_batch_size'] = self.max_val_batch_size = self.max_batch_size
 
         self.training_sampler = None
         self.skip_immediate_validation = False
@@ -85,13 +82,13 @@ class BaseTask(pl.LightningModule):
     # Training, validation and testing
     ###########
     def setup(self, stage):
-        self.train_dataset = self.dataset_cls('train')
-        self.valid_dataset = self.dataset_cls('valid')
+        self.train_dataset = self.dataset_cls(self.config, 'train')
+        self.valid_dataset = self.dataset_cls(self.config, 'valid')
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
     def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
         key_list = []
-        for i in hparams['frozen_params']:
+        for i in self.config['frozen_params']:
             for j in model_state_dict:
                 if j.startswith(i):
                     key_list.append(j)
@@ -113,7 +110,7 @@ class BaseTask(pl.LightningModule):
     def load_finetune_ckpt(
             self, state_dict
     ) -> None:
-        adapt_shapes = hparams['finetune_strict_shapes']
+        adapt_shapes = self.config['finetune_strict_shapes']
         if not adapt_shapes:
             cur_model_state_dict = self.state_dict()
             unmatched_keys = []
@@ -128,9 +125,9 @@ class BaseTask(pl.LightningModule):
         self.load_state_dict(state_dict, strict=False)
 
     def load_pre_train_model(self):
-        pre_train_ckpt_path = hparams['finetune_ckpt_path']
-        blacklist = hparams['finetune_ignored_params']
-        # whitelist=hparams['pre_train_whitelist']
+        pre_train_ckpt_path = self.config['finetune_ckpt_path']
+        blacklist = self.config['finetune_ignored_params']
+        # whitelist=self.config['pre_train_whitelist']
         if blacklist is None:
             blacklist = []
         # if whitelist is  None:
@@ -171,9 +168,9 @@ class BaseTask(pl.LightningModule):
         self.model = self._build_model()
         # utils.load_warp(self)
         self.unfreeze_all_params()
-        if hparams['freezing_enabled']:
+        if self.config['freezing_enabled']:
             self.freeze_params()
-        if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
+        if self.config['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(self.config['work_dir'])) is None:
             self.load_finetune_ckpt(self.load_pre_train_model())
         self.print_arch()
 
@@ -219,7 +216,7 @@ class BaseTask(pl.LightningModule):
         self.log_dict(log_outputs, prog_bar=True, logger=False, on_step=True, on_epoch=False)
         self.log('lr', self.lr_schedulers().get_last_lr()[0], prog_bar=True, logger=False, on_step=True, on_epoch=False)
         # logs to tensorboard
-        if self.global_step % hparams['log_interval'] == 0:
+        if self.global_step % self.config['log_interval'] == 0:
             tb_log = {f'training/{k}': v for k, v in log_outputs.items()}
             tb_log['training/lr'] = self.lr_schedulers().get_last_lr()[0]
             self.logger.log_metrics(tb_log, step=self.global_step)
@@ -291,7 +288,7 @@ class BaseTask(pl.LightningModule):
     def build_scheduler(self, optimizer):
         from utils import build_lr_scheduler_from_config
 
-        scheduler_args = hparams['lr_scheduler_args']
+        scheduler_args = self.config['lr_scheduler_args']
         assert scheduler_args['scheduler_cls'] != ''
         scheduler = build_lr_scheduler_from_config(optimizer, scheduler_args)
         return scheduler
@@ -300,7 +297,7 @@ class BaseTask(pl.LightningModule):
     def build_optimizer(self, model):
         from utils import build_object_from_class_name
 
-        optimizer_args = hparams['optimizer_args']
+        optimizer_args = self.config['optimizer_args']
         assert optimizer_args['optimizer_cls'] != ''
         if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])
@@ -333,9 +330,10 @@ class BaseTask(pl.LightningModule):
             max_batch_size=self.max_batch_size,
             num_replicas=self.num_replicas,
             rank=self.global_rank,
-            sort_by_similar_size=hparams['sort_by_len'],
+            sort_by_similar_size=self.config['sort_by_len'],
+            sampler_frame_count_grid=self.config['sampler_frame_count_grid'],
             size_reversed=True,
-            required_batch_count_multiple=hparams['accumulate_grad_batches'],
+            required_batch_count_multiple=self.config['accumulate_grad_batches'],
             shuffle_sample=True,
             shuffle_batch=True
         )
@@ -343,8 +341,8 @@ class BaseTask(pl.LightningModule):
             self.train_dataset,
             collate_fn=self.train_dataset.collater,
             batch_sampler=self.training_sampler,
-            num_workers=hparams['ds_workers'],
-            prefetch_factor=hparams['dataloader_prefetch_factor'],
+            num_workers=self.config['ds_workers'],
+            prefetch_factor=self.config['dataloader_prefetch_factor'],
             pin_memory=True,
             persistent_workers=True
         )
@@ -365,8 +363,8 @@ class BaseTask(pl.LightningModule):
             self.valid_dataset,
             collate_fn=self.valid_dataset.collater,
             batch_sampler=sampler,
-            num_workers=hparams['ds_workers'],
-            prefetch_factor=hparams['dataloader_prefetch_factor'],
+            num_workers=self.config['ds_workers'],
+            prefetch_factor=self.config['dataloader_prefetch_factor'],
             persistent_workers=True
         )
 
@@ -382,87 +380,6 @@ class BaseTask(pl.LightningModule):
     def on_test_end(self):
         return self.on_validation_end()
 
-    ###########
-    # Running configuration
-    ###########
-
-    @classmethod
-    def start(cls):
-        task = cls()
-
-        # if pre_train is not None:
-        #     task.load_state_dict(pre_train,strict=False)
-        #     print("load success-------------------------------------------------------------------")
-
-        work_dir = pathlib.Path(hparams['work_dir'])
-        trainer = pl.Trainer(
-            accelerator=hparams['pl_trainer_accelerator'],
-            devices=hparams['pl_trainer_devices'],
-            num_nodes=hparams['pl_trainer_num_nodes'],
-            strategy=get_strategy(
-                hparams['pl_trainer_devices'],
-                hparams['pl_trainer_num_nodes'],
-                hparams['pl_trainer_accelerator'],
-                hparams['pl_trainer_strategy'],
-                hparams['pl_trainer_precision'],
-            ),
-            precision=hparams['pl_trainer_precision'],
-            callbacks=[
-                DsModelCheckpoint(
-                    dirpath=work_dir,
-                    filename='model_ckpt_steps_{step}',
-                    auto_insert_metric_name=False,
-                    monitor='step',
-                    mode='max',
-                    save_last=False,
-                    # every_n_train_steps=hparams['val_check_interval'],
-                    save_top_k=hparams['num_ckpt_keep'],
-                    permanent_ckpt_start=hparams['permanent_ckpt_start'],
-                    permanent_ckpt_interval=hparams['permanent_ckpt_interval'],
-                    verbose=True
-                ),
-                # LearningRateMonitor(logging_interval='step'),
-                DsTQDMProgressBar(),
-            ],
-            logger=DsTensorBoardLogger(
-                save_dir=str(work_dir),
-                name='lightning_logs',
-                version='latest'
-            ),
-            gradient_clip_val=hparams['clip_grad_norm'],
-            val_check_interval=hparams['val_check_interval'] * hparams['accumulate_grad_batches'],
-            # so this is global_steps
-            check_val_every_n_epoch=None,
-            log_every_n_steps=1,
-            max_steps=hparams['max_updates'],
-            use_distributed_sampler=False,
-            num_sanity_val_steps=hparams['num_sanity_val_steps'],
-            accumulate_grad_batches=hparams['accumulate_grad_batches']
-        )
-        if not hparams['infer']:  # train
-            @rank_zero_only
-            def train_payload_copy():
-                # Copy files to work_dir
-                binary_dir = pathlib.Path(hparams['binary_data_dir'])
-                spk_map_dst = work_dir / 'spk_map.json'
-                spk_map_src = binary_dir / 'spk_map.json'
-                shutil.copy(spk_map_src, spk_map_dst)
-                print(f'| Copied spk map to {spk_map_dst}.')
-                lang_map_dst = work_dir / 'lang_map.json'
-                lang_map_src = binary_dir / 'lang_map.json'
-                shutil.copy(lang_map_src, lang_map_dst)
-                print(f'| Copied lang map to {lang_map_dst}.')
-                for lang in hparams['dictionaries'].keys():
-                    dict_dst = work_dir / f'dictionary-{lang}.txt'
-                    dict_src = binary_dir / f'dictionary-{lang}.txt'
-                    shutil.copy(dict_src, dict_dst)
-                    print(f'| Copied dictionary for language \'{lang}\' to {dict_dst}.')
-
-            train_payload_copy()
-            trainer.fit(task, ckpt_path=get_latest_checkpoint_path(work_dir))
-        else:
-            trainer.test(task)
-
     def on_save_checkpoint(self, checkpoint):
         if isinstance(self.model, CategorizedModule):
             checkpoint['category'] = self.model.category
@@ -474,8 +391,8 @@ class BaseTask(pl.LightningModule):
         if checkpoint.get('trainer_stage', '') == RunningStage.VALIDATING.value:
             self.skip_immediate_validation = True
 
-        optimizer_args = hparams['optimizer_args']
-        scheduler_args = hparams['lr_scheduler_args']
+        optimizer_args = self.config['optimizer_args']
+        scheduler_args = self.config['lr_scheduler_args']
 
         if 'beta1' in optimizer_args and 'beta2' in optimizer_args and 'betas' not in optimizer_args:
             optimizer_args['betas'] = (optimizer_args['beta1'], optimizer_args['beta2'])

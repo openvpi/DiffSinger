@@ -13,19 +13,18 @@ from modules.metrics import (
     RawCurveAccuracy, RawCurveR2Score, RhythmCorrectness, PhonemeDurationAccuracy
 )
 from modules.toplevel import DiffSingerVariance
-from utils.hparams import hparams
 from utils.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
 
 class VarianceDataset(BaseDataset):
-    def __init__(self, prefix, preload=False):
-        super(VarianceDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
-        need_energy = hparams['predict_energy']
-        need_breathiness = hparams['predict_breathiness']
-        need_voicing = hparams['predict_voicing']
-        need_tension = hparams['predict_tension']
+    def __init__(self, config, prefix, preload=False):
+        super(VarianceDataset, self).__init__(config, prefix, config['dataset_size_key'], preload)
+        need_energy = config['predict_energy']
+        need_breathiness = config['predict_breathiness']
+        need_voicing = config['predict_voicing']
+        need_tension = config['predict_tension']
         self.predict_variances = need_energy or need_breathiness or need_voicing or need_tension
 
     def collater(self, samples):
@@ -40,32 +39,32 @@ class VarianceDataset(BaseDataset):
             'ph_dur': ph_dur
         })
 
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             batch['spk_ids'] = torch.LongTensor([s['spk_id'] for s in samples])
-        if hparams['use_lang_id']:
+        if self.config['use_lang_id']:
             batch['languages'] = utils.collate_nd([s['languages'] for s in samples], 0)
-        if hparams['predict_dur']:
+        if self.config['predict_dur']:
             batch['ph2word'] = utils.collate_nd([s['ph2word'] for s in samples], 0)
             batch['midi'] = utils.collate_nd([s['midi'] for s in samples], 0)
-        if hparams['predict_pitch']:
+        if self.config['predict_pitch']:
             batch['note_midi'] = utils.collate_nd([s['note_midi'] for s in samples], -1)
             batch['note_rest'] = utils.collate_nd([s['note_rest'] for s in samples], True)
             batch['note_dur'] = utils.collate_nd([s['note_dur'] for s in samples], 0)
-            if hparams['use_glide_embed']:
+            if self.config['use_glide_embed']:
                 batch['note_glide'] = utils.collate_nd([s['note_glide'] for s in samples], 0)
             batch['mel2note'] = utils.collate_nd([s['mel2note'] for s in samples], 0)
             batch['base_pitch'] = utils.collate_nd([s['base_pitch'] for s in samples], 0)
-        if hparams['predict_pitch'] or self.predict_variances:
+        if self.config['predict_pitch'] or self.predict_variances:
             batch['mel2ph'] = utils.collate_nd([s['mel2ph'] for s in samples], 0)
             batch['pitch'] = utils.collate_nd([s['pitch'] for s in samples], 0)
             batch['uv'] = utils.collate_nd([s['uv'] for s in samples], True)
-        if hparams['predict_energy']:
+        if self.config['predict_energy']:
             batch['energy'] = utils.collate_nd([s['energy'] for s in samples], 0)
-        if hparams['predict_breathiness']:
+        if self.config['predict_breathiness']:
             batch['breathiness'] = utils.collate_nd([s['breathiness'] for s in samples], 0)
-        if hparams['predict_voicing']:
+        if self.config['predict_voicing']:
             batch['voicing'] = utils.collate_nd([s['voicing'] for s in samples], 0)
-        if hparams['predict_tension']:
+        if self.config['predict_tension']:
             batch['tension'] = utils.collate_nd([s['tension'] for s in samples], 0)
 
         return batch
@@ -81,27 +80,27 @@ def random_retake_masks(b, t, device):
 
 
 class VarianceTask(BaseTask):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config):
+        super().__init__(config)
         self.dataset_cls = VarianceDataset
 
-        self.diffusion_type = hparams['diffusion_type']
+        self.diffusion_type = config['diffusion_type']
 
-        self.use_spk_id = hparams['use_spk_id']
-        self.use_lang_id = hparams['use_lang_id']
+        self.use_spk_id = config['use_spk_id']
+        self.use_lang_id = config['use_lang_id']
 
-        self.predict_dur = hparams['predict_dur']
+        self.predict_dur = config['predict_dur']
         if self.predict_dur:
-            self.lambda_dur_loss = hparams['lambda_dur_loss']
+            self.lambda_dur_loss = config['lambda_dur_loss']
 
-        self.predict_pitch = hparams['predict_pitch']
+        self.predict_pitch = config['predict_pitch']
         if self.predict_pitch:
-            self.lambda_pitch_loss = hparams['lambda_pitch_loss']
+            self.lambda_pitch_loss = config['lambda_pitch_loss']
 
-        predict_energy = hparams['predict_energy']
-        predict_breathiness = hparams['predict_breathiness']
-        predict_voicing = hparams['predict_voicing']
-        predict_tension = hparams['predict_tension']
+        predict_energy = config['predict_energy']
+        predict_breathiness = config['predict_breathiness']
+        predict_voicing = config['predict_voicing']
+        predict_tension = config['predict_tension']
         self.variance_prediction_list = []
         if predict_energy:
             self.variance_prediction_list.append('energy')
@@ -112,18 +111,19 @@ class VarianceTask(BaseTask):
         if predict_tension:
             self.variance_prediction_list.append('tension')
         self.predict_variances = len(self.variance_prediction_list) > 0
-        self.lambda_var_loss = hparams['lambda_var_loss']
+        self.lambda_var_loss = config['lambda_var_loss']
         super()._finish_init()
 
     def _build_model(self):
         return DiffSingerVariance(
+            config=self.config,
             vocab_size=len(self.phoneme_dictionary),
         )
 
     # noinspection PyAttributeOutsideInit
     def build_losses_and_metrics(self):
         if self.predict_dur:
-            dur_hparams = hparams['dur_prediction_args']
+            dur_hparams = self.config['dur_prediction_args']
             self.dur_loss = DurationLoss(
                 offset=dur_hparams['log_offset'],
                 loss_type=dur_hparams['loss_type'],
@@ -136,10 +136,10 @@ class VarianceTask(BaseTask):
             self.register_validation_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
         if self.predict_pitch:
             if self.diffusion_type == 'ddpm':
-                self.pitch_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+                self.pitch_loss = DiffusionLoss(loss_type=self.config['main_loss_type'])
             elif self.diffusion_type == 'reflow':
                 self.pitch_loss = RectifiedFlowLoss(
-                    loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+                    loss_type=self.config['main_loss_type'], log_norm=self.config['main_loss_log_norm']
                 )
             else:
                 raise ValueError(f'Unknown diffusion type: {self.diffusion_type}')
@@ -148,10 +148,10 @@ class VarianceTask(BaseTask):
             self.register_validation_metric('pitch_r2', RawCurveR2Score())
         if self.predict_variances:
             if self.diffusion_type == 'ddpm':
-                self.var_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+                self.var_loss = DiffusionLoss(loss_type=self.config['main_loss_type'])
             elif self.diffusion_type == 'reflow':
                 self.var_loss = RectifiedFlowLoss(
-                    loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+                    loss_type=self.config['main_loss_type'], log_norm=self.config['main_loss_log_norm']
                 )
             else:
                 raise ValueError(f'Unknown diffusion type: {self.diffusion_type}')
@@ -250,14 +250,14 @@ class VarianceTask(BaseTask):
 
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, infer=False)
-        if min(sample['indices']) < hparams['num_valid_plots']:
+        if min(sample['indices']) < self.config['num_valid_plots']:
             def sample_get(key, idx, abs_idx):
                 return sample[key][idx][:self.valid_dataset.metadata[key][abs_idx]].unsqueeze(0)
 
             dur_preds, pitch_preds, variances_preds = self.run_model(sample, infer=True)
             for i in range(len(sample['indices'])):
                 data_idx = sample['indices'][i]
-                if data_idx < hparams['num_valid_plots']:
+                if data_idx < self.config['num_valid_plots']:
                     if dur_preds is not None:
                         dur_len = self.valid_dataset.metadata['ph_dur'][data_idx]
                         tokens = sample_get('tokens', i, data_idx)

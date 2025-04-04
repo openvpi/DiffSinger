@@ -11,13 +11,13 @@ from basics.base_exporter import BaseExporter
 from deployment.modules.toplevel import DiffSingerVarianceONNX
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
 from utils import load_ckpt, onnx_helper, remove_suffix
-from utils.hparams import hparams
 from utils.phoneme_utils import load_phoneme_dictionary
 
 
 class DiffSingerVarianceExporter(BaseExporter):
     def __init__(
             self,
+            config: dict,
             device: Union[str, torch.device] = 'cpu',
             cache_dir: Path = None,
             ckpt_steps: int = None,
@@ -26,14 +26,14 @@ class DiffSingerVarianceExporter(BaseExporter):
             export_spk: List[Tuple[str, Dict[str, float]]] = None,
             freeze_spk: Tuple[str, Dict[str, float]] = None
     ):
-        super().__init__(device=device, cache_dir=cache_dir)
+        super().__init__(config=config, device=device, cache_dir=cache_dir)
         # Basic attributes
-        self.model_name: str = hparams['exp_name']
+        self.model_name: str = self.config['exp_name']
         self.ckpt_steps: int = ckpt_steps
         self.spk_map: dict = self.build_spk_map()
         self.lang_map: dict = self.build_lang_map()
-        self.phoneme_dictionary = load_phoneme_dictionary()
-        self.use_lang_id = hparams.get('use_lang_id', False) and len(self.phoneme_dictionary.cross_lingual_phonemes) > 0
+        self.phoneme_dictionary = load_phoneme_dictionary(config)
+        self.use_lang_id = config.get('use_lang_id', False) and len(self.phoneme_dictionary.cross_lingual_phonemes) > 0
         self.model = self.build_model()
         self.linguistic_encoder_cache_path = self.cache_dir / 'linguistic.onnx'
         self.dur_predictor_cache_path = self.cache_dir / 'dur.onnx'
@@ -66,10 +66,10 @@ class DiffSingerVarianceExporter(BaseExporter):
         self.expose_expr = not freeze_expr
         self.freeze_glide = freeze_glide
         self.freeze_spk: Tuple[str, Dict[str, float]] = freeze_spk \
-            if hparams['use_spk_id'] else None
+            if self.config['use_spk_id'] else None
         self.export_spk: List[Tuple[str, Dict[str, float]]] = export_spk \
-            if hparams['use_spk_id'] and export_spk is not None else []
-        if hparams['use_spk_id']:
+            if self.config['use_spk_id'] and export_spk is not None else []
+        if self.config['use_spk_id']:
             if not self.export_spk and self.freeze_spk is None:
                 # In case the user did not specify any speaker settings:
                 if len(self.spk_map) == 1:
@@ -90,7 +90,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 for p in self.phoneme_dictionary.cross_lingual_phonemes
             })
         ).eval().to(self.device)
-        load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps,
+        load_ckpt(model, self.config['work_dir'], ckpt_steps=self.ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         model.build_smooth_op(self.device)
         return model
@@ -179,8 +179,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         # sampling acceleration
         dsconfig['use_continuous_acceleration'] = True
         # frame specifications
-        dsconfig['sample_rate'] = hparams['audio_sample_rate']
-        dsconfig['hop_size'] = hparams['hop_size']
+        dsconfig['sample_rate'] = self.config['audio_sample_rate']
+        dsconfig['hop_size'] = self.config['hop_size']
         config_path = path / 'dsconfig.yaml'
         with open(config_path, 'w', encoding='utf8') as fw:
             yaml.safe_dump(dsconfig, fw, sort_keys=False)
@@ -194,7 +194,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         word_div = torch.LongTensor([[2, 2, 1]]).to(self.device)
         word_dur = torch.LongTensor([[8, 3, 4]]).to(self.device)
         languages = torch.LongTensor([[0] * 5]).to(self.device)
-        encoder_out = torch.rand(1, 5, hparams['hidden_size'], dtype=torch.float32, device=self.device)
+        encoder_out = torch.rand(1, 5, self.config['hidden_size'], dtype=torch.float32, device=self.device)
         x_masks = tokens == 0
         ph_midi = torch.LongTensor([[60] * 5]).to(self.device)
         encoder_output_names = ['encoder_out', 'x_masks']
@@ -207,7 +207,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             }
         }
         input_lang_id = self.use_lang_id
-        input_spk_embed = hparams['use_spk_id'] and not self.freeze_spk
+        input_spk_embed = self.config['use_spk_id'] and not self.freeze_spk
 
         print(f'Exporting {self.fs2_class_name}...')
         if self.model.predict_dur:
@@ -251,7 +251,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     x_masks,
                     ph_midi,
                     *([torch.rand(
-                        1, 5, hparams['hidden_size'],
+                        1, 5, self.config['hidden_size'],
                         dtype=torch.float32, device=self.device
                     )] if input_spk_embed else [])
                 ),
@@ -306,12 +306,12 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
         # Common dummy inputs
-        dummy_time = (torch.rand((1,), device=self.device) * hparams.get('time_scale_factor', 1.0)).float()
+        dummy_time = (torch.rand((1,), device=self.device) * self.config.get('time_scale_factor', 1.0)).float()
         dummy_steps = 5
 
         if self.model.predict_pitch:
-            use_melody_encoder = hparams.get('use_melody_encoder', False)
-            use_glide_embed = use_melody_encoder and hparams['use_glide_embed'] and not self.freeze_glide
+            use_melody_encoder = self.config.get('use_melody_encoder', False)
+            use_glide_embed = use_melody_encoder and self.config['use_glide_embed'] and not self.freeze_glide
             # Prepare inputs for preprocessor of the pitch predictor
             note_midi = torch.FloatTensor([[60.] * 4]).to(self.device)
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
@@ -329,7 +329,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     **({'expr': torch.ones_like(pitch)} if self.expose_expr else {}),
                     'retake': retake,
                     **({'spk_embed': torch.rand(
-                        1, 15, hparams['hidden_size'], dtype=torch.float32, device=self.device
+                        1, 15, self.config['hidden_size'], dtype=torch.float32, device=self.device
                     )} if input_spk_embed else {})
                 }
             )
@@ -384,9 +384,9 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             # Prepare inputs for backbone tracing and pitch predictor scripting
-            shape = (1, 1, hparams['pitch_prediction_args']['repeat_bins'], 15)
+            shape = (1, 1, self.config['pitch_prediction_args']['repeat_bins'], 15)
             noise = torch.randn(shape, device=self.device)
-            condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
+            condition = torch.rand((1, self.config['hidden_size'], 15), device=self.device)
 
             print(f'Tracing {self.pitch_backbone_class_name} backbone...')
             pitch_predictor = self.model.view_as_pitch_predictor()
@@ -472,7 +472,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
         if self.model.predict_variances:
-            total_repeat_bins = hparams['variances_prediction_args']['total_repeat_bins']
+            total_repeat_bins = self.config['variances_prediction_args']['total_repeat_bins']
             repeat_bins = total_repeat_bins // len(self.model.variance_prediction_list)
 
             # Prepare inputs for preprocessor of the multi-variance predictor
@@ -491,7 +491,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     variances,
                     retake,
                     *([torch.rand(
-                        1, 15, hparams['hidden_size'],
+                        1, 15, self.config['hidden_size'],
                         dtype=torch.float32, device=self.device
                     )] if input_spk_embed else [])
                 ),
@@ -532,8 +532,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             # Prepare inputs for backbone tracing and multi-variance predictor scripting
             shape = (1, len(self.model.variance_prediction_list), repeat_bins, 15)
             noise = torch.randn(shape, device=self.device)
-            condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
-            step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
+            condition = torch.rand((1, self.config['hidden_size'], 15), device=self.device)
+            step = (torch.rand((1,), device=self.device) * self.config['K_step']).long()
 
             print(f'Tracing {self.variance_backbone_class_name} backbone...')
             multi_var_predictor = self.model.view_as_variance_predictor()
@@ -646,7 +646,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(
             linguistic,
             output_shapes={
-                'encoder_out': (1, 'n_tokens', hparams['hidden_size'])
+                'encoder_out': (1, 'n_tokens', self.config['hidden_size'])
             }
         )
         print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
@@ -676,7 +676,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             self, pitch_pre: onnx.ModelProto, pitch_predictor: onnx.ModelProto, pitch_post: onnx.ModelProto
     ) -> onnx.ModelProto:
         onnx_helper.model_override_io_shapes(
-            pitch_pre, output_shapes={'pitch_cond': (1, 'n_frames', hparams['hidden_size'])}
+            pitch_pre, output_shapes={'pitch_cond': (1, 'n_frames', self.config['hidden_size'])}
         )
         pitch_pre, check = onnxsim.simplify(pitch_pre, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
@@ -725,7 +725,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             self, var_pre: onnx.ModelProto, var_diffusion: onnx.ModelProto, var_post: onnx.ModelProto
     ):
         onnx_helper.model_override_io_shapes(
-            var_pre, output_shapes={'variance_cond': (1, 'n_frames', hparams['hidden_size'])}
+            var_pre, output_shapes={'variance_cond': (1, 'n_frames', self.config['hidden_size'])}
         )
         var_pre, check = onnxsim.simplify(var_pre, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'

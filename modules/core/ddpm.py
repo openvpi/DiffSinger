@@ -10,7 +10,6 @@ from torch import nn
 from tqdm import tqdm
 
 from modules.backbones import build_backbone
-from utils.hparams import hparams
 
 
 def extract(a, t, x_shape):
@@ -53,10 +52,11 @@ beta_schedule = {
 
 
 class GaussianDiffusion(nn.Module):
-    def __init__(self, out_dims, num_feats=1, timesteps=1000, k_step=1000,
+    def __init__(self, config, out_dims, num_feats=1, timesteps=1000, k_step=1000,
                  backbone_type=None, backbone_args=None, betas=None,
                  spec_min=None, spec_max=None):
         super().__init__()
+        self.config = config
         self.denoise_fn: nn.Module = build_backbone(out_dims, num_feats, backbone_type, backbone_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
@@ -64,13 +64,13 @@ class GaussianDiffusion(nn.Module):
         if betas is not None:
             betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
         else:
-            betas = beta_schedule[hparams['schedule_type']](timesteps)
+            betas = beta_schedule[config['schedule_type']](timesteps)
 
         alphas = 1. - betas
         alphas_cumprod = np.cumprod(alphas, axis=0)
         alphas_cumprod_prev = np.append(1., alphas_cumprod[:-1])
 
-        self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
+        self.use_shallow_diffusion = config.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
             assert k_step <= timesteps, 'K_step should not be larger than timesteps.'
         self.timesteps = timesteps
@@ -219,8 +219,8 @@ class GaussianDiffusion(nn.Module):
         return x_recon, noise
 
     def inference(self, cond, b=1, x_start=None, device=None):
-        depth = hparams.get('K_step_infer', self.k_step)
-        speedup = hparams['diff_speedup']
+        depth = self.config.get('K_step_infer', self.k_step)
+        speedup = self.config['diff_speedup']
         if speedup > 0:
             assert depth % speedup == 0, f'Acceleration ratio must be a factor of diffusion depth {depth}.'
 
@@ -242,7 +242,7 @@ class GaussianDiffusion(nn.Module):
             x = x_start
 
         if speedup > 1 and t_max > 0:
-            algorithm = hparams['diff_accelerator']
+            algorithm = self.config['diff_accelerator']
             if algorithm == 'dpm-solver':
                 from inference.dpm_solver_pytorch import NoiseScheduleVP, model_wrapper, DPM_Solver
                 # 1. Define the noise schedule.
@@ -272,8 +272,8 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 dpm_solver = DPM_Solver(model_fn, noise_schedule, algorithm_type="dpmsolver++")
 
-                steps = t_max // hparams["diff_speedup"]
-                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
+                steps = t_max // self.config["diff_speedup"]
+                self.bar = tqdm(desc="sample time step", total=steps, disable=not self.config['infer'], leave=False)
                 x = dpm_solver.sample(
                     x,
                     steps=steps,
@@ -310,8 +310,8 @@ class GaussianDiffusion(nn.Module):
                 # costs and the sample quality.
                 uni_pc = UniPC(model_fn, noise_schedule, variant='bh2')
 
-                steps = t_max // hparams["diff_speedup"]
-                self.bar = tqdm(desc="sample time step", total=steps, disable=not hparams['infer'], leave=False)
+                steps = t_max // self.config["diff_speedup"]
+                self.bar = tqdm(desc="sample time step", total=steps, disable=not self.config['infer'], leave=False)
                 x = uni_pc.sample(
                     x,
                     steps=steps,
@@ -325,7 +325,7 @@ class GaussianDiffusion(nn.Module):
                 iteration_interval = speedup
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
-                        total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
+                        total=t_max // iteration_interval, disable=not self.config['infer'], leave=False
                 ):
                     x = self.p_sample_plms(
                         x, torch.full((b,), i, device=device, dtype=torch.long),
@@ -335,7 +335,7 @@ class GaussianDiffusion(nn.Module):
                 iteration_interval = speedup
                 for i in tqdm(
                         reversed(range(0, t_max, iteration_interval)), desc='sample time step',
-                        total=t_max // iteration_interval, disable=not hparams['infer'], leave=False
+                        total=t_max // iteration_interval, disable=not self.config['infer'], leave=False
                 ):
                     x = self.p_sample_ddim(
                         x, torch.full((b,), i, device=device, dtype=torch.long),
@@ -345,7 +345,7 @@ class GaussianDiffusion(nn.Module):
                 raise ValueError(f"Unsupported acceleration algorithm for DDPM: {algorithm}.")
         else:
             for i in tqdm(reversed(range(0, t_max)), desc='sample time step', total=t_max,
-                          disable=not hparams['infer'], leave=False):
+                          disable=not self.config['infer'], leave=False):
                 x = self.p_sample(x, torch.full((b,), i, device=device, dtype=torch.long), cond)
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
@@ -384,7 +384,8 @@ class GaussianDiffusion(nn.Module):
 
 
 class RepetitiveDiffusion(GaussianDiffusion):
-    def __init__(self, vmin: float | int | list, vmax: float | int | list,
+    def __init__(self, config: dict,
+                 vmin: float | int | list, vmax: float | int | list,
                  repeat_bins: int, timesteps=1000, k_step=1000,
                  backbone_type=None, backbone_args=None,
                  betas=None):
@@ -394,6 +395,7 @@ class RepetitiveDiffusion(GaussianDiffusion):
         spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
         self.repeat_bins = repeat_bins
         super().__init__(
+            config=config,
             out_dims=repeat_bins, num_feats=num_feats,
             timesteps=timesteps, k_step=k_step,
             backbone_type=backbone_type, backbone_args=backbone_args,
@@ -422,7 +424,8 @@ class RepetitiveDiffusion(GaussianDiffusion):
 
 
 class PitchDiffusion(RepetitiveDiffusion):
-    def __init__(self, vmin: float, vmax: float,
+    def __init__(self, config: dict,
+                 vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  timesteps=1000, k_step=1000,
                  backbone_type=None, backbone_args=None,
@@ -432,6 +435,7 @@ class PitchDiffusion(RepetitiveDiffusion):
         self.cmin = cmin  # clip min
         self.cmax = cmax  # clip max
         super().__init__(
+            config=config,
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             backbone_type=backbone_type, backbone_args=backbone_args,
@@ -447,7 +451,8 @@ class PitchDiffusion(RepetitiveDiffusion):
 
 class MultiVarianceDiffusion(RepetitiveDiffusion):
     def __init__(
-            self, ranges: List[Tuple[float, float]],
+            self, config: dict,
+            ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, timesteps=1000, k_step=1000,
             backbone_type=None, backbone_args=None,
@@ -462,6 +467,7 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
         if len(vmax) == 1:
             vmax = vmax[0]
         super().__init__(
+            config=config,
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             timesteps=timesteps, k_step=k_step,
             backbone_type=backbone_type, backbone_args=backbone_args,

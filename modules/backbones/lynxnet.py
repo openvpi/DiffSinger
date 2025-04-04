@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU
-from utils.hparams import hparams
 
 
 class Conv1d(torch.nn.Conv1d):
@@ -88,7 +87,7 @@ class LYNXNetResidualLayer(nn.Module):
 
 
 class LYNXNet(nn.Module):
-    def __init__(self, in_dims, n_feats, *, num_layers=6, num_channels=512, expansion_factor=2, kernel_size=31,
+    def __init__(self, in_dims, n_feats, hidden_size, *, num_layers=6, num_channels=512, expansion_factor=2, kernel_size=31,
                  activation='PReLU', dropout=0.0, strong_cond=False):
         """
         LYNXNet(Linear Gated Depthwise Separable Convolution Network)
@@ -110,7 +109,7 @@ class LYNXNet(nn.Module):
         self.residual_layers = nn.ModuleList(
             [
                 LYNXNetResidualLayer(
-                    dim_cond=hparams['hidden_size'],
+                    dim_cond=hidden_size,
                     dim=num_channels,
                     expansion_factor=expansion_factor,
                     kernel_size=kernel_size,

@@ -10,7 +10,6 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from utils.hparams import hparams
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import load_phoneme_dictionary
@@ -43,16 +42,17 @@ class BaseBinarizer:
             the phoneme set.
     """
 
-    def __init__(self, datasets=None, data_attrs=None):
+    def __init__(self, config, datasets=None, data_attrs=None):
+        self.config = config
         if datasets is None:
-            datasets = hparams['datasets']
+            datasets = config['datasets']
         self.datasets = datasets
         self.raw_data_dirs = [pathlib.Path(ds['raw_data_dir']) for ds in self.datasets]
-        self.binary_data_dir = pathlib.Path(hparams['binary_data_dir'])
+        self.binary_data_dir = pathlib.Path(config['binary_data_dir'])
         self.data_attrs = [] if data_attrs is None else data_attrs
 
-        self.binarization_args = hparams['binarization_args']
-        self.augmentation_args = hparams.get('augmentation_args', {})
+        self.binarization_args = self.config['binarization_args']
+        self.augmentation_args = self.config.get('augmentation_args', {})
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.spk_map = {}
@@ -60,7 +60,7 @@ class BaseBinarizer:
         self.build_spk_map()
 
         self.lang_map = {}
-        self.dictionaries = hparams['dictionaries']
+        self.dictionaries = config['dictionaries']
         self.build_lang_map()
 
         self.items = {}
@@ -68,8 +68,8 @@ class BaseBinarizer:
         self._train_item_names: list = None
         self._valid_item_names: list = None
 
-        self.phoneme_dictionary = load_phoneme_dictionary()
-        self.timestep = hparams['hop_size'] / hparams['audio_sample_rate']
+        self.phoneme_dictionary = load_phoneme_dictionary(config)
+        self.timestep = config['hop_size'] / config['audio_sample_rate']
 
     def build_spk_map(self):
         spk_ids = [ds.get('spk_id') for ds in self.datasets]
@@ -82,7 +82,7 @@ class BaseBinarizer:
                 idx += 1
             spk_ids[i] = idx
             assigned_spk_ids.add(idx)
-        assert max(spk_ids) < hparams['num_spk'], \
+        assert max(spk_ids) < self.config['num_spk'], \
             f'Index in spk_id sequence {spk_ids} is out of range. All values should be smaller than num_spk.'
 
         for spk_id, dataset in zip(spk_ids, self.datasets):
@@ -96,7 +96,7 @@ class BaseBinarizer:
         print("| spk_map: ", self.spk_map)
 
     def build_lang_map(self):
-        assert len(self.dictionaries.keys()) <= hparams['num_lang'], \
+        assert len(self.dictionaries.keys()) <= self.config['num_lang'], \
             'Number of languages must not be greater than num_lang!'
         for dataset in self.datasets:
             assert dataset['language'] in self.dictionaries, f'Unrecognized language name: {dataset["language"]}'
@@ -207,7 +207,7 @@ class BaseBinarizer:
         lang_map_fn = self.binary_data_dir / 'lang_map.json'
         with open(lang_map_fn, 'w', encoding='utf-8') as f:
             json.dump(self.lang_map, f, ensure_ascii=False)
-        for lang, dict_path in hparams['dictionaries'].items():
+        for lang, dict_path in self.config['dictionaries'].items():
             shutil.copy(dict_path, self.binary_data_dir / f'dictionary-{lang}.txt')
         self.check_coverage()
 

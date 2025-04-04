@@ -19,6 +19,7 @@ def get_backbone_args(config: dict, backbone_type: str):
             'num_layers': config.get('residual_layers'),
             'num_channels': config.get('residual_channels'),
             'dilation_cycle_length': config.get('dilation_cycle_length'),
+            'hidden_size': config.get('hidden_size'),
         }
     else:
         return None

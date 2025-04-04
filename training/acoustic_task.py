@@ -13,29 +13,28 @@ from modules.aux_decoder import build_aux_loss
 from modules.losses import DiffusionLoss, RectifiedFlowLoss
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import get_vocoder_cls
-from utils.hparams import hparams
 from utils.plot import spec_to_figure
 
 matplotlib.use('Agg')
 
 
 class AcousticDataset(BaseDataset):
-    def __init__(self, prefix, preload=False):
-        super(AcousticDataset, self).__init__(prefix, hparams['dataset_size_key'], preload)
+    def __init__(self, config, prefix, preload=False):
+        super(AcousticDataset, self).__init__(config, prefix, config['dataset_size_key'], preload)
         self.required_variances = {}  # key: variance name, value: padding value
-        if hparams['use_energy_embed']:
+        if config['use_energy_embed']:
             self.required_variances['energy'] = 0.0
-        if hparams['use_breathiness_embed']:
+        if config['use_breathiness_embed']:
             self.required_variances['breathiness'] = 0.0
-        if hparams['use_voicing_embed']:
+        if config['use_voicing_embed']:
             self.required_variances['voicing'] = 0.0
-        if hparams['use_tension_embed']:
+        if config['use_tension_embed']:
             self.required_variances['tension'] = 0.0
 
-        self.need_key_shift = hparams['use_key_shift_embed']
-        self.need_speed = hparams['use_speed_embed']
-        self.need_spk_id = hparams['use_spk_id']
-        self.need_lang_id = hparams['use_lang_id']
+        self.need_key_shift = config['use_key_shift_embed']
+        self.need_speed = config['use_speed_embed']
+        self.need_spk_id = config['use_spk_id']
+        self.need_lang_id = config['use_lang_id']
 
     def collater(self, samples):
         batch = super().collater(samples)
@@ -68,49 +67,50 @@ class AcousticDataset(BaseDataset):
 
 
 class AcousticTask(BaseTask):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config):
+        super().__init__(config)
         self.dataset_cls = AcousticDataset
-        self.diffusion_type = hparams['diffusion_type']
+        self.diffusion_type = config['diffusion_type']
         assert self.diffusion_type in ['ddpm', 'reflow'], f"Unknown diffusion type: {self.diffusion_type}"
-        self.use_shallow_diffusion = hparams['use_shallow_diffusion']
+        self.use_shallow_diffusion = config['use_shallow_diffusion']
         if self.use_shallow_diffusion:
-            self.shallow_args = hparams['shallow_diffusion_args']
+            self.shallow_args = config['shallow_diffusion_args']
             self.train_aux_decoder = self.shallow_args['train_aux_decoder']
             self.train_diffusion = self.shallow_args['train_diffusion']
 
-        self.use_vocoder = hparams['infer'] or hparams['val_with_vocoder']
+        self.use_vocoder = config['infer'] or config['val_with_vocoder']
         if self.use_vocoder:
-            self.vocoder: BaseVocoder = get_vocoder_cls(hparams)()
+            self.vocoder: BaseVocoder = get_vocoder_cls(config)(config)
         self.logged_gt_wav = set()
         self.required_variances = []
-        if hparams['use_energy_embed']:
+        if config['use_energy_embed']:
             self.required_variances.append('energy')
-        if hparams['use_breathiness_embed']:
+        if config['use_breathiness_embed']:
             self.required_variances.append('breathiness')
-        if hparams['use_voicing_embed']:
+        if config['use_voicing_embed']:
             self.required_variances.append('voicing')
-        if hparams['use_tension_embed']:
+        if config['use_tension_embed']:
             self.required_variances.append('tension')
         super()._finish_init()
 
     def _build_model(self):
         return DiffSingerAcoustic(
+            config=self.config,
             vocab_size=len(self.phoneme_dictionary),
-            out_dims=hparams['audio_num_mel_bins']
+            out_dims=self.config['audio_num_mel_bins']
         )
 
     # noinspection PyAttributeOutsideInit
     def build_losses_and_metrics(self):
         if self.use_shallow_diffusion:
             self.aux_mel_loss = build_aux_loss(self.shallow_args['aux_decoder_arch'])
-            self.lambda_aux_mel_loss = hparams['lambda_aux_mel_loss']
+            self.lambda_aux_mel_loss = self.config['lambda_aux_mel_loss']
             self.register_validation_loss('aux_mel_loss')
         if self.diffusion_type == 'ddpm':
-            self.mel_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
+            self.mel_loss = DiffusionLoss(loss_type=self.config['main_loss_type'])
         elif self.diffusion_type == 'reflow':
             self.mel_loss = RectifiedFlowLoss(
-                loss_type=hparams['main_loss_type'], log_norm=hparams['main_loss_log_norm']
+                loss_type=self.config['main_loss_type'], log_norm=self.config['main_loss_log_norm']
             )
         else:
             raise ValueError(f"Unknown diffusion type: {self.diffusion_type}")
@@ -128,11 +128,11 @@ class AcousticTask(BaseTask):
         key_shift = sample.get('key_shift')
         speed = sample.get('speed')
 
-        if hparams['use_spk_id']:
+        if self.config['use_spk_id']:
             spk_embed_id = sample['spk_ids']
         else:
             spk_embed_id = None
-        if hparams['use_lang_id']:
+        if self.config['use_lang_id']:
             languages = sample['languages']
         else:
             languages = None
@@ -178,11 +178,11 @@ class AcousticTask(BaseTask):
 
     def _validation_step(self, sample, batch_idx):
         losses = self.run_model(sample, infer=False)
-        if sample['size'] > 0 and min(sample['indices']) < hparams['num_valid_plots']:
+        if sample['size'] > 0 and min(sample['indices']) < self.config['num_valid_plots']:
             mel_out: ShallowDiffusionOutput = self.run_model(sample, infer=True)
             for i in range(len(sample['indices'])):
                 data_idx = sample['indices'][i].item()
-                if data_idx < hparams['num_valid_plots']:
+                if data_idx < self.config['num_valid_plots']:
                     if self.use_vocoder:
                         self.plot_wav(
                             data_idx, sample['mel'][i],
@@ -212,7 +212,7 @@ class AcousticTask(BaseTask):
             gt_wav = self.vocoder.spec2wav_torch(gt_mel, f0=f0)
             self.logger.all_rank_experiment.add_audio(
                 f'gt_{data_idx}', gt_wav,
-                sample_rate=hparams['audio_sample_rate'],
+                sample_rate=self.config['audio_sample_rate'],
                 global_step=self.global_step
             )
             self.logged_gt_wav.add(data_idx)
@@ -220,20 +220,20 @@ class AcousticTask(BaseTask):
             aux_wav = self.vocoder.spec2wav_torch(aux_mel, f0=f0)
             self.logger.all_rank_experiment.add_audio(
                 f'aux_{data_idx}', aux_wav,
-                sample_rate=hparams['audio_sample_rate'],
+                sample_rate=self.config['audio_sample_rate'],
                 global_step=self.global_step
             )
         if diff_mel is not None:
             diff_wav = self.vocoder.spec2wav_torch(diff_mel, f0=f0)
             self.logger.all_rank_experiment.add_audio(
                 f'diff_{data_idx}', diff_wav,
-                sample_rate=hparams['audio_sample_rate'],
+                sample_rate=self.config['audio_sample_rate'],
                 global_step=self.global_step
             )
 
     def plot_mel(self, data_idx, gt_spec, out_spec, name_prefix='mel'):
-        vmin = hparams['mel_vmin']
-        vmax = hparams['mel_vmax']
+        vmin = self.config['mel_vmin']
+        vmax = self.config['mel_vmax']
         mel_len = self.valid_dataset.metadata['mel'][data_idx]
         spec_cat = torch.cat([(out_spec - gt_spec).abs() + vmin, gt_spec, out_spec], -1)
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"

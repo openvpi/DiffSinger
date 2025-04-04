@@ -11,7 +11,7 @@ root_dir = pathlib.Path(__file__).resolve().parent.parent
 os.environ['PYTHONPATH'] = str(root_dir)
 sys.path.insert(0, str(root_dir))
 
-from utils.hparams import set_hparams, hparams
+from utils.config_utils import read_full_config, print_config
 
 
 def check_pytorch_version():
@@ -130,18 +130,14 @@ def acoustic(
     export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
-    sys.argv = [
-        sys.argv[0],
-        '--exp_name',
-        exp,
-        '--infer'
-    ]
-    set_hparams()
+    config, config_chain = read_full_config(exp_name=exp, infer=True)
+    print(config, config_chain)
 
     # Export artifacts
     from deployment.exporters import DiffSingerAcousticExporter
     print(f'| Exporter: {DiffSingerAcousticExporter}')
     exporter = DiffSingerAcousticExporter(
+        config=config,
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
@@ -211,16 +207,13 @@ def variance(
     export_spk_mix, freeze_spk_mix = parse_spk_settings(export_spk, freeze_spk)
 
     # Load configurations
-    sys.argv = [
-        sys.argv[0],
-        '--exp_name',
-        exp,
-        '--infer'
-    ]
-    set_hparams()
+    config, config_chain = read_full_config(exp_name=exp, infer=True)
+    print(config, config_chain)
+
     from deployment.exporters import DiffSingerVarianceExporter
     print(f'| Exporter: {DiffSingerVarianceExporter}')
     exporter = DiffSingerVarianceExporter(
+        config=config,
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         ckpt_steps=ckpt,
@@ -237,7 +230,7 @@ def variance(
 
 @main.command(help='Export NSF-HiFiGAN vocoder model to ONNX format.')
 @click.option(
-    '--config', type=click.Path(
+    '--config', 'config_path', type=click.Path(
         exists=True, file_okay=True, dir_okay=False, readable=True,
         path_type=pathlib.Path, resolve_path=True
     ),
@@ -266,7 +259,7 @@ def variance(
     help='Specify filename (without suffix) of the target model file.'
 )
 def nsf_hifigan(
-        config: pathlib.Path,
+        config_path: pathlib.Path,
         ckpt: pathlib.Path = None,
         out: pathlib.Path = None,
         name: str = None
@@ -276,9 +269,11 @@ def nsf_hifigan(
         out = root_dir / 'artifacts' / 'nsf_hifigan'
 
     # Load configurations
-    set_hparams(config.as_posix())
+    config, config_chain = read_full_config(config_path)
+    print_config(config, config_chain)
+
     if ckpt is None:
-        model_path = pathlib.Path(hparams['vocoder_ckpt']).resolve()
+        model_path = pathlib.Path(config['vocoder_ckpt']).resolve()
     else:
         model_path = ckpt
 
@@ -286,6 +281,7 @@ def nsf_hifigan(
     from deployment.exporters import NSFHiFiGANExporter
     print(f'| Exporter: {NSFHiFiGANExporter}')
     exporter = NSFHiFiGANExporter(
+        config=config,
         device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         cache_dir=root_dir / 'deployment' / 'cache',
         model_path=model_path,

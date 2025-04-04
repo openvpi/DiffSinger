@@ -69,7 +69,9 @@ class RectifiedFlowONNX(RectifiedFlow):
 
 
 class PitchRectifiedFlowONNX(RectifiedFlowONNX, PitchRectifiedFlow):
-    def __init__(self, vmin: float, vmax: float,
+    def __init__(self,
+                 config: dict,
+                 vmin: float, vmax: float,
                  cmin: float, cmax: float, repeat_bins,
                  time_scale_factor=1000,
                  backbone_type=None, backbone_args=None):
@@ -78,6 +80,7 @@ class PitchRectifiedFlowONNX(RectifiedFlowONNX, PitchRectifiedFlow):
         self.cmin = cmin
         self.cmax = cmax
         super(PitchRectifiedFlow, self).__init__(
+            config=config,
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             time_scale_factor=time_scale_factor,
             backbone_type=backbone_type, backbone_args=backbone_args
@@ -96,7 +99,8 @@ class PitchRectifiedFlowONNX(RectifiedFlowONNX, PitchRectifiedFlow):
 
 class MultiVarianceRectifiedFlowONNX(RectifiedFlowONNX, MultiVarianceRectifiedFlow):
     def __init__(
-            self, ranges: List[Tuple[float, float]],
+            self, config: dict,
+            ranges: List[Tuple[float, float]],
             clamps: List[Tuple[float | None, float | None] | None],
             repeat_bins, time_scale_factor=1000,
             backbone_type=None, backbone_args=None
@@ -110,6 +114,7 @@ class MultiVarianceRectifiedFlowONNX(RectifiedFlowONNX, MultiVarianceRectifiedFl
         if len(vmax) == 1:
             vmax = vmax[0]
         super(MultiVarianceRectifiedFlow, self).__init__(
+            config=config,
             vmin=vmin, vmax=vmax, repeat_bins=repeat_bins,
             time_scale_factor=time_scale_factor,
             backbone_type=backbone_type, backbone_args=backbone_args

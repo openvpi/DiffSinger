@@ -103,6 +103,7 @@ def get_energy_librosa(waveform, length, *, hop_size, win_size, domain='db'):
 
 
 def get_breathiness(
+        config: dict,
         waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,
         *, hop_size=None, fft_size=None, win_size=None
@@ -120,6 +121,7 @@ def get_breathiness(
     """
     if not isinstance(waveform, DecomposedWaveform):
         waveform = DecomposedWaveform(
+            config=config,
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
@@ -132,6 +134,7 @@ def get_breathiness(
 
 
 def get_voicing(
+        config: dict,
         waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,
         *, hop_size=None, fft_size=None, win_size=None
@@ -149,6 +152,7 @@ def get_voicing(
     """
     if not isinstance(waveform, DecomposedWaveform):
         waveform = DecomposedWaveform(
+            config=config,
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
@@ -161,6 +165,7 @@ def get_voicing(
 
 
 def get_tension_base_harmonic(
+        config: dict,
         waveform: Union[np.ndarray, DecomposedWaveform],
         samplerate, f0, length,
         *, hop_size=None, fft_size=None, win_size=None,
@@ -182,6 +187,7 @@ def get_tension_base_harmonic(
     """
     if not isinstance(waveform, DecomposedWaveform):
         waveform = DecomposedWaveform(
+            config=config,
             waveform=waveform, samplerate=samplerate, f0=f0,
             hop_size=hop_size, fft_size=fft_size, win_size=win_size
         )
