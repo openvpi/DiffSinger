@@ -7,7 +7,7 @@ from modules.core.ddpm import MultiVarianceDiffusion
 from utils import filter_kwargs
 from utils.hparams import hparams
 
-VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension']
+VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension', 'falsetto']
 
 
 class ParameterAdaptorModule(torch.nn.Module):
@@ -18,6 +18,7 @@ class ParameterAdaptorModule(torch.nn.Module):
         self.predict_breathiness = hparams.get('predict_breathiness', False)
         self.predict_voicing = hparams.get('predict_voicing', False)
         self.predict_tension = hparams.get('predict_tension', False)
+        self.predict_falsetto = hparams.get('predict_falsetto', False)
         if self.predict_energy:
             self.variance_prediction_list.append('energy')
         if self.predict_breathiness:
@@ -26,6 +27,8 @@ class ParameterAdaptorModule(torch.nn.Module):
             self.variance_prediction_list.append('voicing')
         if self.predict_tension:
             self.variance_prediction_list.append('tension')
+        if self.predict_falsetto:
+            self.variance_prediction_list.append('falsetto')
         self.predict_variances = len(self.variance_prediction_list) > 0
 
     def build_adaptor(self, cls=MultiVarianceDiffusion):
@@ -61,6 +64,16 @@ class ParameterAdaptorModule(torch.nn.Module):
             clamps.append((
                 hparams['tension_logit_min'],
                 hparams['tension_logit_max']
+            ))
+
+        if self.predict_falsetto:
+            ranges.append((
+                hparams['falsetto_ratio_min'],
+                hparams['falsetto_ratio_max']
+            ))
+            clamps.append((
+                hparams['falsetto_ratio_min'],
+                hparams['falsetto_ratio_max']
             ))
 
         variances_hparams = hparams['variances_prediction_args']

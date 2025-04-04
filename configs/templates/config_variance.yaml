@@ -50,6 +50,7 @@ predict_energy: false
 predict_breathiness: false
 predict_voicing: false
 predict_tension: false
+predict_falsetto: false
 
 energy_db_min: -96.0
 energy_db_max: -12.0
@@ -62,6 +63,9 @@ voicing_db_max: -12.0
 
 tension_logit_min: -10.0
 tension_logit_max: 10.0
+
+falsetto_ratio_min: 0
+falsetto_ratio_max: 1
 
 enc_ffn_kernel_size: 3
 use_rope: true
