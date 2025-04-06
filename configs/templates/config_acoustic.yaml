@@ -76,10 +76,10 @@ T_start: 0.4
 T_start_infer: 0.4
 K_step: 300
 K_step_infer: 300
-backbone_type: 'lynxnet'
+backbone_type: 'asivo'
 backbone_args:
   num_channels: 1024
-  num_layers: 6
+  num_layers: 20
   kernel_size: 31
   dropout_rate: 0.0
   strong_cond: true
