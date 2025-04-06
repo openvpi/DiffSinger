@@ -1,11 +1,13 @@
 import torch.nn
 from modules.backbones.wavenet import WaveNet
 from modules.backbones.lynxnet import LYNXNet
+from modules.backbones.asivonet import AsivoNet
 from utils import filter_kwargs
 
 BACKBONES = {
     'wavenet': WaveNet,
-    'lynxnet': LYNXNet
+    'lynxnet': LYNXNet,
+    'asivonet': AsivoNet
 }
 
 
