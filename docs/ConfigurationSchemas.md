@@ -673,7 +673,7 @@ Size of TransformerFFNLayer convolution kernel size in FastSpeech2 encoder.
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>9</td>
+<tr><td align="center"><b>default</b></td><td>3</td>
 </tbody></table>
 
 ### enc_layers
@@ -1972,6 +1972,18 @@ Whether to enable melody encoder for the pitch predictor.
 ### use_pos_embed
 
 Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>boolean</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
+### use_rope
+
+Whether to use RoPE (Rotary Positional Encoding) in FastSpeech2 encoder.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
