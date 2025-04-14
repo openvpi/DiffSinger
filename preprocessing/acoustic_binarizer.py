@@ -218,7 +218,7 @@ class AcousticBinarizer(BaseBinarizer):
 
         if self.need_falsetto:
             # get ground truth falsetto
-            falsetto = get_falestto_base_harmonic(
+            falsetto = get_falsetto_base_harmonic(
                 dec_waveform, None, None, length=length
             )
 
