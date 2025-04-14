@@ -215,7 +215,7 @@ def get_falsetto_base_harmonic(
         *, hop_size=None, fft_size=None, win_size=None
 ):
     """
-    Definition of falestto: Attenuation ratio from the second harmonic to the fourth harmonic (H2 / (H2 + H4)).
+    Definition of falsetto: Attenuation ratio from the second harmonic to the fourth harmonic (H2 / (H2 + H4)).
     Refer to : ACOUSTIC MEASURES OF FALSETTO VOICE (DOI:10.1121/1.4877544)
     :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
     :param samplerate: sampling rate
@@ -224,7 +224,7 @@ def get_falsetto_base_harmonic(
     :param hop_size: Frame width, in number of samples
     :param fft_size: Number of fft bins
     :param win_size: Window size, in number of samples
-    :return: falestto
+    :return: falsetto
     """
     if not isinstance(waveform, DecomposedWaveform):
         waveform = DecomposedWaveform(
@@ -243,9 +243,9 @@ def get_falsetto_base_harmonic(
         hop_size=waveform.hop_size, win_size=waveform.win_size,
         domain='amplitude'
     )
-    falestto = energy_h2 / (energy_h2 + energy_h4 + 1e-5)
-    falestto = np.clip(falestto, a_min=0, a_max=1)
-    return falestto
+    falsetto = energy_h2 / (energy_h2 + energy_h4 + 1e-5)
+    falsetto = np.clip(falsetto, a_min=0, a_max=1)
+    return falsetto
 
 
 class SinusoidalSmoothingConv1d(torch.nn.Conv1d):
