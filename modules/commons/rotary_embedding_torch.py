@@ -306,15 +306,16 @@ class RotaryEmbedding(Module):
             exists(self.cached_freqs) and \
             (offset + seq_len) <= self.cached_freqs_seq_len
         ):
-            return self.cached_freqs[offset:(offset + seq_len)].detach()
+            freqs = self.cached_freqs[offset:(offset + seq_len)].detach()
+        else:
+            freqs = self.freqs
 
-        freqs = self.freqs
+            freqs = einsum('..., f -> ... f', t.type(freqs.dtype), freqs)
+            freqs = repeat(freqs, '... n -> ... (n r)', r = 2)
 
-        freqs = einsum('..., f -> ... f', t.type(freqs.dtype), freqs)
-        freqs = repeat(freqs, '... n -> ... (n r)', r = 2)
+            if should_cache and offset == 0:
+                self.cached_freqs[:seq_len] = freqs.detach()
+                self.cached_freqs_seq_len = seq_len
 
-        if should_cache and offset == 0:
-            self.cached_freqs[:seq_len] = freqs.detach()
-            self.cached_freqs_seq_len = seq_len
-
+        freqs = freqs + 0. * self.freqs.sum()
         return freqs
