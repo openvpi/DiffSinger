@@ -28,6 +28,7 @@ from utils.binarizer_utils import (
     get_breathiness,
     get_voicing,
     get_tension_base_harmonic,
+    get_falsetto_base_harmonic,
 )
 from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
@@ -44,6 +45,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'breathiness',
     'voicing',
     'tension',
+    'falsetto',
     'key_shift',
     'speed',
 ]
@@ -53,6 +55,7 @@ energy_smooth: SinusoidalSmoothingConv1d = None
 breathiness_smooth: SinusoidalSmoothingConv1d = None
 voicing_smooth: SinusoidalSmoothingConv1d = None
 tension_smooth: SinusoidalSmoothingConv1d = None
+falsetto_smooth: SinusoidalSmoothingConv1d = None
 
 
 class AcousticBinarizer(BaseBinarizer):
@@ -63,6 +66,7 @@ class AcousticBinarizer(BaseBinarizer):
         self.need_breathiness = hparams['use_breathiness_embed']
         self.need_voicing = hparams['use_voicing_embed']
         self.need_tension = hparams['use_tension_embed']
+        self.need_falsetto = hparams['use_falsetto_embed']
         assert hparams['mel_base'] == 'e', (
             "Mel base must be set to \'e\' according to 2nd stage of the migration plan. "
             "See https://github.com/openvpi/DiffSinger/releases/tag/v2.3.0 for more details."
@@ -211,6 +215,21 @@ class AcousticBinarizer(BaseBinarizer):
                 return None
 
             processed_input['tension'] = tension.cpu().numpy()
+
+        if self.need_falsetto:
+            # get ground truth falsetto
+            falsetto = get_falestto_base_harmonic(
+                dec_waveform, None, None, length=length
+            )
+
+            global falsetto_smooth
+            if falsetto_smooth is None:
+                falsetto_smooth = SinusoidalSmoothingConv1d(
+                    round(hparams['falsetto_smooth_width'] / self.timestep)
+                ).eval().to(self.device)
+            falsetto = falsetto_smooth(torch.from_numpy(falsetto).to(self.device)[None])[0]
+
+            processed_input['falsetto'] = falsetto.cpu().numpy()
 
         if hparams['use_key_shift_embed']:
             processed_input['key_shift'] = 0.
