@@ -1,3 +1,4 @@
+import pathlib
 from typing import Annotated, Any, Dict, List, Literal, Union
 
 from pydantic import Field, field_validator
@@ -43,6 +44,10 @@ class DataSourceConfig(ConfigBaseModel):
         )
     })
     test_prefixes: List[str] = Field([])
+
+    @property
+    def raw_data_dir_resolved(self) -> pathlib.Path:
+        return pathlib.Path(self.raw_data_dir).resolve()
 
 
 # noinspection PyMethodParameters
@@ -197,6 +202,10 @@ class BinarizerConfig(ConfigBaseModel):
     augmentation: BinarizerAugmentationConfig = Field(..., json_schema_extra={
         "scope": ConfigurationScope.ACOUSTIC
     })
+
+    @property
+    def binary_data_dir_resolved(self) -> pathlib.Path:
+        return pathlib.Path(self.binary_data_dir).resolve()
 
 
 class LinguisticEncoderConfig(ConfigBaseModel):

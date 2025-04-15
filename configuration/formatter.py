@@ -130,7 +130,6 @@ class ModelFormatter:
 if __name__ == '__main__':
     # Example usage
     config = load_raw_config("resources/acoustic_v3.yaml")
-    config.pop("scope", None)
     config = BaseConfig.model_validate(config, scope=ConfigurationScope.ACOUSTIC)
     config.resolve()
     config.check()
