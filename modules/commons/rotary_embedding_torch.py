@@ -317,5 +317,6 @@ class RotaryEmbedding(Module):
                 self.cached_freqs[:seq_len] = freqs.detach()
                 self.cached_freqs_seq_len = seq_len
 
+        # Fix issue about 'find_unused_parameters' when DDP training.
         freqs = freqs + 0. * self.freqs.sum()
         return freqs
