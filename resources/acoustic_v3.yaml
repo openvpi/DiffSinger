@@ -1,0 +1,177 @@
+bases: ["resources/base_v3.yaml"]
+
+data:
+  dictionaries:
+    zh: "dictionaries/opencpop_extension.txt"
+    ja: "dictionaries/japanese_dict_full.txt"
+    en: "dictionaries/ds_cmudict-07b.txt"
+  extra_phonemes: ["EP"]
+  merged_phoneme_groups:
+    - ["zh/i", "ja/i", "en/iy"]
+    - ["SP", "ja/cl"]
+  sources:
+    - raw_data_dir: "data/qixuan_v4/raw"
+      speaker: qixuan
+      spk_id: 0
+      language: zh
+      test_prefixes:
+        - "DongWuSenLin_021"
+        - "HaoXiangAiZheGeShiJieA_001"
+    - raw_data_dir: "data/junninghua_v3_part1_glide/raw"
+      speaker: junninghua
+      spk_id: 1
+      language: zh
+    - raw_data_dir: "data/junninghua_v3_part2_glide/raw"
+      speaker: junninghua
+      spk_id: 1
+      language: zh
+
+binarizer:
+  binary_data_dir: "data/qixuan_v4/binary"
+  num_workers: 2
+  batch_size: 8
+  extractors:
+    pitch_extraction:
+      method: rmvpe
+      model_path: "resources/rmvpe/model.pt"
+      f0_min: 65
+      f0_max: 1100
+    harmonic_noise_separation:
+      method: vr
+      model_path: "resources/vr/model.pt"
+  features:
+    audio_sample_rate: 44100
+    hop_size: 512
+    fft_size: 2048
+    win_size: 2048
+    spectrogram:
+      type: mel
+      num_bins: 128
+      fmin: 40
+      fmax: 16000
+      vmin: -12
+      vmax: 0
+    energy:
+      used: true
+      smooth_width: 0.12
+    breathiness:
+      used: true
+      smooth_width: 0.12
+    voicing:
+      used: true
+      smooth_width: 0.12
+    tension:
+      used: true
+      smooth_width: 0.12
+  augmentation:
+    random_pitch_shifting:
+      enabled: true
+      range: [-5., 5.]
+      scale: 0.75
+    random_time_stretching:
+      enabled: true
+      range: [0.5, 2.]
+      scale: 0.75
+
+model:
+  encoder:
+    use_lang_id: true
+    num_lang: 3
+    use_spk_id: true
+    num_spk: 2
+    hidden_size: 256
+    linguistic_encoder:
+      arch: fs2
+      kwargs:
+        dropout: 0.1
+        use_pos_embed: true
+        num_layers: 4
+        num_heads: 2
+        ffn_kernel_size: 3
+        ffn_act: gelu
+        use_rope: true
+        rel_pos: true
+  embeddings:
+    use_energy_embed: false
+    use_breathiness_embed: false
+    use_voicing_embed: false
+    use_tension_embed: false
+    use_key_shift_embed: true
+    use_speed_embed: true
+  use_shallow_diffusion: true
+  aux_decoder:
+    arch: convnext
+    kwargs:
+      num_channels: 512
+      num_layers: 6
+      kernel_size: 7
+      dropout_rate: 0.1
+  decoder:
+    diffusion_type: reflow
+    time_scale_factor: 1000
+    sampling_algorithm: euler
+    sampling_steps: 20
+    backbone:
+      arch: lynxnet
+      kwargs:
+        num_channels: 1024
+        num_layers: 6
+        kernel_size: 31
+        dropout_rate: 0.0
+        strong_cond: true
+
+training:
+  batch_sampler:
+    max_batch_frames: 50000
+    max_batch_size: 64
+    frame_count_grid: 6
+  data_loader:
+    num_workers: 4
+    prefetch_factor: 2
+  optimizer:
+    cls: torch.optim.AdamW
+    kwargs:
+      lr: 0.0006
+      betas: [0.9, 0.98]
+      weight_decay: 0
+  lr_scheduler:
+    cls: torch.optim.lr_scheduler.StepLR
+    unit: "step"
+    kwargs:
+      step_size: 50000
+      gamma: 0.5
+  trainer:
+    unit: "step"
+    min_steps: 0
+    max_steps: 120000
+    min_epochs: 0
+    max_epochs: 1000
+    checkpoints:
+      - prefix: "model_ckpt_temp"
+        monitor: "unit"
+        save_top_k: 1
+        every_n_units: 2000
+        since_m_units: 0
+      - prefix: "model_ckpt_perm"
+        monitor: "unit"
+        save_top_k: -1
+        every_n_units: 20000
+        since_m_units: 80000
+      - prefix: "model_ckpt"
+        monitor: "metric"
+        expr: "total_loss"
+        save_top_k: 5
+        mode: "min"
+    accelerator: "auto"
+    devices: "auto"
+    num_nodes: 1
+    strategy:
+      name: "auto"
+      kwargs:
+        process_group_backend: nccl
+        find_unused_parameters: false
+    precision: "16-mixed"
+    val_every_n_units: 2000
+    log_every_n_steps: 1
+    num_sanity_val_steps: 1
+    accumulate_grad_batches: 1
