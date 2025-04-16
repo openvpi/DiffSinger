@@ -111,11 +111,11 @@ pitch_prediction_args:
 #   strong_cond: true
 
 variances_prediction_args:
-  total_repeat_bins: 48
+  total_repeat_bins: 64
   backbone_type: 'wavenet'
   backbone_args:
     num_layers: 10
-    num_channels: 192
+    num_channels: 256
     dilation_cycle_length: 4
 # backbone_type: 'lynxnet'
 # backbone_args:
