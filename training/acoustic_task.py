@@ -32,7 +32,7 @@ class AcousticDataset(BaseDataset):
         if hparams['use_tension_embed']:
             self.required_variances['tension'] = 0.0
         if hparams['use_falsetto_embed']:
-            self.required_variances['falsetto'] = 0.0
+            self.required_variances['falsetto_dev'] = 0.0
 
         self.need_key_shift = hparams['use_key_shift_embed']
         self.need_speed = hparams['use_speed_embed']
@@ -95,7 +95,7 @@ class AcousticTask(BaseTask):
         if hparams['use_tension_embed']:
             self.required_variances.append('tension')
         if hparams['use_falsetto_embed']:
-            self.required_variances.append('falsetto')
+            self.required_variances.append('falsetto_dev')
         super()._finish_init()
 
     def _build_model(self):
