@@ -33,6 +33,7 @@ predict_energy: false
 predict_breathiness: false
 predict_voicing: false
 predict_tension: false
+predict_falsetto: false
 
 enc_ffn_kernel_size: 3
 use_rope: true
@@ -85,6 +86,10 @@ voicing_smooth_width: 0.12
 tension_logit_min: -10.0
 tension_logit_max: 10.0
 tension_smooth_width: 0.12
+
+falsetto_ratio_min: 0
+falsetto_ratio_max: 1
+falsetto_smooth_width: 0.12
 
 variances_prediction_args:
   total_repeat_bins: 48
