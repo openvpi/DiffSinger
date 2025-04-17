@@ -114,9 +114,33 @@ class SwiGLU(nn.Module):
         # out, gate = x.chunk(2, dim=self.dim)
         # Using torch.split instead of chunk for ONNX export compatibility.
         out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
-        return out * F.silu(gate)
+        gate = F.silu(gate)
+        if x.dtype == torch.float16:
+            out_min, out_max = torch.aminmax(out.detach())
+            gate_min, gate_max = torch.aminmax(gate.detach())
+            max_abs_out = torch.max(-out_min, out_max).float()
+            max_abs_gate = torch.max(-gate_min, gate_max).float()
+            if max_abs_out * max_abs_gate > 1000:
+                return (out.float() * gate.float()).clamp(-1000, 1000).half()             
+        return out * gate
 
 
+class Conv1d(torch.nn.Conv1d):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        nn.init.kaiming_normal_(self.weight)
+
+
+class Transpose(nn.Module):
+    def __init__(self, dims):
+        super().__init__()
+        assert len(dims) == 2, 'dims must be a tuple of two dimensions'
+        self.dims = dims
+
+    def forward(self, x):
+        return x.transpose(*self.dims)
+        
+        
 class TransformerFFNLayer(nn.Module):
     def __init__(self, hidden_size, filter_size, kernel_size=1, dropout=0., act='gelu'):
         super().__init__()

@@ -77,13 +77,12 @@ T_start: 0.4
 T_start_infer: 0.4
 K_step: 300
 K_step_infer: 300
-backbone_type: 'lynxnet'
+backbone_type: 'lynxnet2'
 backbone_args:
   num_channels: 1024
   num_layers: 6
   kernel_size: 31
   dropout_rate: 0.0
-  strong_cond: true
 #backbone_type: 'wavenet'
 #backbone_args:
 #  num_channels: 512
@@ -103,20 +102,24 @@ shallow_diffusion_args:
 lambda_aux_mel_loss: 0.2
 
 optimizer_args:
+  optimizer_cls: modules.optimizer.muon.Muon_AdamW
   lr: 0.0006
+  muon_args:
+    weight_decay: 0.1
+  adamw_args:
+    weight_decay: 0.0
 lr_scheduler_args:
-  scheduler_cls: torch.optim.lr_scheduler.StepLR
-  step_size: 10000
-  gamma: 0.75
+  step_size: 5000
+  gamma: 0.8
 max_batch_frames: 50000
 max_batch_size: 64
-max_updates: 160000
+max_updates: 100000
 
 num_valid_plots: 10
 val_with_vocoder: true
 val_check_interval: 2000
 num_ckpt_keep: 5
-permanent_ckpt_start: 120000
-permanent_ckpt_interval: 20000
+permanent_ckpt_start: 60000
+permanent_ckpt_interval: 10000
 pl_trainer_devices: 'auto'
 pl_trainer_precision: '16-mixed'

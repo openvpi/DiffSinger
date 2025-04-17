@@ -46,7 +46,8 @@ class FastSpeech2Variance(nn.Module):
                 dropout_rate=dur_hparams['dropout'],
                 kernel_size=dur_hparams['kernel_size'],
                 offset=dur_hparams['log_offset'],
-                dur_loss_type=dur_hparams['loss_type']
+                dur_loss_type=dur_hparams['loss_type'],
+                arch=dur_hparams['arch']
             )
 
     def forward(
