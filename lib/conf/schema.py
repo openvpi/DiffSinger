@@ -174,6 +174,7 @@ class RandomPitchShiftingConfig(ConfigBaseModel):
     def check_range(cls, v):
         if len(v) != 2 or v[0] >= v[1] or v[0] >= 0 or v[1] <= 0:
             raise ValueError("Pitch shifting range must be in the form of (min, max) where min < 0 < max.")
+        return v
 
 
 # noinspection PyMethodParameters
@@ -186,6 +187,7 @@ class RandomTimeStretchingConfig(ConfigBaseModel):
     def check_range(cls, v):
         if len(v) != 2 or v[0] >= v[1] or v[0] <= 0 or v[1] <= 0:
             raise ValueError("Time stretching range must be in the form of (min, max) where 0 < min < max.")
+        return v
 
 
 class BinarizerAugmentationConfig(ConfigBaseModel):
@@ -196,7 +198,6 @@ class BinarizerAugmentationConfig(ConfigBaseModel):
 class BinarizerConfig(ConfigBaseModel):
     binary_data_dir: str = Field(...)
     num_workers: int = Field(0, ge=0)
-    batch_size: int = Field(8, gt=0)
     extractors: BinarizerExtractorsConfig = Field(...)
     features: BinarizerFeaturesConfig = Field(...)
     augmentation: BinarizerAugmentationConfig = Field(..., json_schema_extra={
@@ -407,7 +408,7 @@ class TrainingConfig(ConfigBaseModel):
     trainer: TrainerConfig = Field(...)
 
 
-class BaseConfig(ConfigBaseModel):
+class RootConfig(ConfigBaseModel):
     data: DataConfig = Field(...)
     binarizer: BinarizerConfig = Field(...)
     model: ModelConfig = Field(...)

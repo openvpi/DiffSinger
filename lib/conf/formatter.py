@@ -2,8 +2,8 @@ from typing import Any, List, Optional, Tuple
 
 from pydantic import BaseModel
 
-from configuration.io import load_raw_config
-from configuration.schema import ConfigurationScope, BaseConfig
+from lib.conf.io import load_raw_config
+from lib.conf.schema import ConfigurationScope, RootConfig
 
 
 class ModelFormatter:
@@ -130,7 +130,7 @@ class ModelFormatter:
 if __name__ == '__main__':
     # Example usage
     config = load_raw_config("resources/acoustic_v3.yaml")
-    config = BaseConfig.model_validate(config, scope=ConfigurationScope.ACOUSTIC)
+    config = RootConfig.model_validate(config, scope=ConfigurationScope.ACOUSTIC)
     config.resolve()
     config.check()
     formatter = ModelFormatter(line_width=120, indent=4)
