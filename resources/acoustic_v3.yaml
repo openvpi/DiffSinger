@@ -2,10 +2,10 @@ bases: ["resources/base_v3.yaml"]
 
 data:
   dictionaries:
-    zh: "dictionaries/opencpop_extension.txt"
+    zh: "dictionaries/opencpop-extension.txt"
     ja: "dictionaries/japanese_dict_full.txt"
     en: "dictionaries/ds_cmudict-07b.txt"
-  extra_phonemes: ["EP"]
+  extra_phonemes: ["EP", "ja/cl"]
   merged_phoneme_groups:
     - ["zh/i", "ja/i", "en/iy"]
     - ["SP", "ja/cl"]
@@ -28,17 +28,16 @@ data:
 
 binarizer:
   binary_data_dir: "data/qixuan_v4/binary"
-  num_workers: 2
-  batch_size: 8
+  num_workers: 4
   extractors:
     pitch_extraction:
       method: rmvpe
-      model_path: "resources/rmvpe/model.pt"
+      model_path: "checkpoints/rmvpe0917/model.pt"
       f0_min: 65
       f0_max: 1100
     harmonic_noise_separation:
       method: vr
-      model_path: "resources/vr/model.pt"
+      model_path: "checkpoints/vr/model.pt"
   features:
     audio_sample_rate: 44100
     hop_size: 512
