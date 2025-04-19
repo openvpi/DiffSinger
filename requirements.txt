@@ -3,6 +3,7 @@
 # See instructions at https://pytorch.org/get-started/locally/
 
 click
+dask
 einops>=0.7.0
 h5py
 librosa<0.10.0
