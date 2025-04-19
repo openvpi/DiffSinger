@@ -32,12 +32,12 @@ binarizer:
   extractors:
     pitch_extraction:
       method: rmvpe
-      model_path: "checkpoints/rmvpe0917/model.pt"
+      model_path: "assets/rmvpe/model.pt"
       f0_min: 65
       f0_max: 1100
     harmonic_noise_separation:
       method: vr
-      model_path: "checkpoints/vr/model.pt"
+      model_path: "assets/vr/model.pt"
   features:
     audio_sample_rate: 44100
     hop_size: 512
