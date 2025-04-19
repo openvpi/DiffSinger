@@ -1,11 +1,15 @@
 from typing import Dict
 
 import numpy as np
-import pyworld as pw
 import torch
-from torch.nn import functional as F
 
-from modules.hnsep.vr import load_sep_model
+from lib.feature.binarizer_utils import (
+    world_analyze,
+    world_synthesize_harmonics,
+    world_synthesize_aperiodic,
+    get_kth_harmonic
+)
+from modules.vr import load_sep_model
 from utils import hparams
 from utils.pitch_utils import interp_f0
 
@@ -54,6 +58,9 @@ class DecomposedWaveform:
     def win_size(self):
         raise NotImplementedError()
 
+    def waveform(self) -> np.ndarray:
+        raise NotImplementedError()
+
     def harmonic(self, k: int = None) -> np.ndarray:
         raise NotImplementedError()
 
@@ -80,7 +87,6 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         self._half_width = base_harmonic_radius
         self._device = ('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
         # intermediate variables
-        self._f0_world = None
         self._sp = None
         self._ap = None
         # final components
@@ -105,29 +111,10 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         return self._win_size
 
     def _world_extraction(self):
-        # Add a tiny noise to the signal to avoid NaN results of D4C in rare edge cases
-        # References:
-        #   - https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder/issues/50
-        #   - https://github.com/mmorise/World/issues/116
-        x = self._waveform.astype(np.double) + np.random.randn(*self._waveform.shape) * 1e-5
-        samplerate = self._samplerate
-        f0 = self._f0.astype(np.double)
-
-        hop_size = self._hop_size
-        fft_size = self._fft_size
-
-        wav_frames = (x.shape[0] + hop_size - 1) // hop_size
-        f0_frames = f0.shape[0]
-        if f0_frames < wav_frames:
-            f0 = np.pad(f0, (0, wav_frames - f0_frames), mode='constant', constant_values=(f0[0], f0[-1]))
-        elif f0_frames > wav_frames:
-            f0 = f0[:wav_frames]
-
-        time_step = hop_size / samplerate
-        t = np.arange(0, wav_frames) * time_step
-        self._f0_world = f0
-        self._sp = pw.cheaptrick(x, f0, t, samplerate, fft_size=fft_size)  # extract smoothed spectrogram
-        self._ap = pw.d4c(x, f0, t, samplerate, fft_size=fft_size)  # extract aperiodicity
+        self._sp, self._ap = world_analyze(
+            self._waveform, self._f0,
+            samplerate=self._samplerate, hop_size=self._hop_size, fft_size=self._fft_size
+        )
 
     def _kth_harmonic(self, k: int) -> np.ndarray:
         """
@@ -138,59 +125,21 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         if k in self._harmonics:
             return self._harmonics[k]
 
-        hop_size = self._hop_size
-        win_size = self._win_size
-        samplerate = self._samplerate
-        half_width = self._half_width
-        device = self._device
-
-        waveform = torch.from_numpy(self.harmonic()).unsqueeze(0).to(device)  # [B, n_samples]
-        n_samples = waveform.shape[1]       
-        f0 = self._f0 * (k + 1)
-        pad_size = int(n_samples // hop_size) - len(f0) + 1
-        if pad_size > 0:
-            f0 = np.pad(f0, (0, pad_size), mode='constant', constant_values=(f0[0], f0[-1]))
-        
-        f0, _ = interp_f0(f0, uv=f0 == 0)
-        f0 = torch.from_numpy(f0).to(device)[None, :, None]  # [B, n_frames, 1]
-        n_f0_frames = f0.shape[1]
-
-        phase = torch.arange(win_size, dtype=waveform.dtype, device=device) / win_size * 2 * np.pi
-        nuttall_window = (
-                0.355768
-                - 0.487396 * torch.cos(phase)
-                + 0.144232 * torch.cos(2 * phase)
-                - 0.012604 * torch.cos(3 * phase)
+        f0, _ = interp_f0(self._f0, uv=self._f0 == 0)
+        self._harmonics[k] = get_kth_harmonic(
+            self.harmonic(), f0, k,
+            samplerate=self._samplerate, hop_size=self._hop_size, win_size=self._win_size,
+            kth_harmonic_radius=self._half_width, device=self._device
         )
-        spec = torch.stft(
-            waveform,
-            n_fft=win_size,
-            win_length=win_size,
-            hop_length=hop_size,
-            window=nuttall_window,
-            center=True,
-            return_complex=True
-        ).permute(0, 2, 1)  # [B, n_frames, n_spec]
-        n_spec_frames, n_specs = spec.shape[1:]
-        idx = torch.arange(n_specs).unsqueeze(0).unsqueeze(0).to(f0)  # [1, 1, n_spec]
-        center = f0 * win_size / samplerate
-        start = torch.clip(center - half_width, min=0)
-        end = torch.clip(center + half_width, max=n_specs)
-        idx_mask = (center >= 1) & (idx >= start) & (idx < end)  # [B, n_frames, n_spec]
-        if n_f0_frames < n_spec_frames:
-            idx_mask = F.pad(idx_mask, [0, 0, 0, n_spec_frames - n_f0_frames])
-        spec = spec * idx_mask[:, :n_spec_frames, :]
-        self._harmonics[k] = torch.istft(
-            spec.permute(0, 2, 1),
-            n_fft=win_size,
-            win_length=win_size,
-            hop_length=hop_size,
-            window=nuttall_window,
-            center=True,
-            length=n_samples
-        ).squeeze(0).cpu().numpy()
 
         return self._harmonics[k]
+
+    def waveform(self) -> np.ndarray:
+        """
+        Get the original waveform.
+        :return: waveform float32[T]
+        """
+        return self._waveform
 
     def harmonic(self, k: int = None) -> np.ndarray:
         """
@@ -205,12 +154,10 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         if self._sp is None or self._ap is None:
             self._world_extraction()
         # noinspection PyAttributeOutsideInit
-        self._harmonic_part = pw.synthesize(
-            self._f0_world,
-            np.clip(self._sp * (1 - self._ap * self._ap), a_min=1e-16, a_max=None),  # clip to avoid zeros
-            np.zeros_like(self._ap),
-            self._samplerate, frame_period=self._time_step * 1000
-        ).astype(np.float32)  # synthesize the harmonic part using the parameters
+        self._harmonic_part = world_synthesize_harmonics(
+            self._f0, self._sp, self._ap,
+            samplerate=self._samplerate, time_step=self._time_step
+        )
         return self._harmonic_part
 
     def aperiodic(self) -> np.ndarray:
@@ -223,10 +170,10 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         if self._sp is None or self._ap is None:
             self._world_extraction()
         # noinspection PyAttributeOutsideInit
-        self._aperiodic_part = pw.synthesize(
-            self._f0_world, self._sp * self._ap * self._ap, np.ones_like(self._ap),
-            self._samplerate, frame_period=self._time_step * 1000
-        ).astype(np.float32)  # synthesize the aperiodic part using the parameters
+        self._aperiodic_part = world_synthesize_aperiodic(
+            self._f0, self._sp, self._ap,
+            samplerate=self._samplerate, time_step=self._time_step
+        )
         return self._aperiodic_part
 
 

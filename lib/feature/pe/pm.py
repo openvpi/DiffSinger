@@ -1,5 +1,5 @@
 from basics.base_pe import BasePE
-from utils.binarizer_utils import get_pitch_parselmouth
+from lib.feature.binarizer_utils import get_pitch_parselmouth
 
 
 class ParselmouthPE(BasePE):

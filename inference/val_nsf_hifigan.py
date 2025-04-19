@@ -8,7 +8,7 @@ import torch
 import torchcrepe
 import tqdm
 
-from utils.binarizer_utils import get_pitch_parselmouth, get_mel_torch
+from lib.feature.binarizer_utils import get_pitch_parselmouth, get_mel_torch
 from modules.vocoders.nsf_hifigan import NsfHifiGAN
 from utils.infer_utils import save_wav
 from utils.hparams import set_hparams, hparams

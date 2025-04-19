@@ -3,6 +3,8 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+
+from lib.functional import mel2ph_to_dur
 from modules.commons.rotary_embedding_torch import RotaryEmbedding
 from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
@@ -339,15 +341,6 @@ class StretchRegulator(torch.nn.Module):
         stretch_denorm = torch.cumsum(stretch_delta, dim=1)
         stretch = stretch_denorm / mel2dur
         return stretch * (mel2ph > 0)
-
-
-def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
-    B, _ = mel2ph.shape
-    dur = mel2ph.new_zeros(B, T_txt + 1).scatter_add(1, mel2ph, torch.ones_like(mel2ph))
-    dur = dur[:, 1:]
-    if max_dur is not None:
-        dur = dur.clamp(max=max_dur)
-    return dur
 
 
 class FastSpeech2Encoder(nn.Module):

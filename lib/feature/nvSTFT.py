@@ -4,8 +4,8 @@ os.environ["LRU_CACHE_CAPACITY"] = "3"
 import torch
 import torch.utils.data
 import numpy as np
-from librosa.filters import mel as librosa_mel_fn
 import torch.nn.functional as F
+from librosa.filters import mel as librosa_mel_fn
 
 
 def dynamic_range_compression(x, C=1, clip_val=1e-5):

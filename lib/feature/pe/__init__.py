@@ -2,7 +2,7 @@ from utils import hparams
 
 from .pm import ParselmouthPE
 from .pw import HarvestPE
-from .rmvpe import RMVPE
+from modules.rmvpe import RMVPE
 
 
 def initialize_pe():

@@ -12,16 +12,16 @@ from scipy import interpolate
 from basics.base_binarizer import BaseBinarizer, BinarizationError
 from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.pe import initialize_pe
-from utils.binarizer_utils import (
+from lib.feature.pe import initialize_pe
+from lib.feature.binarizer_utils import (
     SinusoidalSmoothingConv1d,
-    get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness,
     get_voicing,
     get_tension_base_harmonic,
 )
-from utils.decomposed_waveform import DecomposedWaveform
+from lib.functional import dur_to_mel2ph
+from lib.feature.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.pitch_utils import interp_f0
@@ -280,8 +280,8 @@ class VarianceBinarizer(BaseBinarizer):
         ph_dur = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
         processed_input['ph_dur'] = ph_dur.cpu().numpy()
 
-        mel2ph = get_mel2ph_torch(
-            self.lr, ph_dur_sec, length, self.timestep, device=self.device
+        mel2ph = dur_to_mel2ph(
+            self.lr, ph_dur_sec, length, self.timestep
         )
 
         if hparams['predict_pitch'] or self.predict_variances:
@@ -352,8 +352,8 @@ class VarianceBinarizer(BaseBinarizer):
             note_dur = torch.diff(note_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
             processed_input['note_dur'] = note_dur.cpu().numpy()
 
-            mel2note = get_mel2ph_torch(
-                self.lr, note_dur_sec, mel2ph.shape[0], self.timestep, device=self.device
+            mel2note = dur_to_mel2ph(
+                self.lr, note_dur_sec, mel2ph.shape[0], self.timestep
             )
             processed_input['mel2note'] = mel2note.cpu().numpy()
 

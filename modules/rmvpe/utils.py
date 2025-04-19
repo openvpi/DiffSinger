@@ -20,7 +20,7 @@ def to_local_average_f0(hidden, center=None, thred=0.03):
     f0 = 10 * 2 ** (cents / 1200)
     uv = hidden.max(dim=2)[0] < thred  # [B, T]
     f0 = f0 * ~uv
-    return f0.squeeze(0).cpu().numpy()
+    return f0.cpu().numpy()
 
 
 def to_viterbi_f0(hidden, thred=0.03):
@@ -32,12 +32,12 @@ def to_viterbi_f0(hidden, thred=0.03):
         to_viterbi_f0.transition = transition
 
     # Convert to probability
-    prob = hidden.squeeze(0).cpu().numpy()
-    prob = prob.T
-    prob = prob / prob.sum(axis=0)
+    prob = hidden.cpu().numpy()
+    prob = prob.swapaxes(1, 2)
+    prob = prob / prob.sum(axis=1)
 
     # Perform viterbi decoding
     path = librosa.sequence.viterbi(prob, to_viterbi_f0.transition).astype(np.int64)
-    center = torch.from_numpy(path).unsqueeze(0).unsqueeze(-1).to(hidden.device)
+    center = torch.from_numpy(path).unsqueeze(-1).to(hidden.device)
 
     return to_local_average_f0(hidden, center=center, thred=thred)
