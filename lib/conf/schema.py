@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 from .core import ConfigBaseModel
 from .ops import (
     ConfigOperationBase, ConfigOperationContext, split_path,
-    ref, this, or_, not_, in_, len_, set_, max_, map_
+    ref, this, or_, not_, in_, len_, set_, max_, map_, ctx, if_, exists
 )
 
 
@@ -33,6 +33,14 @@ class DynamicCheck:
             )
 
 
+class RequiredOnGivenScope(DynamicCheck):
+    def __init__(self, scope_mask: int):
+        super().__init__(
+            expr=if_(ctx("scope") & scope_mask, exists(this()), True),
+            message="Field required."
+        )
+
+
 class DataSourceConfig(ConfigBaseModel):
     raw_data_dir: str = Field(...)
     speaker: str = Field(...)
@@ -55,6 +63,9 @@ class DataConfig(ConfigBaseModel):
     dictionaries: Dict[str, str] = Field(...)
     extra_phonemes: List[str] = Field(...)
     merged_phoneme_groups: List[List[str]] = Field(...)
+    glide_tags: List[Literal["up", "down"]] = Field(["up", "down"], max_length=2, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
     sources: List[DataSourceConfig] = Field(..., min_length=1)
 
     @field_validator("dictionaries")
@@ -77,6 +88,14 @@ class DataConfig(ConfigBaseModel):
     def spk_map(self) -> Dict[str, int]:
         spk_map = DataConfig._check_and_build_spk_map(self.sources)
         return spk_map
+
+    @property
+    def glide_map(self) -> Dict[str, int]:
+        glide_map = {
+            "none": 0,
+            **{typename: idx for idx, typename in enumerate(self.glide_tags, start=1)}
+        }
+        return glide_map
 
     @staticmethod
     def _check_and_build_spk_map(sources: List[DataSourceConfig]):
@@ -155,13 +174,20 @@ class BinarizerFeaturesConfig(ConfigBaseModel):
     hop_size: int = Field(512, gt=0)
     fft_size: int = Field(2048, gt=0)
     win_size: int = Field(2048, gt=0)
-    spectrogram: SpectrogramConfig = Field(..., json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC
+    spectrogram: SpectrogramConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
     })
     energy: CurveParameterConfig = Field(...)
     breathiness: CurveParameterConfig = Field(...)
     voicing: CurveParameterConfig = Field(...)
     tension: CurveParameterConfig = Field(...)
+
+
+class BinarizerMIDIConfig(ConfigBaseModel):
+    used: bool = Field(...)
+    with_glide: bool = Field(False)
+    smooth_width: float = Field(0.06, gt=0)
 
 
 # noinspection PyMethodParameters
@@ -172,7 +198,7 @@ class RandomPitchShiftingConfig(ConfigBaseModel):
 
     @field_validator("range")
     def check_range(cls, v):
-        if len(v) != 2 or v[0] >= v[1] or v[0] >= 0 or v[1] <= 0:
+        if len(v) != 2 or v[0] >= 0 or v[1] <= 0:
             raise ValueError("Pitch shifting range must be in the form of (min, max) where min < 0 < max.")
         return v
 
@@ -185,7 +211,7 @@ class RandomTimeStretchingConfig(ConfigBaseModel):
 
     @field_validator("range")
     def check_range(cls, v):
-        if len(v) != 2 or v[0] >= v[1] or v[0] <= 0 or v[1] <= 0:
+        if len(v) != 2 or v[0] <= 0 or v[0] >= v[1]:
             raise ValueError("Time stretching range must be in the form of (min, max) where 0 < min < max.")
         return v
 
@@ -198,10 +224,18 @@ class BinarizerAugmentationConfig(ConfigBaseModel):
 class BinarizerConfig(ConfigBaseModel):
     binary_data_dir: str = Field(...)
     num_workers: int = Field(0, ge=0)
+    prefer_ds: bool = Field(False, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
     extractors: BinarizerExtractorsConfig = Field(...)
     features: BinarizerFeaturesConfig = Field(...)
-    augmentation: BinarizerAugmentationConfig = Field(..., json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC
+    augmentation: BinarizerAugmentationConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
+    })
+    midi: BinarizerMIDIConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
     })
 
     @property
@@ -298,38 +332,49 @@ class AuxDecoderConfig(ConfigBaseModel):
     kwargs: Dict[str, Any] = Field({})
 
 
-class DecoderBackboneConfig(ConfigBaseModel):
-    input_dim: int = Field(None, json_schema_extra={
+class DiffusionBackboneConfig(ConfigBaseModel):
+    condition_dim: int = Field(None, json_schema_extra={
         "dynamic_expr": ref("model.encoder.hidden_size")
     })
-    output_dim: int = Field(None, json_schema_extra={
+    sample_dim: int = Field(None, json_schema_extra={
         "dynamic_expr": ref("binarizer.features.spectrogram.num_bins")
     })
     arch: Literal["wavenet", "lynxnet"] = Field("wavenet")
     kwargs: Dict[str, Any] = Field(...)
 
 
-class DecoderConfig(ConfigBaseModel):
+class DiffusionConfig(ConfigBaseModel):
     diffusion_type: Literal["reflow"] = Field("reflow")
     time_scale_factor: int = Field(1000, gt=0)
     sampling_algorithm: Literal["euler", "rk2", "rk4", "rk5"] = Field("euler")
     sampling_steps: int = Field(20, gt=0)
-    backbone: DecoderBackboneConfig = Field(...)
+    backbone: DiffusionBackboneConfig = Field(...)
 
 
 class ModelConfig(ConfigBaseModel):
     encoder: EncoderConfig = Field(...)
-    embeddings: EmbeddingsConfig = Field(..., json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC
+    embeddings: EmbeddingsConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
     })
     use_shallow_diffusion: bool = Field(True, json_schema_extra={
         "scope": ConfigurationScope.ACOUSTIC
     })
-    aux_decoder: AuxDecoderConfig = Field(..., json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC
+    aux_decoder: AuxDecoderConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
     })
-    decoder: DecoderConfig = Field(..., json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC
+    decoder: DiffusionConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
+    })
+    pitch_predictor: DiffusionConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
+    })
+    variance_predictor: DiffusionConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
     })
 
 
@@ -422,7 +467,7 @@ class RootConfig(ConfigBaseModel):
         """
         for field_name, field_info in type(current).model_fields.items():
             field_scope = current.__field_scopes__.get(field_name)
-            if field_scope is not None and not field_scope & context.scope_mask:
+            if field_scope is not None and not field_scope & context.scope:
                 continue
             context.current_path.append(field_name)
             value = getattr(current, field_name)
@@ -451,7 +496,7 @@ class RootConfig(ConfigBaseModel):
         """
         for field_name, field_info in type(current).model_fields.items():
             field_scope = current.__field_scopes__.get(field_name)
-            if field_scope is not None and not field_scope & context.scope_mask:
+            if field_scope is not None and not field_scope & context.scope:
                 continue
             context.current_path.append(field_name)
             value = getattr(current, field_name)
@@ -495,7 +540,7 @@ class RootConfig(ConfigBaseModel):
             root=self,
             current_path=parts,
             current_value=current,
-            scope_mask=scope
+            scope=scope
         )
         f(current, context)
 

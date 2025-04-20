@@ -127,12 +127,18 @@ class ModelFormatter:
         return result
 
 
-if __name__ == '__main__':
+def main(path, scope):
     # Example usage
-    config = load_raw_config("configs/acoustic_v3.yaml")
-    config = RootConfig.model_validate(config, scope=ConfigurationScope.ACOUSTIC)
-    config.resolve()
-    config.check()
+    config = load_raw_config(path)
+    config = RootConfig.model_validate(config, scope=scope)
+    config.resolve(scope_mask=scope)
+    config.check(scope_mask=scope)
     formatter = ModelFormatter(line_width=120, indent=4)
     formatted_str = formatter.format(config)
     print(formatted_str)
+
+
+if __name__ == '__main__':
+    # Example usage
+    main("configs/acoustic_v3.yaml", ConfigurationScope.ACOUSTIC)
+    main("configs/variance_v3.yaml", ConfigurationScope.VARIANCE)

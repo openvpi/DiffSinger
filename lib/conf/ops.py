@@ -44,11 +44,11 @@ def split_path(key: str) -> List[str]:
 
 
 class ConfigOperationContext:
-    def __init__(self, root: BaseModel, current_path: List[Union[str, int]], current_value, scope_mask: int):
+    def __init__(self, root: BaseModel, current_path: List[Union[str, int]], current_value, scope: int):
         self.root = root
         self.current_path = current_path
         self.current_value = current_value
-        self.scope_mask = scope_mask
+        self.scope = scope
 
 
 class ConfigOperationBase(abc.ABC):

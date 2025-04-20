@@ -1,0 +1,181 @@
+bases: ["configs/base_v3.yaml"]
+
+data:
+  dictionaries:
+    zh: "dictionaries/opencpop-extension.txt"
+    ja: "dictionaries/japanese_dict_full.txt"
+    en: "dictionaries/ds_cmudict-07b.txt"
+  extra_phonemes: ["EP", "ja/cl"]
+  merged_phoneme_groups:
+    - ["zh/i", "ja/i", "en/iy"]
+    - ["SP", "ja/cl"]
+  glide_tags: ["up", "down"]
+  sources:
+    - raw_data_dir: "data/qixuan_v4/raw"
+      speaker: qixuan
+      spk_id: 0
+      language: zh
+      test_prefixes:
+        - "DongWuSenLin_021"
+        - "HaoXiangAiZheGeShiJieA_001"
+    - raw_data_dir: "data/junninghua_v3_part1_glide/raw"
+      speaker: junninghua
+      spk_id: 1
+      language: zh
+    - raw_data_dir: "data/junninghua_v3_part2_glide/raw"
+      speaker: junninghua
+      spk_id: 1
+      language: zh
+
+binarizer:
+  binary_data_dir: "data/qixuan_v4/binary"
+  num_workers: 4
+  prefer_ds: false
+  extractors:
+    pitch_extraction:
+      method: rmvpe
+      model_path: "assets/rmvpe/model.pt"
+      f0_min: 65
+      f0_max: 1100
+    harmonic_noise_separation:
+      method: vr
+      model_path: "assets/vr/model.pt"
+  features:
+    audio_sample_rate: 44100
+    hop_size: 512
+    fft_size: 2048
+    win_size: 2048
+    energy:
+      used: true
+      smooth_width: 0.12
+    breathiness:
+      used: true
+      smooth_width: 0.12
+    voicing:
+      used: true
+      smooth_width: 0.12
+    tension:
+      used: true
+      smooth_width: 0.12
+  midi:
+    used: true
+    with_glide: false
+
+model:
+  encoder:
+    use_lang_id: true
+    num_lang: 3
+    use_spk_id: true
+    num_spk: 2
+    hidden_size: 256
+    linguistic_encoder:
+      arch: fs2
+      kwargs:
+        dropout: 0.1
+        use_pos_embed: true
+        num_layers: 4
+        num_heads: 2
+        ffn_kernel_size: 3
+        ffn_act: gelu
+        use_rope: true
+        rel_pos: true
+    melody_encoder:
+      arch: fs2
+      embedding_dim: 128
+      kwargs:
+        dropout: 0.1
+        use_pos_embed: true
+        num_layers: 4
+        num_heads: 2
+        ffn_kernel_size: 3
+        ffn_act: gelu
+        use_rope: true
+        rel_pos: true
+  predictions:
+    predict_pitch: true
+    predict_energy: true
+    predict_breathiness: true
+    predict_voicing: true
+    predict_tension: true
+  pitch_predictor:
+    diffusion_type: reflow
+    time_scale_factor: 1000
+    sampling_algorithm: euler
+    sampling_steps: 20
+    backbone:
+      arch: lynxnet
+      kwargs:
+        num_channels: 1024
+        num_layers: 6
+        kernel_size: 31
+        dropout_rate: 0.0
+        strong_cond: true
+  variance_predictor:
+    diffusion_type: reflow
+    time_scale_factor: 1000
+    sampling_algorithm: euler
+    sampling_steps: 20
+    backbone:
+      arch: lynxnet
+      kwargs:
+        num_channels: 1024
+        num_layers: 6
+        kernel_size: 31
+        dropout_rate: 0.0
+        strong_cond: true
+
+training:
+  batch_sampler:
+    max_batch_frames: 50000
+    max_batch_size: 64
+    frame_count_grid: 6
+  data_loader:
+    num_workers: 4
+    prefetch_factor: 2
+  optimizer:
+    cls: torch.optim.AdamW
+    kwargs:
+      lr: 0.0006
+      betas: [0.9, 0.98]
+      weight_decay: 0
+  lr_scheduler:
+    cls: torch.optim.lr_scheduler.StepLR
+    unit: "step"
+    kwargs:
+      step_size: 50000
+      gamma: 0.5
+  trainer:
+    unit: "step"
+    min_steps: 0
+    max_steps: 120000
+    min_epochs: 0
+    max_epochs: 1000
+    checkpoints:
+      - prefix: "model_ckpt_temp"
+        monitor: "unit"
+        save_top_k: 1
+        every_n_units: 2000
+        since_m_units: 0
+      - prefix: "model_ckpt_perm"
+        monitor: "unit"
+        save_top_k: -1
+        every_n_units: 20000
+        since_m_units: 80000
+      - prefix: "model_ckpt"
+        monitor: "metric"
+        expr: "total_loss"
+        save_top_k: 5
+        mode: "min"
+    accelerator: "auto"
+    devices: "auto"
+    num_nodes: 1
+    strategy:
+      name: "auto"
+      kwargs:
+        process_group_backend: nccl
+        find_unused_parameters: false
+    precision: "16-mixed"
+    val_every_n_units: 2000
+    log_every_n_steps: 1
+    num_sanity_val_steps: 1
+    accumulate_grad_batches: 1
