@@ -158,7 +158,6 @@ class BaseBinarizer(abc.ABC):
             self.train_items.append(item)
 
     def check_coverage(self):
-        return
         # TODO refactor this
         # Group by phonemes in the dictionary.
         ph_idx_required = set(range(1, len(self.phoneme_dictionary)))

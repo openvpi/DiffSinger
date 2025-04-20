@@ -106,6 +106,11 @@ class VarianceBinarizer(BaseBinarizer):
                     else:
                         note_midi.append(librosa.note_to_midi(note, round_midi=False))
                         note_rest.append(False)
+                if all(note_rest):
+                    raise ValueError(
+                        f"All-rest note sequence found in raw dataset '{raw_data_dir.as_posix()}':\n"
+                        f"item '{item_name}', note_seq '{' '.join(note_text)}'"
+                    )
                 note_dur = []
                 for dur in transcription["note_dur"].split():
                     dur_float = float(dur)
