@@ -9,17 +9,14 @@ import tqdm
 from lib.conf.schema import DataConfig, BinarizerConfig
 from lib.conf.schema import DataSourceConfig
 from lib.feature.binarizer_utils import (
-    SinusoidalSmoothingConv1d,
-    get_mel_torch,
     get_pitch_parselmouth,
     get_pitch_harvest,
     get_energy_librosa,
-    world_analyze,
-    world_synthesize_harmonics,
-    world_synthesize_aperiodic,
-    get_kth_harmonic,
-    get_tension,
+    get_tension, SinusoidalSmoothingConv1d,
 )
+from lib.feature.decomposed_waveform import world_analyze, world_synthesize_harmonics, world_synthesize_aperiodic, \
+    get_kth_harmonic
+from lib.feature.mel_spec import StretchableMelSpectrogram
 from lib.functional import dur_to_mel2ph
 from modules.fastspeech.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
@@ -69,6 +66,7 @@ class BaseBinarizer(abc.ABC):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.lr = LengthRegulator()
         # Lazy-initialized modules
+        self.mel_spec = None
         self.rmvpe = None
         self.hn_sep_model = None
         self.smooth_fns = {}
@@ -156,6 +154,7 @@ class BaseBinarizer(abc.ABC):
         PyTorch modules have some parameter copying issues during multiprocessing.
         To avoid this, we need to free the lazy-initialized modules before starting new processes.
         """
+        self.mel_spec = None
         self.rmvpe = None
         self.hn_sep_model = None
         self.smooth_fns.clear()
@@ -254,26 +253,28 @@ class BaseBinarizer(abc.ABC):
         return self.smooth_fns[smooth_fn_name](torch.from_numpy(curve)[None].to(self.device))[0].cpu().numpy()
 
     @dask.delayed(nout=2)
+    @torch.no_grad()
     def get_mel(self, waveform: numpy.ndarray, shift: float = 0., speed: float = 1.):
-        mel = get_mel_torch(
-            waveform,
-            self.config.features.audio_sample_rate,
-            num_mel_bins=self.config.features.spectrogram.num_bins,
-            hop_size=self.config.features.hop_size,
-            win_size=self.config.features.win_size,
-            fft_size=self.config.features.fft_size,
-            fmin=self.config.features.spectrogram.fmin,
-            fmax=self.config.features.spectrogram.fmax,
-            keyshift=shift,
-            speed=speed,
-            device=self.device
-        )
+        if self.mel_spec is None:
+            self.mel_spec = StretchableMelSpectrogram(
+                sample_rate=self.config.features.audio_sample_rate,
+                n_mels=self.config.features.spectrogram.num_bins,
+                n_fft=self.config.features.fft_size,
+                win_length=self.config.features.win_size,
+                hop_length=self.config.features.hop_size,
+                fmin=self.config.features.spectrogram.fmin,
+                fmax=self.config.features.spectrogram.fmax
+            ).eval().to(self.device)
+        mel = self.mel_spec(
+            torch.from_numpy(waveform).to(self.device).unsqueeze(0),
+            key_shift=shift, speed=speed
+        ).squeeze(0).T.cpu().numpy()
         return mel, mel.shape[0]
 
     @dask.delayed
     def get_mel2ph(self, ph_dur: numpy.ndarray, length: int):
         mel2ph = dur_to_mel2ph(
-            self.lr, torch.from_numpy(ph_dur), length, self.timestep, device=self.device
+            self.lr, torch.from_numpy(ph_dur).to(self.device), length, self.timestep
         ).cpu().numpy()
         return mel2ph
 

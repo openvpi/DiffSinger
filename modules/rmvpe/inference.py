@@ -61,14 +61,13 @@ class RMVPE:
         batched = waveform.ndim > 1
         if not batched:
             waveform = waveform[None]
+            length = [length]
         elif not isinstance(length, list) or len(length) != waveform.shape[0]:
             raise ValueError(
                 f"When batch processing, length should be a list of length {waveform.shape[0]}."
             )
         f0s = self.infer_from_audio(waveform, sample_rate=samplerate)
         uvs = f0s == 0
-        if not batched:
-            return f0s[0], uvs[0]
         f0_list = []
         uv_list = []
         for i, size in enumerate(length):
@@ -82,4 +81,6 @@ class RMVPE:
                 f0_res[uv_res] = 0
             f0_list.append(f0_res)
             uv_list.append(uv_res)
+        if not batched:
+            return f0_list[0], uv_list[0]
         return f0_list, uv_list

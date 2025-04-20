@@ -14,11 +14,10 @@ from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
 from lib.feature.pe import initialize_pe
 from lib.feature.binarizer_utils import (
-    SinusoidalSmoothingConv1d,
     get_energy_librosa,
     get_breathiness,
     get_voicing,
-    get_tension_base_harmonic,
+    get_tension_base_harmonic, SinusoidalSmoothingConv1d,
 )
 from lib.functional import dur_to_mel2ph
 from lib.feature.decomposed_waveform import DecomposedWaveform

@@ -6,7 +6,7 @@ def dur_to_mel2ph(lr, durs, length, timestep):
     non_batched = durs.ndim == 1
     if non_batched:
         b = 1
-        durs = durs.unsqueeze(1)
+        durs = durs.unsqueeze(0)
     else:
         b = durs.shape[0]
     ph_acc = torch.round(torch.cumsum(durs, dim=1) / timestep + 0.5).long()
