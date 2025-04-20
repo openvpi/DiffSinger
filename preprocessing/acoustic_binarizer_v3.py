@@ -1,12 +1,10 @@
 import collections
 import copy
 import csv
-import pathlib
 import random
 from dataclasses import dataclass
 
 import dask
-import librosa
 import numpy
 
 from lib.conf.schema import DataSourceConfig
@@ -30,8 +28,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
 
 @dataclass
 class AcousticMetadataItem(MetadataItem):
-    wav_fn: pathlib.Path
-    ph_dur: list[float]
+    pass
 
 
 class AcousticBinarizer(BaseBinarizer):
@@ -46,86 +43,40 @@ class AcousticBinarizer(BaseBinarizer):
             item_name = transcription["name"]
             spk_name = data_source_config.speaker
             spk_id = data_source_config.spk_id
-            ph_text = transcription["ph_seq"].split()
-            lang_seq = []
-            for ph in ph_text:
-                if self.phoneme_dictionary.is_cross_lingual(ph):
-                    if "/" in ph:
-                        lang_name = ph.split("/")[0]
-                        if lang_name not in self.lang_map:
-                            raise ValueError(
-                                f"Invalid language tag found in raw dataset '{raw_data_dir.as_posix()}':\n"
-                                f"item '{item_name}', phoneme '{ph}'"
-                            )
-                        # noinspection PyUnresolvedReferences
-                        lang_id = self.lang_map[lang_name]
-                    else:
-                        # noinspection PyUnresolvedReferences
-                        lang_id = self.lang_map[data_source_config.language]
-                else:
-                    lang_id = 0
-                lang_seq.append(lang_id)
-            ph_seq = self.phoneme_dictionary.encode(ph_text, lang=data_source_config.language)
-            wav_fn = raw_data_dir / "wavs" / f"{item_name}.wav"
-            ph_dur = []
-            for dur in transcription["ph_dur"].split():
-                dur_float = float(dur)
-                if dur_float < 0:
-                    raise ValueError(
-                        f"Negative duration found in raw dataset '{raw_data_dir.as_posix()}':\n"
-                        f"item '{item_name}', duration '{dur}'"
-                    )
-                ph_dur.append(dur_float)
-            if len(ph_seq) != len(ph_dur):
+            succeeded, parse_results = self.parse_language_phoneme_sequences(
+                transcription, language=data_source_config.language
+            )
+            if not succeeded:
                 raise ValueError(
-                    f"Unaligned ph_seq and ph_dur found in raw dataset '{raw_data_dir.as_posix()}':\n"
-                    f"item '{item_name}', ph_seq length {len(ph_seq)}, ph_dur length {len(ph_dur)}"
+                    parse_results.format(raw_data_dir.as_posix(), item_name)
+                )
+            ph_text, lang_seq, ph_seq, ph_dur = parse_results
+            wav_fn = raw_data_dir / "wavs" / f"{item_name}.wav"
+            if not wav_fn.exists():
+                raise ValueError(
+                    f"Waveform file missing in raw dataset \'{raw_data_dir.as_posix()}\':\n"
+                    f"item {item_name}, wav file \'{wav_fn.as_posix()}\'."
                 )
             metadata_dict[item_name] = AcousticMetadataItem(
                 item_name=item_name,
                 spk_name=spk_name,
                 spk_id=spk_id,
+                ph_text=ph_text,
                 lang_seq=lang_seq,
-                ph_text=" ".join(ph_text),
                 ph_seq=ph_seq,
-                wav_fn=wav_fn,
                 ph_dur=ph_dur,
+                wav_fn=wav_fn,
             )
-        test_prefixes = data_source_config.test_prefixes
-        for prefix in test_prefixes:
-            if prefix in metadata_dict:
-                self.valid_items.append(metadata_dict.pop(prefix))
-            else:
-                hit = False
-                for key in list(metadata_dict.keys()):
-                    if key.startswith(prefix):
-                        self.valid_items.append(metadata_dict.pop(key))
-                        hit = True
-                if not hit:
-                    # TODO: change to warning
-                    raise ValueError(
-                        f"Test prefix does not hit any item in raw dataset '{raw_data_dir.as_posix()}':\n"
-                        f"prefix '{prefix}'"
-                    )
-        for item in metadata_dict.values():
-            self.train_items.append(item)
+        return metadata_dict
 
     def process_item(self, item: AcousticMetadataItem, augmentation=False) -> list[DataSample]:
+        waveform = self.load_waveform(item.wav_fn)
         ph_dur = numpy.array(item.ph_dur, dtype=numpy.float32)
-        waveform, _ = librosa.load(item.wav_fn, sr=self.config.features.audio_sample_rate, mono=True)
         mel, length = self.get_mel(waveform)
         mel2ph = self.get_mel2ph(ph_dur, length)
         f0, uv = self.get_f0(waveform, length)
         energy = self.get_energy(waveform, length, smooth_fn_name="energy")
-        hn_sep_method = self.config.extractors.harmonic_noise_separation.method
-        if hn_sep_method == "world":
-            sp, ap = self.world_analyze(waveform, f0)
-            noise = self.world_synthesize_aperiodic(f0, sp, ap)
-            harmonic = self.world_synthesize_harmonics(f0, sp, ap)
-        elif hn_sep_method == "vr":
-            harmonic, noise = self.harmonic_noise_separation(waveform)
-        else:
-            raise ValueError(f"Unknown harmonic-noise separation method: {hn_sep_method}")
+        harmonic, noise = self.harmonic_noise_separation(waveform, f0)
         breathiness = self.get_energy(noise, length, smooth_fn_name="breathiness")
         voicing = self.get_energy(harmonic, length, smooth_fn_name="voicing")
         base_harmonic = self.get_kth_harmonic(harmonic, f0, k=0)

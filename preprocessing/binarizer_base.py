@@ -1,7 +1,9 @@
 import abc
+import pathlib
 from dataclasses import dataclass
 
 import dask
+import librosa
 import numpy
 import torch
 import tqdm
@@ -30,9 +32,11 @@ class MetadataItem(abc.ABC):
     item_name: str
     spk_name: str
     spk_id: int
-    lang_seq: list[int]
     ph_text: str
+    lang_seq: list[int]
     ph_seq: list[int]
+    ph_dur: list[float]
+    wav_fn: pathlib.Path
 
 
 @dataclass
@@ -59,7 +63,7 @@ class BaseBinarizer(abc.ABC):
         self.lang_map = data_config.lang_map
         self.sources = data_config.sources
         self.config = binarizer_config
-        self.binary_data_dir = binarizer_config.binary_data_dir_resolved
+        self.binary_data_dir: pathlib.Path = binarizer_config.binary_data_dir_resolved
         self.binary_data_dir.mkdir(parents=True, exist_ok=True)
         self.timestep = binarizer_config.features.hop_size / binarizer_config.features.audio_sample_rate
 
@@ -81,14 +85,80 @@ class BaseBinarizer(abc.ABC):
         self.train_items: list[MetadataItem] = []
 
     @abc.abstractmethod
-    def load_metadata(self, data_source_config: DataSourceConfig):
+    def load_metadata(self, data_source_config: DataSourceConfig) -> dict[str, MetadataItem]:
         pass
 
     @abc.abstractmethod
     def process_item(self, item: MetadataItem, augmentation=False) -> list[DataSample]:
         pass
 
+    def parse_language_phoneme_sequences(self, transcription: dict, language: str) -> tuple[bool, tuple | str]:
+        """
+        Parse the language and phoneme sequences from transcriptions
+        :param transcription: dict
+        :param language: language context
+        :return: (succeeded, results).
+          if succeeded, results = (ph_text, lang_seq, ph_seq, ph_dur);
+          if failed, results = error message template with args (raw_data_dir, item_name)
+        """
+        ph_text = transcription["ph_seq"].split()
+        lang_seq = []
+        for ph in ph_text:
+            if self.phoneme_dictionary.is_cross_lingual(ph):
+                if "/" in ph:
+                    lang_name = ph.split("/")[0]
+                    if lang_name not in self.lang_map:
+                        return False, (
+                            "Invalid language tag found in raw dataset '{}':\n"
+                            f"item '{{}}', phoneme '{ph}'"
+                        )
+                    # noinspection PyUnresolvedReferences
+                    lang_id = self.lang_map[lang_name]
+                else:
+                    # noinspection PyUnresolvedReferences
+                    lang_id = self.lang_map[data_source_config.language]
+            else:
+                lang_id = 0
+            lang_seq.append(lang_id)
+        ph_seq = self.phoneme_dictionary.encode(ph_text, lang=language)
+        ph_dur = []
+        for dur in transcription["ph_dur"].split():
+            dur_float = float(dur)
+            if dur_float < 0:
+                return False, (
+                    "Negative phoneme duration found in raw dataset '{}':\n"
+                    f"item '{{}}', duration '{dur}'"
+                )
+            ph_dur.append(dur_float)
+        if len(ph_seq) != len(ph_dur):
+            raise ValueError(
+                "Unaligned ph_seq and ph_dur found in raw dataset '{}':\n"
+                f"item '{{}}', ph_seq length {len(ph_seq)}, ph_dur length {len(ph_dur)}"
+            )
+        ph_text = " ".join(ph_text)
+        return True, (ph_text, lang_seq, ph_seq, ph_dur)
+
+    def split_train_and_valid_set(self, metadata_dict: dict[str, MetadataItem], prefixes: list[str]):
+        for prefix in prefixes:
+            if prefix in metadata_dict:
+                self.valid_items.append(metadata_dict.pop(prefix))
+            else:
+                hit = False
+                for key in list(metadata_dict.keys()):
+                    if key.startswith(prefix):
+                        self.valid_items.append(metadata_dict.pop(key))
+                        hit = True
+                if not hit:
+                    # TODO: change to warning
+                    raise ValueError(
+                        f"Test prefix does not hit any item:\n"
+                        f"prefix '{prefix}'"
+                    )
+        for item in metadata_dict.values():
+            self.train_items.append(item)
+
     def check_coverage(self):
+        return
         # TODO refactor this
         # Group by phonemes in the dictionary.
         ph_idx_required = set(range(1, len(self.phoneme_dictionary)))
@@ -151,8 +221,11 @@ class BaseBinarizer(abc.ABC):
 
     def free_lazy_modules(self):
         """
-        PyTorch modules have some parameter copying issues during multiprocessing.
-        To avoid this, we need to free the lazy-initialized modules before starting new processes.
+        The lazy-initialized PyTorch modules should be freed before multiprocessing,
+        because of CUDA IPC (shared memory) issues on Windows platforms.
+        Reference:
+          - https://github.com/pytorch/pytorch/issues/100358
+          - https://github.com/Xiao-Chenguang/FedMind/issues/61
         """
         self.mel_spec = None
         self.rmvpe = None
@@ -239,18 +312,16 @@ class BaseBinarizer(abc.ABC):
 
     def process(self):
         for source in self.sources:
-            self.load_metadata(source)
+            metadata_dict = self.load_metadata(source)
+            self.split_train_and_valid_set(metadata_dict, source.test_prefixes)
         self.check_coverage()
         self.process_items(self.valid_items, prefix="valid", augmentation=False, multiprocessing=False)
         self.process_items(self.train_items, prefix="train", augmentation=True, multiprocessing=True)
 
-    @torch.no_grad()
-    def smooth_curve(self, curve: numpy.ndarray, smooth_fn_name: str):
-        if smooth_fn_name not in self.smooth_fns:
-            self.smooth_fns[smooth_fn_name] = SinusoidalSmoothingConv1d(
-                round(self.smooth_widths[smooth_fn_name] / self.timestep)
-            ).eval().to(self.device)
-        return self.smooth_fns[smooth_fn_name](torch.from_numpy(curve)[None].to(self.device))[0].cpu().numpy()
+    @dask.delayed
+    def load_waveform(self, wav_fn: pathlib.Path):
+        waveform, _ = librosa.load(wav_fn, sr=self.config.features.audio_sample_rate, mono=True)
+        return waveform
 
     @dask.delayed(nout=2)
     @torch.no_grad()
@@ -277,6 +348,14 @@ class BaseBinarizer(abc.ABC):
             self.lr, torch.from_numpy(ph_dur).to(self.device), length, self.timestep
         ).cpu().numpy()
         return mel2ph
+
+    @torch.no_grad()
+    def smooth_curve(self, curve: numpy.ndarray, smooth_fn_name: str):
+        if smooth_fn_name not in self.smooth_fns:
+            self.smooth_fns[smooth_fn_name] = SinusoidalSmoothingConv1d(
+                round(self.smooth_widths[smooth_fn_name] / self.timestep)
+            ).eval().to(self.device)
+        return self.smooth_fns[smooth_fn_name](torch.from_numpy(curve)[None].to(self.device))[0].cpu().numpy()
 
     @dask.delayed(nout=2)
     def get_f0(self, waveform: numpy.ndarray, length: int):
@@ -359,7 +438,7 @@ class BaseBinarizer(abc.ABC):
 
     @dask.delayed(nout=2)
     @torch.no_grad()
-    def harmonic_noise_separation(self, waveform: numpy.ndarray):
+    def run_vr_separation(self, waveform: numpy.ndarray):
         if self.hn_sep_model is None:
             from modules.vr import load_sep_model
             self.hn_sep_model = load_sep_model(
@@ -373,6 +452,18 @@ class BaseBinarizer(abc.ABC):
         x = torch.mean(x, dim=1)
         harmonic = x.squeeze().cpu().numpy()
         noise = waveform - harmonic
+        return harmonic, noise
+
+    def harmonic_noise_separation(self, waveform: numpy.ndarray, f0: numpy.ndarray):
+        hn_sep_method = self.config.extractors.harmonic_noise_separation.method
+        if hn_sep_method == "world":
+            sp, ap = self.world_analyze(waveform, f0)
+            noise = self.world_synthesize_aperiodic(f0, sp, ap)
+            harmonic = self.world_synthesize_harmonics(f0, sp, ap)
+        elif hn_sep_method == "vr":
+            harmonic, noise = self.run_vr_separation(waveform)
+        else:
+            raise ValueError(f"Unknown harmonic-noise separation method: {hn_sep_method}")
         return harmonic, noise
 
     @dask.delayed
