@@ -22,6 +22,7 @@ from lib.feature.mel_spec import StretchableMelSpectrogram
 from lib.functional import dur_to_mel2ph
 from modules.fastspeech.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
+from utils.infer_utils import resample_align_curve
 from utils.multiprocess_utils import chunked_multiprocess_run
 from utils.phoneme_utils import PhonemeDictionary
 from utils.plot import distribution_to_figure
@@ -92,6 +93,30 @@ class BaseBinarizer(abc.ABC):
     def process_item(self, item: MetadataItem, augmentation=False) -> list[DataSample]:
         pass
 
+    def try_load_external_labels_if_allowed(self, raw_data_dir, item_name, transcription) -> tuple[bool, dict]:
+        """
+        Try to load external labels from the waveform file if allowed (prefer_ds=true).
+        :return: (loaded, overridden transcription)
+        """
+        if self.config.prefer_ds:
+            ds_fn = raw_data_dir / "wavs" / f"{item_name}.ds"
+            if ds_fn.exists() and ds_fn.is_file():
+                with open(ds_fn, "r", encoding="utf8") as ds_f:
+                    ds_obj = ds_f.read()
+                if isinstance(ds_obj, list):
+                    if len(ds_obj) == 0:
+                        raise ValueError(f"Empty ds content encountered in '{ds_fn}'.")
+                    elif len(ds_obj) > 1:
+                        raise ValueError(
+                            f"Unsupported multiple segments in '{ds_fn}' (found {len(ds_obj)} segments).")
+                    ds_obj = ds_obj[0]
+                transcription = {
+                    **transcription,
+                    **{k: v for k, v in ds_obj if v}
+                }
+                return True, transcription
+        return False, transcription
+
     def parse_language_phoneme_sequences(self, transcription: dict, language: str) -> tuple[bool, tuple | str]:
         """
         Parse the language and phoneme sequences from transcriptions
@@ -158,6 +183,7 @@ class BaseBinarizer(abc.ABC):
             self.train_items.append(item)
 
     def check_coverage(self):
+        return
         # TODO refactor this
         # Group by phonemes in the dictionary.
         ph_idx_required = set(range(1, len(self.phoneme_dictionary)))
@@ -179,34 +205,34 @@ class BaseBinarizer(abc.ABC):
 
         def display_phoneme(phoneme):
             if isinstance(phoneme, tuple):
-                return f'({", ".join(phoneme)})'
+                return f"({', '.join(phoneme)})"
             return phoneme
 
-        print('===== Phoneme Distribution Summary =====')
+        print("===== Phoneme Distribution Summary =====")
         keys = sorted(ph_count_map.keys(), key=lambda v: v[0] if isinstance(v, tuple) else v)
         for i, key in enumerate(keys):
             if i == len(ph_count_map) - 1:
-                end = '\n'
+                end = "\n"
             elif i % 10 == 9:
-                end = ',\n'
+                end = ",\n"
             else:
-                end = ', '
+                end = ", "
             key_disp = display_phoneme(key)
-            print(f'{key_disp}: {ph_count_map[key]}', end=end)
+            print(f"{key_disp}: {ph_count_map[key]}", end=end)
 
         # Draw graph.
         xs = [display_phoneme(k) for k in keys]
         ys = [ph_count_map[k] for k in keys]
         plt = distribution_to_figure(
-            title='Phoneme Distribution Summary',
-            x_label='Phoneme', y_label='Number of occurrences',
+            title="Phoneme Distribution Summary",
+            x_label="Phoneme", y_label="Number of occurrences",
             items=xs, values=ys, rotate=len(self.lang_map) > 1
         )
-        filename = self.binary_data_dir / 'phoneme_distribution.jpg'
+        filename = self.binary_data_dir / "phoneme_distribution.jpg"
         plt.savefig(fname=filename,
-                    bbox_inches='tight',
+                    bbox_inches="tight",
                     pad_inches=0.25)
-        print(f'| save summary to \'{filename}\'')
+        print(f"| save summary to '{filename}'")
 
         # Check unrecognizable or missing phonemes
         if ph_idx_occurred != ph_idx_required:
@@ -215,7 +241,7 @@ class BaseBinarizer(abc.ABC):
                 for idx in ph_idx_required.difference(ph_idx_occurred)
             }, key=lambda v: v[0] if isinstance(v, tuple) else v)
             raise RuntimeError(
-                f'The following phonemes are not covered in transcriptions: {missing_phones}'
+                f"The following phonemes are not covered in transcriptions: {missing_phones}"
             )
 
     def free_lazy_modules(self):
@@ -292,7 +318,7 @@ class BaseBinarizer(abc.ABC):
             print(f"| {prefix} total duration (before augmentation): {dur_before:.2f}s")
             print(
                 f"| {prefix} respective duration (before augmentation): "
-                + ', '.join(f'{k}={v:.2f}s' for k, v in total_duration_before_aug.items() if v > 0)
+                + ", ".join(f"{k}={v:.2f}s" for k, v in total_duration_before_aug.items() if v > 0)
             )
             print(
                 f"| {prefix} total duration (after augmentation): "
@@ -300,13 +326,13 @@ class BaseBinarizer(abc.ABC):
             )
             print(
                 f"| {prefix} respective duration (after augmentation): "
-                + ', '.join(f'{k}={v:.2f}s' for k, v in total_duration.items())
+                + ", ".join(f"{k}={v:.2f}s" for k, v in total_duration.items())
             )
         else:
             print(f"| {prefix} total duration: {dur_before:.2f}s")
             print(
                 f"| {prefix} respective duration: "
-                + ', '.join(f'{k}={v:.2f}s' for k, v in total_duration_before_aug.items() if v > 0)
+                + ", ".join(f"{k}={v:.2f}s" for k, v in total_duration_before_aug.items() if v > 0)
             )
 
     def process(self):
@@ -347,6 +373,14 @@ class BaseBinarizer(abc.ABC):
             self.lr, torch.from_numpy(ph_dur).to(self.device), length, self.timestep
         ).cpu().numpy()
         return mel2ph
+
+    @dask.delayed
+    def sec_dur_to_frame_dur(self, dur_sec: numpy.ndarray):
+        dur_frame = numpy.diff(
+            numpy.round(numpy.cumsum(dur_sec, axis=0) / self.timestep + 0.5).astype(numpy.int64),
+            axis=0, prepend=numpy.array([0])
+        )
+        return dur_frame
 
     @torch.no_grad()
     def smooth_curve(self, curve: numpy.ndarray, smooth_fn_name: str):
@@ -485,3 +519,27 @@ class BaseBinarizer(abc.ABC):
         )
         tension = self.smooth_curve(tension, smooth_fn_name="tension")
         return tension
+
+    def try_load_curve_from_label_if_allowed(self, label: dict, curve_key: str, timestep_key: str, length: int):
+        if not self.config.prefer_ds:
+            return None
+        curve_text = label.get(curve_key)
+        if curve_text is None:
+            return None
+        curve = self.resample_align_curve(
+            numpy.array(curve_text.split(), numpy.float32),
+            original_timestep=float(label[timestep_key]),
+            target_timestep=self.timestep,
+            align_length=length
+        )
+        return curve
+
+    @dask.delayed
+    def resample_align_curve(
+            self, curve: numpy.ndarray,
+            original_timestep: float, target_timestep: float, align_length: int
+    ):
+        resample_aligned_curve = resample_align_curve(
+            curve, original_timestep, target_timestep, align_length
+        )
+        return resample_aligned_curve

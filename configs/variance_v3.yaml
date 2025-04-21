@@ -59,6 +59,7 @@ binarizer:
       smooth_width: 0.12
   midi:
     used: true
+    smooth_width: 0.06
     with_glide: false
 
 model:

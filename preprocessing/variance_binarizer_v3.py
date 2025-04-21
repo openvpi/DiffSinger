@@ -9,7 +9,6 @@ import scipy
 
 from lib.conf.schema import DataSourceConfig, DataConfig
 from preprocessing.binarizer_base import MetadataItem, BaseBinarizer, DataSample
-from utils.infer_utils import resample_align_curve
 from utils.pitch_utils import interp_f0
 from utils.plot import distribution_to_figure
 
@@ -40,7 +39,7 @@ class VarianceMetadataItem(MetadataItem):
     note_rest: list[bool]
     note_dur: list[float]
     note_glide: list[int]
-    manual_labels: dict
+    external_labels: dict
 
 
 class VarianceBinarizer(BaseBinarizer):
@@ -61,32 +60,18 @@ class VarianceBinarizer(BaseBinarizer):
             spk_name = data_source_config.speaker
             spk_id = data_source_config.spk_id
             wav_fn = raw_data_dir / "wavs" / f"{item_name}.wav"
-            if self.config.prefer_ds:
-                ds_fn = raw_data_dir / "wavs" / f"{item_name}.ds"
-                if ds_fn.exists() and ds_fn.is_file():
-                    with open(ds_fn, "r", encoding="utf8") as ds_f:
-                        ds_obj = ds_f.read()
-                    if isinstance(ds_obj, list):
-                        if len(ds_obj) == 0:
-                            raise ValueError(f"Empty ds content encountered in \'{ds_fn}\'.")
-                        elif len(ds_obj) > 1:
-                            raise ValueError(
-                                f"Unsupported multiple segments in \'{ds_fn}\' (found {len(ds_obj)} segments).")
-                        ds_obj = ds_obj[0]
-                    transcription = {
-                        **transcription,
-                        **{k: v for k, v in ds_obj if v}
-                    }
-                elif not wav_fn.exists():
+            loaded, transcription = self.try_load_external_labels_if_allowed(raw_data_dir, item_name, transcription)
+            if not loaded and not wav_fn.exists():
+                if self.config.prefer_ds:
                     raise ValueError(
-                        f"Both waveform and ds files are missing in raw dataset \'{raw_data_dir.as_posix()}\':\n"
-                        f"item {item_name}, wav file \'{wav_fn.as_posix()}\', ds file \'{ds_fn.as_posix()}\'"
+                        f"Both waveform and external labels are missing in raw dataset \'{raw_data_dir.as_posix()}\':\n"
+                        f"item {item_name}, wav file \'{wav_fn.as_posix()}\'"
                     )
-            elif not wav_fn.exists():
-                raise ValueError(
-                    f"Waveform file missing in raw dataset \'{raw_data_dir.as_posix()}\':\n"
-                    f"item {item_name}, wav file \'{wav_fn.as_posix()}\'."
-                )
+                else:
+                    raise ValueError(
+                        f"Waveform file missing in raw dataset \'{raw_data_dir.as_posix()}\':\n"
+                        f"item {item_name}, wav file \'{wav_fn.as_posix()}\'."
+                    )
             succeeded, parse_results = self.parse_language_phoneme_sequences(
                 transcription, language=data_source_config.language
             )
@@ -150,7 +135,7 @@ class VarianceBinarizer(BaseBinarizer):
                 note_dur=note_dur,
                 note_glide=note_glide,
                 wav_fn=wav_fn,
-                manual_labels=transcription
+                external_labels=transcription
             )
         return metadata_dict
 
@@ -227,7 +212,7 @@ class VarianceBinarizer(BaseBinarizer):
                 )
 
     def process_item(self, item: VarianceMetadataItem, augmentation=False) -> list[DataSample]:
-        label = item.manual_labels
+        label = item.external_labels
         length = round(sum(item.ph_dur) / self.timestep)
         ph_dur_sec = numpy.array(item.ph_dur, dtype=numpy.float32)
         ph_dur = self.sec_dur_to_frame_dur(ph_dur_sec)
@@ -322,38 +307,6 @@ class VarianceBinarizer(BaseBinarizer):
 
         # No augmentation supported yet
         return [sample]
-
-    def try_load_curve_from_label_if_allowed(self, label: dict, curve_key: str, timestep_key: str, length: int):
-        if not self.config.prefer_ds:
-            return None
-        curve_text = label.get(curve_key)
-        if curve_text is None:
-            return None
-        curve = self.resample_align_curve(
-            numpy.array(curve_text.split(), numpy.float32),
-            original_timestep=float(label[timestep_key]),
-            target_timestep=self.timestep,
-            align_length=length
-        )
-        return curve
-
-    @dask.delayed
-    def sec_dur_to_frame_dur(self, dur_sec: numpy.ndarray):
-        dur_frame = numpy.diff(
-            numpy.round(numpy.cumsum(dur_sec, axis=0) / self.timestep + 0.5).astype(numpy.int64),
-            axis=0, prepend=numpy.array([0])
-        )
-        return dur_frame
-
-    @dask.delayed
-    def resample_align_curve(
-            self, curve: numpy.ndarray,
-            original_timestep: float, target_timestep: float, align_length: int
-    ):
-        resample_aligned_curve = resample_align_curve(
-            curve, original_timestep, target_timestep, align_length
-        )
-        return resample_aligned_curve
 
     @dask.delayed
     def interp_midi(self, note_midi: numpy.ndarray, note_rest: numpy.ndarray):
