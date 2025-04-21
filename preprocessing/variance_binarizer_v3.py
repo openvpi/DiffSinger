@@ -124,6 +124,7 @@ class VarianceBinarizer(BaseBinarizer):
                 note_midi = note_rest = note_dur = note_glide = None
             metadata_dict[item_name] = VarianceMetadataItem(
                 item_name=item_name,
+                estimated_duration=sum(ph_dur),
                 spk_name=spk_name,
                 spk_id=spk_id,
                 ph_text=ph_text,

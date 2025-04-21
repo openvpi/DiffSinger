@@ -31,6 +31,7 @@ from utils.plot import distribution_to_figure
 @dataclass
 class MetadataItem(abc.ABC):
     item_name: str
+    estimated_duration: float
     spk_name: str
     spk_id: int
     ph_text: str
@@ -183,7 +184,6 @@ class BaseBinarizer(abc.ABC):
             self.train_items.append(item)
 
     def check_coverage(self):
-        return
         # TODO refactor this
         # Group by phonemes in the dictionary.
         ph_idx_required = set(range(1, len(self.phoneme_dictionary)))
@@ -340,6 +340,7 @@ class BaseBinarizer(abc.ABC):
             metadata_dict = self.load_metadata(source)
             self.split_train_and_valid_set(metadata_dict, source.test_prefixes)
         self.check_coverage()
+        self.train_items.sort(key=lambda i: i.estimated_duration, reverse=True)
         self.process_items(self.valid_items, prefix="valid", augmentation=False, multiprocessing=False)
         self.process_items(self.train_items, prefix="train", augmentation=True, multiprocessing=True)
 

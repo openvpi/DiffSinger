@@ -59,6 +59,7 @@ class AcousticBinarizer(BaseBinarizer):
                 )
             metadata_dict[item_name] = AcousticMetadataItem(
                 item_name=item_name,
+                estimated_duration=sum(ph_dur),
                 spk_name=spk_name,
                 spk_id=spk_id,
                 ph_text=ph_text,
