@@ -121,11 +121,11 @@ class SwiGLU(nn.Module):
             max_abs_out = torch.max(-out_min, out_max).float()
             max_abs_gate = torch.max(-gate_min, gate_max).float()
             if max_abs_out * max_abs_gate > 1000:
-                return (out.float() * gate.float()).clamp(-1000, 1000).half()             
+                return (out.float() * gate.float()).clamp(-1000, 1000).half()
         return out * gate
 
 
-class Conv1d(torch.nn.Conv1d):
+class KaimingNormalConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         nn.init.kaiming_normal_(self.weight)
@@ -190,9 +190,16 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         
         # Dropout layer
         self.dropout = nn.Dropout(dropout)
-
+        
         # Rotary Embeddings
         self.rotary_embed = rotary_embed
+        
+        # Initialization parameters
+        nn.init.xavier_uniform_(self.in_proj.weight)
+        nn.init.xavier_uniform_(self.out_proj.weight)
+        if bias:
+            nn.init.constant_(self.in_proj.bias, 0.0)
+            nn.init.constant_(self.out_proj.bias, 0.0)
         
     def forward(self, x, key_padding_mask=None):
         # x: (B, L, C)

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Conv1d, Transpose
+from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose
 from utils.hparams import hparams
 
 
@@ -42,6 +42,8 @@ class LYNXNet2(nn.Module):
         self.n_feats = n_feats
         self.input_projection = nn.Linear(in_dims * n_feats, num_channels)
         self.conditioner_projection = nn.Linear(hparams['hidden_size'], num_channels)
+        # It may need to be modified at some point to be compatible with the condition cache
+        # self.conditioner_projection = nn.Conv1d(hparams['hidden_size'], num_channels, 1)
         self.diffusion_embedding = nn.Sequential(
             SinusoidalPosEmb(num_channels),
             nn.Linear(num_channels, num_channels * 4),
@@ -80,6 +82,8 @@ class LYNXNet2(nn.Module):
 
         x = self.input_projection(x.transpose(1, 2)) # [B, T, F x M]
         x = x + self.conditioner_projection(cond.transpose(1, 2))
+        # It may need to be modified at some point to be compatible with the condition cache
+        # x = x + self.conditioner_projection(cond.transpose(1, 2))
         x = x + self.diffusion_embedding(diffusion_step).unsqueeze(1)
 
         for layer in self.residual_layers:
