@@ -83,7 +83,8 @@ class VarianceBinarizer(BaseBinarizer):
         predict_breathiness = hparams['predict_breathiness']
         predict_voicing = hparams['predict_voicing']
         predict_tension = hparams['predict_tension']
-        self.predict_variances = predict_energy or predict_breathiness or predict_voicing or predict_tension
+        predict_falsetto = hparams['predict_falsetto']
+        self.predict_variances = predict_energy or predict_breathiness or predict_voicing or predict_tension or predict_falsetto
         self.lr = LengthRegulator().to(self.device)
         self.prefer_ds = self.binarization_args['prefer_ds']
         self.cached_ds = {}
