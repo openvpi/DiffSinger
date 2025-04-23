@@ -8,7 +8,8 @@ import torch
 import torchcrepe
 import tqdm
 
-from lib.feature.binarizer_utils import get_pitch_parselmouth, get_mel_torch
+from lib.feature.mel_spec import StretchableMelSpectrogram
+from lib.feature.pitch import get_pitch_parselmouth
 from modules.vocoders.nsf_hifigan import NsfHifiGAN
 from utils.infer_utils import save_wav
 from utils.hparams import set_hparams, hparams
@@ -62,12 +63,17 @@ for filename in tqdm.tqdm(os.listdir(in_path)):
     if not filename.endswith('.wav'):
         continue
     wav, _ = librosa.load(os.path.join(in_path, filename), sr=hparams['audio_sample_rate'], mono=True)
-    mel = get_mel_torch(
-        wav, hparams['audio_sample_rate'], num_mel_bins=hparams['audio_num_mel_bins'],
-        hop_size=hparams['hop_size'], win_size=hparams['win_size'], fft_size=hparams['fft_size'],
-        fmin=hparams['fmin'], fmax=hparams['fmax'],
-        device=device
-    )
+    mel_fn = StretchableMelSpectrogram(
+        sample_rate=hparams['audio_sample_rate'],
+        n_mels=hparams['audio_num_mel_bins'],
+        n_fft=hparams['fft_size'],
+        win_length=hparams['win_size'],
+        hop_length=hparams['hop_size'],
+        fmin=hparams['fmin'],
+        fmax=hparams['fmax'],
+    ).eval().to(device)
+    with torch.no_grad():
+        mel = mel_fn(torch.from_numpy(wav).to(device).unsqueeze(0)).squeeze(0).cpu().numpy()
 
     f0, _ = get_pitch_parselmouth(
         wav, samplerate=hparams['audio_sample_rate'], length=len(mel),

@@ -23,7 +23,7 @@ from utils import load_ckpt
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.phoneme_utils import load_phoneme_dictionary
-from utils.pitch_utils import interp_f0
+from lib.feature.pitch import interp_f0
 
 
 class DiffSingerVarianceInfer(BaseSVSInfer):

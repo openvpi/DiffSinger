@@ -10,14 +10,12 @@ import tqdm
 
 from lib.conf.schema import DataConfig, BinarizerConfig
 from lib.conf.schema import DataSourceConfig
-from lib.feature.binarizer_utils import (
-    get_pitch_parselmouth,
-    get_pitch_harvest,
-    get_energy_librosa,
-    get_tension, SinusoidalSmoothingConv1d,
-)
-from lib.feature.decomposed_waveform import world_analyze, world_synthesize_harmonics, world_synthesize_aperiodic, \
+from lib.feature import get_energy, get_tension, SinusoidalSmoothingConv1d
+from lib.feature.pitch import get_pitch_parselmouth, get_pitch_harvest
+from lib.feature.decomposition import (
+    world_analyze, world_synthesize_harmonics, world_synthesize_aperiodic,
     get_kth_harmonic
+)
 from lib.feature.mel_spec import StretchableMelSpectrogram
 from lib.functional import dur_to_mel2ph
 from modules.fastspeech.tts_modules import LengthRegulator
@@ -433,7 +431,7 @@ class BaseBinarizer(abc.ABC):
 
     @dask.delayed
     def get_energy(self, waveform: numpy.ndarray, length: int, smooth_fn_name: str = None):
-        energy = get_energy_librosa(
+        energy = get_energy(
             waveform, length,
             hop_size=self.config.features.hop_size,
             win_size=self.config.features.win_size

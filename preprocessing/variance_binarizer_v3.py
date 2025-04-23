@@ -9,7 +9,7 @@ import scipy
 
 from lib.conf.schema import DataSourceConfig, DataConfig
 from preprocessing.binarizer_base import MetadataItem, BaseBinarizer, DataSample
-from utils.pitch_utils import interp_f0
+from lib.feature.pitch import interp_f0
 from utils.plot import distribution_to_figure
 
 VARIANCE_ITEM_ATTRIBUTES = [
