@@ -337,6 +337,10 @@ class BaseBinarizer(abc.ABC):
         for source in self.sources:
             metadata_dict = self.load_metadata(source)
             self.split_train_and_valid_set(metadata_dict, source.test_prefixes)
+        if not self.train_items:
+            raise RuntimeError("Training set is empty.")
+        if not self.valid_items:
+            raise RuntimeError("Validation set is empty.")
         self.check_coverage()
         self.train_items.sort(key=lambda i: i.estimated_duration, reverse=True)
         self.process_items(self.valid_items, prefix="valid", augmentation=False, multiprocessing=False)
