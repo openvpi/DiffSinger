@@ -41,6 +41,13 @@ def binarize_variance_datasets(data_config: DataConfig, binarizer_config: Binari
     binarizer.process()
 
 
+def binarize_duration_datasets(data_config: DataConfig, binarizer_config: BinarizerConfig):
+    from preprocessing.duration_binarizer import DurationBinarizer
+    binarizer = DurationBinarizer(data_config, binarizer_config)
+    print("| Binarizer: ", binarizer.__class__)
+    binarizer.process()
+
+
 @click.group(help="Binarize raw datasets.")
 def main():
     pass
@@ -80,6 +87,24 @@ def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str]):
 def _binarize_variance_datasets_cli(config: pathlib.Path, override: list[str]):
     config = _load_and_log_config(config, scope=ConfigurationScope.VARIANCE, overrides=override)
     binarize_variance_datasets(config.data, config.binarizer)
+
+
+@main.command(name="duration", help="Binarize raw duration datasets.")
+@click.option(
+    "--config", type=click.Path(
+        exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+    ),
+    required=True,
+    help="Path to the configuration file."
+)
+@click.option(
+    "--override", multiple=True,
+    type=str, required=False,
+    help="Override configuration values in dotlist format."
+)
+def _binarize_duration_datasets_cli(config: pathlib.Path, override: list[str]):
+    config = _load_and_log_config(config, scope=ConfigurationScope.DURATION, overrides=override)
+    binarize_duration_datasets(config.data, config.binarizer)
 
 
 if __name__ == "__main__":
