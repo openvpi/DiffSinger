@@ -28,14 +28,14 @@ def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[
 
 
 def binarize_acoustic_datasets(data_config: DataConfig, binarizer_config: BinarizerConfig):
-    from preprocessing.acoustic_binarizer_v3 import AcousticBinarizer
+    from preprocessing.acoustic_binarizer import AcousticBinarizer
     binarizer = AcousticBinarizer(data_config, binarizer_config)
     print("| Binarizer: ", binarizer.__class__)
     binarizer.process()
 
 
 def binarize_variance_datasets(data_config: DataConfig, binarizer_config: BinarizerConfig):
-    from preprocessing.variance_binarizer_v3 import VarianceBinarizer
+    from preprocessing.variance_binarizer import VarianceBinarizer
     binarizer = VarianceBinarizer(data_config, binarizer_config)
     print("| Binarizer: ", binarizer.__class__)
     binarizer.process()

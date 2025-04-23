@@ -8,9 +8,9 @@ import numpy
 import scipy
 
 from lib.conf.schema import DataSourceConfig, DataConfig
-from preprocessing.binarizer_base import MetadataItem, BaseBinarizer, DataSample
 from lib.feature.pitch import interp_f0
 from utils.plot import distribution_to_figure
+from .binarizer_base import MetadataItem, BaseBinarizer, DataSample
 
 VARIANCE_ITEM_ATTRIBUTES = [
     "spk_id",  # index number of dataset/speaker, int64
