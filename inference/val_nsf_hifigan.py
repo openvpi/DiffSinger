@@ -8,7 +8,7 @@ import torch
 import torchcrepe
 import tqdm
 
-from lib.feature.mel_spec import StretchableMelSpectrogram
+from lib.feature.mel import StretchableMelSpectrogram
 from lib.feature.pitch import get_pitch_parselmouth
 from modules.vocoders.nsf_hifigan import NsfHifiGAN
 from utils.infer_utils import save_wav

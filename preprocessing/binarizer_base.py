@@ -16,7 +16,7 @@ from lib.feature.decomposition import (
     world_analyze, world_synthesize_harmonics, world_synthesize_aperiodic,
     get_kth_harmonic
 )
-from lib.feature.mel_spec import StretchableMelSpectrogram
+from lib.feature.mel import StretchableMelSpectrogram
 from lib.functional import dur_to_mel2ph
 from modules.fastspeech.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
