@@ -14,7 +14,7 @@ from scipy import interpolate
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
-from modules.fastspeech.tts_modules import (
+from modules.commons.tts_modules import (
     LengthRegulator, RhythmRegulator
 )
 from lib.functional import mel2ph_to_dur

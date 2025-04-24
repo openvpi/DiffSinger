@@ -2,7 +2,7 @@ import torch
 import torchmetrics
 from torch import Tensor
 
-from modules.fastspeech.tts_modules import RhythmRegulator
+from modules.commons.tts_modules import RhythmRegulator
 
 
 def linguistic_checks(pred, target, ph2word, mask=None):

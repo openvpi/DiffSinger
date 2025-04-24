@@ -9,7 +9,7 @@ import tqdm
 
 from basics.base_svs_infer import BaseSVSInfer
 from modules.fastspeech.param_adaptor import VARIANCE_CHECKLIST
-from modules.fastspeech.tts_modules import LengthRegulator
+from modules.commons.tts_modules import LengthRegulator
 from modules.toplevel import DiffSingerAcoustic, ShallowDiffusionOutput
 from modules.vocoders.registry import VOCODERS
 from utils import load_ckpt

@@ -18,7 +18,7 @@ from lib.feature.decomposition import (
 )
 from lib.feature.mel import StretchableMelSpectrogram
 from lib.functional import dur_to_mel2ph
-from modules.fastspeech.tts_modules import LengthRegulator
+from modules.commons.tts_modules import LengthRegulator
 from utils.indexed_datasets import IndexedDatasetBuilder
 from utils.infer_utils import resample_align_curve
 from utils.multiprocess_utils import chunked_multiprocess_run
