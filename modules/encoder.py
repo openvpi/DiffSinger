@@ -3,8 +3,11 @@ from torch import nn
 
 from lib.conf.schema import LinguisticEncoderConfig, MelodyEncoderConfig
 from utils import filter_kwargs
-from .commons.common_layers import NormalInitEmbedding as Embedding, XavierUniformInitLinear as Linear
-from .fastspeech.tts_modules import FastSpeech2Encoder
+from .commons.common_layers import (
+    NormalInitEmbedding as Embedding,
+    XavierUniformInitLinear as Linear,
+)
+from modules.commons.tts_modules import FastSpeech2Encoder
 
 __all__ = [
     "LinguisticEncoder",

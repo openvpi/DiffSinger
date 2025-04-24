@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from lib.conf.schema import EmbeddingsConfig
+from .commons.common_layers import XavierUniformInitLinear as Linear
 
 __all__ = [
     "ParameterEmbeddings",
@@ -12,21 +13,21 @@ class ParameterEmbeddings(nn.Module):
     def __init__(self, config: EmbeddingsConfig):
         super().__init__()
         self.config = config
-        self.pitch_embedding = nn.Linear(1, config.embedding_dim)
+        self.pitch_embedding = Linear(1, config.embedding_dim)
         self.variance_embeddings = nn.ModuleDict()
         self.transition_embeddings = nn.ModuleDict()
         if self.config.use_energy_embed:
-            self.variance_embeddings['energy'] = nn.Linear(1, config.embedding_dim)
+            self.variance_embeddings['energy'] = Linear(1, config.embedding_dim)
         if self.config.use_breathiness_embed:
-            self.variance_embeddings['breathiness'] = nn.Linear(1, config.embedding_dim)
+            self.variance_embeddings['breathiness'] = Linear(1, config.embedding_dim)
         if self.config.use_voicing_embed:
-            self.variance_embeddings['voicing'] = nn.Linear(1, config.embedding_dim)
+            self.variance_embeddings['voicing'] = Linear(1, config.embedding_dim)
         if self.config.use_tension_embed:
-            self.variance_embeddings['tension'] = nn.Linear(1, config.embedding_dim)
+            self.variance_embeddings['tension'] = Linear(1, config.embedding_dim)
         if self.config.use_key_shift_embed:
-            self.transition_embeddings['key_shift'] = nn.Linear(1, config.embedding_dim)
+            self.transition_embeddings['key_shift'] = Linear(1, config.embedding_dim)
         if self.config.use_speed_embed:
-            self.transition_embeddings['speed'] = nn.Linear(1, config.embedding_dim)
+            self.transition_embeddings['speed'] = Linear(1, config.embedding_dim)
 
     def forward(self, x, f0, **kwargs):
         f0_mel = (1 + f0 / 700).log()

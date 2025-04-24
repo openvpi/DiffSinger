@@ -1,10 +1,14 @@
 import torch.nn as nn
 
 from lib.conf.schema import ModelConfig
+from .commons.common_layers import (
+    NormalInitEmbedding as Embedding,
+    XavierUniformInitLinear as Linear,
+)
 from .decoder import DiffusionDecoder, ShallowDiffusionOutput
 from .embedding import ParameterEmbeddings
 from .encoder import LinguisticEncoder, MelodyEncoder
-from .fastspeech.tts_modules import LocalUpsample
+from modules.commons.tts_modules import LocalUpsample
 from .normalizer import FeatureNormalizer
 
 __all__ = [
@@ -23,7 +27,7 @@ class DiffSingerAcoustic(nn.Module):
         self.local_upsample = LocalUpsample()  # tokens to frames
         self.use_spk_embed = config.use_spk_id
         if self.use_spk_embed:
-            self.spk_embed = nn.Embedding(config.num_spk, config.condition_dim)
+            self.spk_embed = Embedding(config.num_spk, config.condition_dim)
         self.parameter_embeddings = ParameterEmbeddings(config=config.embeddings)
         self.spec_decoder = DiffusionDecoder(
             sample_dim=config.sample_dim,
@@ -97,7 +101,7 @@ class DiffSingerVariance(nn.Module):
         self.local_upsample = LocalUpsample()
         self.use_spk_embed = config.use_spk_id
         if self.use_spk_embed:
-            self.spk_embed = nn.Embedding(config.num_spk, config.condition_dim)
+            self.spk_embed = Embedding(config.num_spk, config.condition_dim)
         if self.predict_pitch:
             self.melody_encoder = MelodyEncoder(config=config.melody_encoder)
             self.pitch_predictor = DiffusionDecoder(
@@ -120,7 +124,7 @@ class DiffSingerVariance(nn.Module):
                     f"variance_total_repeat_bins must be divisible by "
                     f"number of variances ({len(self.variance_list)})."
                 )
-            self.pitch_embedding = nn.Linear(1, config.condition_dim)
+            self.pitch_embedding = Linear(1, config.condition_dim)
             self.variance_predictor = DiffusionDecoder(
                 sample_dim=total_repeat_bins,
                 condition_dim=config.condition_dim,
