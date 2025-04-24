@@ -1,4 +1,4 @@
-# refer to： 
+# refer to:
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/model_conformer_naive.py
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/naive_v2_diff.py
 
@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU
-from utils.hparams import hparams
 
 
 class Conv1d(torch.nn.Conv1d):
@@ -88,8 +87,12 @@ class LYNXNetResidualLayer(nn.Module):
 
 
 class LYNXNet(nn.Module):
-    def __init__(self, in_dims, n_feats, *, num_layers=6, num_channels=512, expansion_factor=2, kernel_size=31,
-                 activation='PReLU', dropout=0.0, strong_cond=False):
+    def __init__(
+            self, sample_dim: int, condition_dim: int,
+            *,
+            num_layers=6, num_channels=512, expansion_factor=2, kernel_size=31,
+            activation='PReLU', dropout=0.0, strong_cond=False
+    ):
         """
         LYNXNet(Linear Gated Depthwise Separable Convolution Network)
         TIPS:You can control the style of the generated results by modifying the 'activation', 
@@ -98,9 +101,8 @@ class LYNXNet(nn.Module):
             - 'ReLU' : Contrary to 'SiLU', Voice will be weakened
         """
         super().__init__()
-        self.in_dims = in_dims
-        self.n_feats = n_feats
-        self.input_projection = Conv1d(in_dims * n_feats, num_channels, 1)
+        self.sample_dim = sample_dim
+        self.input_projection = Conv1d(sample_dim, num_channels, 1)
         self.diffusion_embedding = nn.Sequential(
             SinusoidalPosEmb(num_channels),
             nn.Linear(num_channels, num_channels * 4),
@@ -110,7 +112,7 @@ class LYNXNet(nn.Module):
         self.residual_layers = nn.ModuleList(
             [
                 LYNXNetResidualLayer(
-                    dim_cond=hparams['hidden_size'],
+                    dim_cond=condition_dim,
                     dim=num_channels,
                     expansion_factor=expansion_factor,
                     kernel_size=kernel_size,
@@ -121,7 +123,7 @@ class LYNXNet(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(num_channels)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, kernel_size=1)
+        self.output_projection = Conv1d(num_channels, sample_dim, kernel_size=1)
         self.strong_cond = strong_cond
         nn.init.zeros_(self.output_projection.weight)
 
@@ -132,16 +134,11 @@ class LYNXNet(nn.Module):
         :param cond: [B, H, T]
         :return:
         """
-
-        if self.n_feats == 1:
-            x = spec[:, 0]  # [B, M, T]
-        else:
-            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
-
+        x = spec.squeeze(1)  # [B, M, T]
         x = self.input_projection(x)  # x [B, residual_channel, T]
+
         if not self.strong_cond:
             x = F.gelu(x)
-
         diffusion_step = self.diffusion_embedding(diffusion_step).unsqueeze(-1)
 
         for layer in self.residual_layers:
@@ -152,12 +149,6 @@ class LYNXNet(nn.Module):
 
         # MLP and GLU
         x = self.output_projection(x)  # [B, 128, T]
+        x = x[:, None, :, :]
 
-        if self.n_feats == 1:
-            x = x[:, None, :, :]
-        else:
-            # This is the temporary solution since PyTorch 1.13
-            # does not support exporting aten::unflatten to ONNX
-            # x = x.unflatten(dim=1, sizes=(self.n_feats, self.in_dims))
-            x = x.reshape(-1, self.n_feats, self.in_dims, x.shape[2])
         return x

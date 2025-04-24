@@ -73,23 +73,22 @@ binarizer:
       scale: 0.75
 
 model:
-  encoder:
+  use_spk_id: true
+  num_spk: 2
+  hidden_size: 256
+  linguistic_encoder:
     use_lang_id: true
     num_lang: 3
-    use_spk_id: true
-    num_spk: 2
-    hidden_size: 256
-    linguistic_encoder:
-      arch: fs2
-      kwargs:
-        dropout: 0.1
-        use_pos_embed: true
-        num_layers: 4
-        num_heads: 2
-        ffn_kernel_size: 3
-        ffn_act: gelu
-        use_rope: true
-        rel_pos: true
+    arch: fs2
+    kwargs:
+      dropout: 0.1
+      use_pos_embed: true
+      num_layers: 4
+      num_heads: 2
+      ffn_kernel_size: 3
+      ffn_act: gelu
+      use_rope: true
+      rel_pos: true
   embeddings:
     use_energy_embed: false
     use_breathiness_embed: false
@@ -97,27 +96,30 @@ model:
     use_tension_embed: false
     use_key_shift_embed: true
     use_speed_embed: true
-  use_shallow_diffusion: true
-  aux_decoder:
-    arch: convnext
-    kwargs:
+  normalization:
+    spec_min: -12.
+    spec_max: 0.
+  spec_decoder:
+    use_shallow_diffusion: true
+    aux_decoder_grad: 0.1
+    aux_decoder_arch: convnext
+    aux_decoder_kwargs:
       num_channels: 512
       num_layers: 6
       kernel_size: 7
       dropout_rate: 0.1
-  decoder:
     diffusion_type: reflow
+    t_start: 0.4
     time_scale_factor: 1000
     sampling_algorithm: euler
     sampling_steps: 20
-    backbone:
-      arch: lynxnet
-      kwargs:
-        num_channels: 1024
-        num_layers: 6
-        kernel_size: 31
-        dropout_rate: 0.0
-        strong_cond: true
+    backbone_arch: lynxnet
+    backbone_kwargs:
+      num_channels: 1024
+      num_layers: 6
+      kernel_size: 31
+      dropout_rate: 0.0
+      strong_cond: true
 
 training:
   batch_sampler:

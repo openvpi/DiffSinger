@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import SinusoidalPosEmb
-from utils.hparams import hparams
 
 
 class Conv1d(torch.nn.Conv1d):
@@ -49,11 +48,14 @@ class ResidualBlock(nn.Module):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_dims, n_feats, *, num_layers=20, num_channels=256, dilation_cycle_length=4):
+    def __init__(
+            self, sample_dim: int, condition_dim: int,
+            *,
+            num_layers=20, num_channels=256, dilation_cycle_length=4
+    ):
         super().__init__()
-        self.in_dims = in_dims
-        self.n_feats = n_feats
-        self.input_projection = Conv1d(in_dims * n_feats, num_channels, 1)
+        self.sample_dim = sample_dim
+        self.input_projection = Conv1d(sample_dim, num_channels, 1)
         self.diffusion_embedding = SinusoidalPosEmb(num_channels)
         self.mlp = nn.Sequential(
             nn.Linear(num_channels, num_channels * 4),
@@ -62,14 +64,14 @@ class WaveNet(nn.Module):
         )
         self.residual_layers = nn.ModuleList([
             ResidualBlock(
-                encoder_hidden=hparams['hidden_size'],
+                encoder_hidden=condition_dim,
                 residual_channels=num_channels,
                 dilation=2 ** (i % dilation_cycle_length)
             )
             for i in range(num_layers)
         ])
         self.skip_projection = Conv1d(num_channels, num_channels, 1)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, 1)
+        self.output_projection = Conv1d(num_channels, sample_dim, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):
@@ -79,10 +81,7 @@ class WaveNet(nn.Module):
         :param cond: [B, H, T]
         :return:
         """
-        if self.n_feats == 1:
-            x = spec.squeeze(1)  # [B, M, T]
-        else:
-            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
+        x = spec.squeeze(1)  # [B, M, T]
         x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)
@@ -97,11 +96,6 @@ class WaveNet(nn.Module):
         x = self.skip_projection(x)
         x = F.relu(x)
         x = self.output_projection(x)  # [B, M, T]
-        if self.n_feats == 1:
-            x = x[:, None, :, :]
-        else:
-            # This is the temporary solution since PyTorch 1.13
-            # does not support exporting aten::unflatten to ONNX
-            # x = x.unflatten(dim=1, sizes=(self.n_feats, self.in_dims))
-            x = x.reshape(-1, self.n_feats, self.in_dims, x.shape[2])
+        x = x[:, None, :, :]
+
         return x

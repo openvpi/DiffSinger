@@ -63,67 +63,82 @@ binarizer:
     with_glide: false
 
 model:
-  encoder:
+  use_spk_id: true
+  num_spk: 2
+  hidden_size: 256
+  linguistic_encoder:
     use_lang_id: true
     num_lang: 3
-    use_spk_id: true
-    num_spk: 2
-    hidden_size: 256
-    linguistic_encoder:
-      arch: fs2
-      kwargs:
-        dropout: 0.1
-        use_pos_embed: true
-        num_layers: 4
-        num_heads: 2
-        ffn_kernel_size: 3
-        ffn_act: gelu
-        use_rope: true
-        rel_pos: true
-    melody_encoder:
-      arch: fs2
-      embedding_dim: 128
-      kwargs:
-        dropout: 0.1
-        use_pos_embed: true
-        num_layers: 4
-        num_heads: 2
-        ffn_kernel_size: 3
-        ffn_act: gelu
-        use_rope: true
-        rel_pos: true
-  predictions:
+    arch: fs2
+    kwargs:
+      dropout: 0.1
+      use_pos_embed: true
+      num_layers: 4
+      num_heads: 2
+      ffn_kernel_size: 3
+      ffn_act: gelu
+      use_rope: true
+      rel_pos: true
+  melody_encoder:
+    use_glide_id: false
+    num_glide: 2
+    glide_embed_scale: 11.313708498984760  # sqrt(128)
+    hidden_size: 128
+    arch: fs2
+    kwargs:
+      dropout: 0.1
+      use_pos_embed: true
+      num_layers: 4
+      num_heads: 2
+      ffn_kernel_size: 3
+      ffn_act: gelu
+      use_rope: true
+      rel_pos: true
+  prediction:
     predict_pitch: true
     predict_energy: true
     predict_breathiness: true
     predict_voicing: true
     predict_tension: true
+  normalization:
+    pitch_repeat_bins: 64
+    pitd_norm_min: -8.0
+    pitd_norm_max: 8.0
+    pitd_clip_min: -12.0
+    pitd_clip_max: 12.0
+    variance_total_repeat_bins: 48
+    energy_db_min: -96.0
+    energy_db_max: -12.0
+    breathiness_db_min: -96.0
+    breathiness_db_max: -20.0
+    voicing_db_min: -96.0
+    voicing_db_max: -12.0
+    tension_logit_min: -10.0
+    tension_logit_max: 10.0
   pitch_predictor:
     diffusion_type: reflow
     time_scale_factor: 1000
     sampling_algorithm: euler
     sampling_steps: 20
-    backbone:
-      arch: lynxnet
-      kwargs:
-        num_channels: 1024
-        num_layers: 6
-        kernel_size: 31
-        dropout_rate: 0.0
-        strong_cond: true
+    backbone_arch: lynxnet
+    backbone_kwargs:
+      num_channels: 1024
+      num_layers: 6
+      kernel_size: 31
+      dropout_rate: 0.0
+      strong_cond: true
   variance_predictor:
     diffusion_type: reflow
     time_scale_factor: 1000
     sampling_algorithm: euler
     sampling_steps: 20
-    backbone:
-      arch: lynxnet
-      kwargs:
-        num_channels: 1024
-        num_layers: 6
-        kernel_size: 31
-        dropout_rate: 0.0
-        strong_cond: true
+    backbone_arch: lynxnet
+    backbone_kwargs:
+      num_channels: 1024
+      num_layers: 6
+      kernel_size: 31
+      dropout_rate: 0.0
+      strong_cond: true
 
 training:
   batch_sampler:

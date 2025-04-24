@@ -419,3 +419,19 @@ class FastSpeech2Encoder(nn.Module):
         if return_hiddens:
             x = torch.stack(hiddens, 0)  # [L, B, T, C]
         return x
+
+
+class LocalUpsample(nn.Module):
+    def __init__(self):
+        """
+        Inputs: x: [B, T, H], ups: [B, T]
+        Outputs: x_up: [B, sum(ups), H]
+        """
+        super().__init__()
+        self.lr = LengthRegulator()
+
+    def forward(self, x, ups):
+        x = F.pad(x, [0, 0, 1, 0])
+        indices = self.lr(ups)[..., None].repeat(1, 1, x.shape[-1])
+        x_up = torch.gather(x, 1, indices)
+        return x_up

@@ -1,5 +1,6 @@
+import math
 import pathlib
-from typing import Annotated, Any, Dict, List, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field, field_validator
 
@@ -13,6 +14,7 @@ from .ops import (
 class ConfigurationScope:
     ACOUSTIC = 0x1
     VARIANCE = 0x2
+    DURATION = 0x4
 
 
 class DynamicCheck:
@@ -51,7 +53,7 @@ class DataSourceConfig(ConfigBaseModel):
             message="Language must be one of the keys in data.dictionaries."
         )
     })
-    test_prefixes: List[str] = Field([])
+    test_prefixes: list[str] = Field([])
 
     @property
     def raw_data_dir_resolved(self) -> pathlib.Path:
@@ -60,13 +62,13 @@ class DataSourceConfig(ConfigBaseModel):
 
 # noinspection PyMethodParameters
 class DataConfig(ConfigBaseModel):
-    dictionaries: Dict[str, str] = Field(...)
-    extra_phonemes: List[str] = Field(...)
-    merged_phoneme_groups: List[List[str]] = Field(...)
-    glide_tags: List[Literal["up", "down"]] = Field(["up", "down"], max_length=2, json_schema_extra={
+    dictionaries: dict[str, str] = Field(...)
+    extra_phonemes: list[str] = Field(...)
+    merged_phoneme_groups: list[list[str]] = Field(...)
+    glide_tags: list[Literal["up", "down"]] = Field(["up", "down"], max_length=2, json_schema_extra={
         "scope": ConfigurationScope.VARIANCE
     })
-    sources: List[DataSourceConfig] = Field(..., min_length=1)
+    sources: list[DataSourceConfig] = Field(..., min_length=1)
 
     @field_validator("dictionaries")
     def check_dictionaries(cls, v):
@@ -75,22 +77,22 @@ class DataConfig(ConfigBaseModel):
         return v
 
     @field_validator("sources")
-    def check_sources(cls, v: List[DataSourceConfig]):
+    def check_sources(cls, v: list[DataSourceConfig]):
         cls._check_and_build_spk_map(v)
         return v
 
     @property
-    def lang_map(self) -> Dict[str, int]:
+    def lang_map(self) -> dict[str, int]:
         lang_map = {lang: i for i, lang in enumerate(sorted(self.dictionaries.keys()), start=1)}
         return lang_map
 
     @property
-    def spk_map(self) -> Dict[str, int]:
+    def spk_map(self) -> dict[str, int]:
         spk_map = DataConfig._check_and_build_spk_map(self.sources)
         return spk_map
 
     @property
-    def glide_map(self) -> Dict[str, int]:
+    def glide_map(self) -> dict[str, int]:
         glide_map = {
             "none": 0,
             **{typename: idx for idx, typename in enumerate(self.glide_tags, start=1)}
@@ -98,8 +100,8 @@ class DataConfig(ConfigBaseModel):
         return glide_map
 
     @staticmethod
-    def _check_and_build_spk_map(sources: List[DataSourceConfig]):
-        spk_map: Dict[str, int] = {}
+    def _check_and_build_spk_map(sources: list[DataSourceConfig]):
+        spk_map: dict[str, int] = {}
         assigned_spk_ids = {s.spk_id for s in sources if s.spk_id is not None}
         next_spk_id = 0
         for source in sources:
@@ -155,13 +157,6 @@ class SpectrogramConfig(ConfigBaseModel):
             message="fmax must be greater than fmin."
         )
     })
-    vmin: float = Field(-12)
-    vmax: float = Field(0, json_schema_extra={
-        "dynamic_check": DynamicCheck(
-            expr=this() > ref("binarizer.features.spectrogram.vmin"),
-            message="vmax must be greater than vmin."
-        )
-    })
 
 
 class CurveParameterConfig(ConfigBaseModel):
@@ -193,7 +188,7 @@ class BinarizerMIDIConfig(ConfigBaseModel):
 # noinspection PyMethodParameters
 class RandomPitchShiftingConfig(ConfigBaseModel):
     enabled: bool = Field(True)
-    range: List[float] = Field([-5.0, 5.0])
+    range: list[float] = Field([-5.0, 5.0])
     scale: float = Field(0.75, ge=0)
 
     @field_validator("range")
@@ -206,7 +201,7 @@ class RandomPitchShiftingConfig(ConfigBaseModel):
 # noinspection PyMethodParameters
 class RandomTimeStretchingConfig(ConfigBaseModel):
     enabled: bool = Field(True)
-    range: List[float] = Field([0.5, 2.0])
+    range: list[float] = Field([0.5, 2.0])
     scale: float = Field(0.75, ge=0)
 
     @field_validator("range")
@@ -244,16 +239,42 @@ class BinarizerConfig(ConfigBaseModel):
 
 
 class LinguisticEncoderConfig(ConfigBaseModel):
-    embedding_dim: int = Field(None, json_schema_extra={
-        "dynamic_expr": ref("model.encoder.hidden_size")
+    use_lang_id: bool = Field(False)
+    num_lang: int = Field(..., json_schema_extra={
+        "dynamic_check": DynamicCheck(
+            expr=this() >= len_(ref("data.dictionaries")),
+            message="Number of language embeddings must be greater than or equal to the number of languages."
+        )
+    })
+    hidden_size: int = Field(None, json_schema_extra={
+        "dynamic_expr": ref("model.condition_dim")
     })
     arch: Literal["fs2"] = Field("fs2")
-    kwargs: Dict[str, Any] = Field({})
+    kwargs: dict[str, Any] = Field({})
+
+
+class MelodyEncoderConfig(ConfigBaseModel):
+    use_glide_id: bool = Field(False, json_schema_extra={
+        "dynamic_check": DynamicCheck(
+            expr=or_(ref("binarizer.midi.with_glide"), not_(this())),
+            message="Glide embed is available only if MIDI is with glide."
+        )
+    })
+    num_glide: int = Field(1, json_schema_extra={
+        "dynamic_expr": len_(ref("data.glide_tags"))
+    })
+    glide_embed_scale: float = Field(math.sqrt(128), gt=0)
+    hidden_size: int = Field(128, gt=0)
+    out_size: int = Field(None, json_schema_extra={
+        "dynamic_expr": ref("model.condition_dim")
+    })
+    arch: Literal["fs2"] = Field("fs2")
+    kwargs: dict[str, Any] = Field({})
 
 
 class EmbeddingsConfig(ConfigBaseModel):
     embedding_dim: int = Field(None, json_schema_extra={
-        "dynamic_expr": ref("model.encoder.hidden_size")
+        "dynamic_expr": ref("model.condition_dim")
     })
     use_energy_embed: bool = Field(False, json_schema_extra={
         "dynamic_check": DynamicCheck(
@@ -297,14 +318,119 @@ class EmbeddingsConfig(ConfigBaseModel):
     })
 
 
-class EncoderConfig(ConfigBaseModel):
-    use_lang_id: bool = Field(False)
-    num_lang: int = Field(..., json_schema_extra={
+class PredictionConfig(ConfigBaseModel):
+    predict_pitch: bool = Field(...)
+    predict_energy: bool = Field(...)
+    predict_breathiness: bool = Field(...)
+    predict_voicing: bool = Field(...)
+    predict_tension: bool = Field(...)
+
+
+class NormalizationConfig(ConfigBaseModel):
+    spec_min: float = Field(-12, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC
+    })
+    spec_max: float = Field(0, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
         "dynamic_check": DynamicCheck(
-            expr=this() >= len_(ref("data.dictionaries")),
-            message="Number of language embeddings must be greater than or equal to the number of languages."
+            expr=this() > ref("model.normalization.spec_min"),
+            message="spec_max must be greater than spec_min."
         )
     })
+    pitch_repeat_bins: int = Field(64, gt=0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    pitd_norm_min: float = Field(-8.0, lt=0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    pitd_norm_max: float = Field(8.0, gt=0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    pitd_clip_min: float = Field(-12.0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": DynamicCheck(
+            expr=this() <= ref("model.normalization.pitd_norm_min"),
+            message="pitd_clip_min must be <= pitd_norm_min."
+        )
+    })
+    pitd_clip_max: float = Field(12.0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": DynamicCheck(
+            expr=this() >= ref("model.normalization.pitd_norm_max"),
+            message="pitd_clip_max must be >= pitd_norm_max."
+        )
+    })
+    variance_total_repeat_bins: int = Field(48, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    energy_db_min: float = Field(-96.0, ge=-96, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    energy_db_max: float = Field(-12.0, le=0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": DynamicCheck(
+            expr=this() > ref("model.normalization.energy_db_min"),
+            message="energy_db_max must be greater than energy_db_min."
+        )
+    })
+    breathiness_db_min: float = Field(-96.0, ge=-96, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    breathiness_db_max: float = Field(-20.0, le=0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": DynamicCheck(
+            expr=this() > ref("model.normalization.breathiness_db_min"),
+            message="breathiness_db_max must be greater than breathiness_db_min."
+        )
+    })
+    voicing_db_min: float = Field(-96.0, ge=-96, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    voicing_db_max: float = Field(-12.0, le=0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": DynamicCheck(
+            expr=this() > ref("model.normalization.voicing_db_min"),
+            message="voicing_db_max must be greater than voicing_db_min."
+        )
+    })
+    tension_logit_min: float = Field(-10.0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE
+    })
+    tension_logit_max: float = Field(10.0, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": DynamicCheck(
+            expr=this() > ref("model.normalization.tension_logit_min"),
+            message="tension_logit_max must be greater than tension_logit_min."
+        )
+    })
+
+
+class DiffusionDecoderConfig(ConfigBaseModel):
+    use_shallow_diffusion: bool = Field(False, json_schema_extra={
+        "dynamic_check": DynamicCheck(
+            expr=if_(not_(ctx("scope") == ConfigurationScope.ACOUSTIC), not_(this()), True),
+            message="Shallow diffusion is only available for acoustic model."
+        )
+    })
+    aux_decoder_grad: float = Field(0.1, ge=0, lt=1, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC
+    })
+    aux_decoder_arch: Literal["convnext"] = Field("convnext", json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC
+    })
+    aux_decoder_kwargs: dict[str, Any] = Field({}, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC
+    })
+    diffusion_type: Literal["reflow"] = Field("reflow")
+    t_start: float = Field(0., ge=0., le=1.)
+    time_scale_factor: int = Field(1000, gt=0)
+    sampling_algorithm: Literal["euler", "rk2", "rk4", "rk5"] = Field("euler")
+    sampling_steps: int = Field(20, gt=0)
+    backbone_arch: Literal["wavenet", "lynxnet"] = Field("wavenet")
+    backbone_kwargs: dict[str, Any] = Field(...)
+
+
+class ModelConfig(ConfigBaseModel):
     use_spk_id: bool = Field(False, json_schema_extra={
         "dynamic_check": DynamicCheck(
             expr=or_(len_(set_(map_(ref("data.sources"), lambda x: x.spk_id))) <= 1, this()),
@@ -317,62 +443,37 @@ class EncoderConfig(ConfigBaseModel):
             message="Number of speaker embeddings must be greater the maximum speaker ID."
         )
     })
-    hidden_size: int = Field(256, gt=0)
+    condition_dim: int = Field(256, gt=0)
     linguistic_encoder: LinguisticEncoderConfig = Field(...)
-
-
-class AuxDecoderConfig(ConfigBaseModel):
-    input_dim: int = Field(None, json_schema_extra={
-        "dynamic_expr": ref("model.encoder.hidden_size")
+    melody_encoder: MelodyEncoderConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
     })
-    output_dim: int = Field(None, json_schema_extra={
-        "dynamic_expr": ref("binarizer.features.spectrogram.num_bins")
-    })
-    arch: Literal["convnext"] = Field("convnext")
-    kwargs: Dict[str, Any] = Field({})
-
-
-class DiffusionBackboneConfig(ConfigBaseModel):
-    condition_dim: int = Field(None, json_schema_extra={
-        "dynamic_expr": ref("model.encoder.hidden_size")
-    })
-    sample_dim: int = Field(None, json_schema_extra={
-        "dynamic_expr": ref("binarizer.features.spectrogram.num_bins")
-    })
-    arch: Literal["wavenet", "lynxnet"] = Field("wavenet")
-    kwargs: Dict[str, Any] = Field(...)
-
-
-class DiffusionConfig(ConfigBaseModel):
-    diffusion_type: Literal["reflow"] = Field("reflow")
-    time_scale_factor: int = Field(1000, gt=0)
-    sampling_algorithm: Literal["euler", "rk2", "rk4", "rk5"] = Field("euler")
-    sampling_steps: int = Field(20, gt=0)
-    backbone: DiffusionBackboneConfig = Field(...)
-
-
-class ModelConfig(ConfigBaseModel):
-    encoder: EncoderConfig = Field(...)
     embeddings: EmbeddingsConfig = Field(None, json_schema_extra={
         "scope": ConfigurationScope.ACOUSTIC,
         "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
     })
-    use_shallow_diffusion: bool = Field(True, json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC
-    })
-    aux_decoder: AuxDecoderConfig = Field(None, json_schema_extra={
+    sample_dim: int = Field(None, json_schema_extra={
         "scope": ConfigurationScope.ACOUSTIC,
-        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
+        "dynamic_expr": ref("binarizer.features.spectrogram.num_bins")
     })
-    decoder: DiffusionConfig = Field(None, json_schema_extra={
-        "scope": ConfigurationScope.ACOUSTIC,
-        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
-    })
-    pitch_predictor: DiffusionConfig = Field(None, json_schema_extra={
+    prediction: PredictionConfig = Field(None, json_schema_extra={
         "scope": ConfigurationScope.VARIANCE,
         "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
     })
-    variance_predictor: DiffusionConfig = Field(None, json_schema_extra={
+    normalization: NormalizationConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC | ConfigurationScope.VARIANCE,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC | ConfigurationScope.VARIANCE)
+    })
+    spec_decoder: DiffusionDecoderConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.ACOUSTIC,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.ACOUSTIC)
+    })
+    pitch_predictor: DiffusionDecoderConfig = Field(None, json_schema_extra={
+        "scope": ConfigurationScope.VARIANCE,
+        "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
+    })
+    variance_predictor: DiffusionDecoderConfig = Field(None, json_schema_extra={
         "scope": ConfigurationScope.VARIANCE,
         "dynamic_check": RequiredOnGivenScope(ConfigurationScope.VARIANCE)
     })
@@ -391,13 +492,13 @@ class DataLoaderConfig(ConfigBaseModel):
 
 class OptimizerConfig(ConfigBaseModel):
     cls: str = Field("torch.optim.AdamW")
-    kwargs: Dict[str, Any] = Field(...)
+    kwargs: dict[str, Any] = Field(...)
 
 
 class LRSchedulerConfig(ConfigBaseModel):
     cls: str = Field("torch.optim.lr_scheduler.StepLR")
     unit: Literal["step", "epoch"] = Field("step")
-    kwargs: Dict[str, Any] = Field(...)
+    kwargs: dict[str, Any] = Field(...)
 
 
 class UnitCheckpointConfig(ConfigBaseModel):
@@ -417,14 +518,14 @@ class MetricCheckpointConfig(ConfigBaseModel):
 
 
 ModelCheckpointConfig = Annotated[
-    Union[UnitCheckpointConfig, MetricCheckpointConfig],
+    UnitCheckpointConfig | MetricCheckpointConfig,
     Field(discriminator="monitor")
 ]
 
 
 class TrainerStrategyConfig(ConfigBaseModel):
     name: str = Field("auto")
-    kwargs: Dict[str, Any] = Field(...)
+    kwargs: dict[str, Any] = Field(...)
 
 
 class TrainerConfig(ConfigBaseModel):
@@ -433,10 +534,10 @@ class TrainerConfig(ConfigBaseModel):
     max_steps: int = Field(160000)
     min_epochs: int = Field(0)
     max_epochs: int = Field(100)
-    checkpoints: List[ModelCheckpointConfig] = Field(..., min_length=1)
+    checkpoints: list[ModelCheckpointConfig] = Field(..., min_length=1)
     accelerator: str = Field("auto")
-    devices: Union[Literal["auto"], int, List[int]] = Field("auto")
-    num_nodes: int = Field(1, ge=1)
+    devices: Union[Literal["auto"], int, list[int]] = Field("auto")
+    num_nodes: Literal[1] = Field(1, ge=1)
     strategy: TrainerStrategyConfig = Field(...)
     precision: str = Field("16-mixed")
     val_every_n_units: int = Field(2000, ge=1)

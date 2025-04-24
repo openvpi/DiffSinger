@@ -76,8 +76,7 @@ class ConvNeXtDecoder(nn.Module):
             stride=1, padding=(kernel_size - 1) // 2
         )
 
-    # noinspection PyUnusedLocal
-    def forward(self, x, infer=False):
+    def forward(self, x):
         x = x.transpose(1, 2)
         x = self.inconv(x)
         for conv in self.conv:
