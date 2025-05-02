@@ -1,7 +1,0 @@
-*.ds
-*.onnx
-*.npy
-*.wav
-temp/
-cache/
-assets/
