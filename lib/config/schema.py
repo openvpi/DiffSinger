@@ -362,6 +362,19 @@ class EmbeddingsConfig(ConfigBaseModel):
         )
     })
 
+    @property
+    def embedded_variance_names(self):
+        embedded_variance_names = []
+        if self.use_energy_embed:
+            embedded_variance_names.append("energy")
+        if self.use_breathiness_embed:
+            embedded_variance_names.append("breathiness")
+        if self.use_voicing_embed:
+            embedded_variance_names.append("voicing")
+        if self.use_tension_embed:
+            embedded_variance_names.append("tension")
+        return embedded_variance_names
+
 
 class PredictionConfig(ConfigBaseModel):
     predict_pitch: bool = Field(...)
@@ -369,6 +382,19 @@ class PredictionConfig(ConfigBaseModel):
     predict_breathiness: bool = Field(...)
     predict_voicing: bool = Field(...)
     predict_tension: bool = Field(...)
+
+    @property
+    def predicted_variance_names(self):
+        predicted_variance_names = []
+        if self.predict_energy:
+            predicted_variance_names.append("energy")
+        if self.predict_breathiness:
+            predicted_variance_names.append("breathiness")
+        if self.predict_voicing:
+            predicted_variance_names.append("voicing")
+        if self.predict_tension:
+            predicted_variance_names.append("tension")
+        return predicted_variance_names
 
 
 class NormalizationConfig(ConfigBaseModel):

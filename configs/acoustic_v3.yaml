@@ -27,7 +27,7 @@ data:
       language: zh
 
 binarizer:
-  binary_data_dir: "data/qixuan_v4/binary"
+  binary_data_dir: "data/qixuan_v4/binary/acoustic"
   num_workers: 4
   extractors:
     pitch_extraction:

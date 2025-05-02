@@ -47,18 +47,18 @@ class AcousticLightningModule(BaseLightningModule):
         self.register_loss("diff_spec_loss", diff_spec_loss)
 
     def forward_model(self, sample: dict[str, torch.Tensor], infer: bool) -> dict[str, torch.Tensor]:
-        sample = sample.copy()
-        tokens = sample.pop("tokens")
-        languages = sample.pop("languages")
-        durations = sample.pop("ph_dur")
-        f0 = sample.pop("f0")
-        spk_id = sample.pop("spk_id")
-        mel = sample.pop("mel")
-        key_shift = sample.pop("key_shift").unsqueeze(1)
-        speed = sample.pop("speed").unsqueeze(1)
+        tokens = sample["tokens"]
+        languages = sample["languages"]
+        durations = sample["ph_dur"]
+        f0 = sample["f0"]
+        spk_id = sample["spk_id"]
+        mel = sample["mel"]
+        key_shift = sample["key_shift"].unsqueeze(1)
+        speed = sample["speed"].unsqueeze(1)
+        variances = {v_name: sample[v_name] for v_name in self.model_config.embeddings.embedded_variance_names}
         model_out, mask = self.model(
             tokens=tokens, durations=durations, languages=languages, spk_ids=spk_id,
-            f0=f0, key_shift=key_shift, speed=speed, spec_gt=mel, infer=infer, **sample
+            f0=f0, key_shift=key_shift, speed=speed, spec_gt=mel, infer=infer, **variances
         )
         model_out: ShallowDiffusionOutput
         if infer:
@@ -66,7 +66,7 @@ class AcousticLightningModule(BaseLightningModule):
                 "aux_spec": model_out.aux_out,
                 "diff_spec": model_out.diff_out,
             }
-            return {k: v for k, v in outputs.items() if v is not None}
+            return outputs
         else:
             losses = {}
             if model_out.aux_out is not None:
@@ -82,48 +82,50 @@ class AcousticLightningModule(BaseLightningModule):
             data_idx = sample['indices'][i].item()
             spec_len = self.valid_dataset.info["mel"][data_idx]
             f0_len = self.valid_dataset.info["f0"][data_idx]
-            if data_idx < self.training_config.validation.max_plots:
-                gt_spec = sample["mel"][i, :spec_len]
-                f0 = sample["f0"][i, :f0_len]
-                if self.vocoder is not None and data_idx not in self.logged_gt_wav_indices:
-                    gt_wav = self.vocoder.run(gt_spec.unsqueeze(0), f0=f0.unsqueeze(0)).squeeze(0)
-                    self.plot_wav(data_idx, gt_wav, name_prefix="gt")
-                    self.logged_gt_wav_indices.add(data_idx)
-                aux_spec = outputs.get("aux_spec")
-                diff_spec = outputs.get("diff_spec")
-                if aux_spec is not None:
-                    self.plot_spec(
-                        data_idx,
-                        sample["mel"][i, :spec_len],
-                        outputs["aux_spec"][i, :spec_len],
-                        name_prefix="aux_spec",
-                    )
-                    if self.vocoder is not None:
-                        aux_wav = self.vocoder.run(outputs["aux_spec"][i].unsqueeze(0), f0=f0.unsqueeze(0)).squeeze(0)
-                        self.plot_wav(data_idx, aux_wav, name_prefix="aux")
-                if diff_spec is not None:
-                    self.plot_spec(
-                        data_idx,
-                        sample["mel"][i, :spec_len],
-                        outputs["diff_spec"][i, :spec_len],
-                        name_prefix="diff_spec",
-                    )
-                    if self.vocoder is not None:
-                        diff_wav = self.vocoder.run(outputs["diff_spec"][i].unsqueeze(0), f0=f0.unsqueeze(0)).squeeze(0)
-                        self.plot_wav(data_idx, diff_wav, name_prefix="diff")
+            if data_idx >= self.training_config.validation.max_plots:
+                continue
+            gt_spec = sample["mel"][i, :spec_len]
+            f0 = sample["f0"][i, :f0_len]
+            if self.vocoder is not None and data_idx not in self.logged_gt_wav_indices:
+                gt_wav = self.vocoder.run(gt_spec.unsqueeze(0), f0=f0.unsqueeze(0)).squeeze(0)
+                self.plot_wav(f"waveform/gt_wav_{data_idx}", gt_wav)
+                self.logged_gt_wav_indices.add(data_idx)
+            spk_name = self.valid_dataset.info["spk_names"][data_idx]
+            item_name = self.valid_dataset.info["item_names"][data_idx]
+            title = f"{spk_name} - {item_name}"
+            if (aux_spec := outputs.get("aux_spec")) is not None:
+                self.plot_spec(
+                    tag=f"spectrogram/aux_spec_{data_idx}",
+                    spec_gt=sample["mel"][i, :spec_len],
+                    spec_pred=aux_spec[i, :spec_len],
+                    title=title
+                )
+                if self.vocoder is not None:
+                    aux_wav = self.vocoder.run(outputs["aux_spec"][i].unsqueeze(0), f0=f0.unsqueeze(0)).squeeze(0)
+                    self.plot_wav(f"waveform/aux_wav_{data_idx}", aux_wav)
+            if (diff_spec := outputs.get("diff_spec")) is not None:
+                self.plot_spec(
+                    tag=f"spectrogram/diff_spec_{data_idx}",
+                    spec_gt=sample["mel"][i, :spec_len],
+                    spec_pred=diff_spec[i, :spec_len],
+                    title=title
+                )
+                if self.vocoder is not None:
+                    diff_wav = self.vocoder.run(outputs["diff_spec"][i].unsqueeze(0), f0=f0.unsqueeze(0)).squeeze(0)
+                    self.plot_wav(f"waveform/diff_wav_{data_idx}", diff_wav)
 
-    def plot_spec(self, data_idx: int, spec_gt: torch.Tensor, spec_pred: torch.Tensor, name_prefix="spec", title=None):
+    def plot_spec(self, tag: str, spec_gt: torch.Tensor, spec_pred: torch.Tensor, title=None):
         vmin = self.training_config.validation.spec_vmin
         vmax = self.training_config.validation.spec_vmax
         spec_compare = torch.cat([(spec_pred - spec_gt).abs() + vmin, spec_gt, spec_pred], -1)
         logger: TensorBoardLogger = self.logger
-        logger.experiment.add_figure(f"{name_prefix}_{data_idx}", spec_to_figure(
+        logger.experiment.add_figure(tag, spec_to_figure(
             spec_compare, vmin=vmin, vmax=vmax, title=title
         ), global_step=self.global_step)
 
-    def plot_wav(self, data_idx: int, wav: torch.Tensor, name_prefix="gt"):
+    def plot_wav(self, tag: str, wav: torch.Tensor):
         logger: TensorBoardLogger = self.logger
         logger.experiment.add_audio(
-            f"{name_prefix}_{data_idx}", wav.cpu().numpy(),
+            tag, wav.cpu().numpy(),
             sample_rate=self.vocoder.sample_rate, global_step=self.global_step
         )

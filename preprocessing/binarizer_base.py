@@ -291,7 +291,7 @@ class BaseBinarizer(abc.ABC):
             )
         else:
             iterable = (self.process_item(item, augmentation) for item in items)
-        names = []
+        item_names = []
         ph_texts = []
         spk_ids = []
         spk_names = []
@@ -301,12 +301,13 @@ class BaseBinarizer(abc.ABC):
         total_duration = {k: 0 for k in self.spk_map}
         for samples in tqdm.tqdm(iterable, total=len(items), desc=f"Processing {prefix} items"):
             for sample in samples:
+                sample: DataSample
                 if not augmentation and sample.augmented:
                     raise RuntimeError(
                         f"Augmented samples are not allowed when `augmentation` is set to False."
                     )
                 builder.add_item(sample.data)
-                names.append(sample.name)
+                item_names.append(sample.name)
                 ph_texts.append(sample.ph_text)
                 spk_ids.append(sample.spk_id)
                 spk_names.append(sample.spk_name)
@@ -322,7 +323,7 @@ class BaseBinarizer(abc.ABC):
                 total_duration[sample.spk_name] += duration
         builder.finalize()
         metadata = {
-            "names": names,
+            "item_names": item_names,
             "ph_texts": ph_texts,
             "spk_ids": spk_ids,
             "spk_names": spk_names,
@@ -330,7 +331,7 @@ class BaseBinarizer(abc.ABC):
             **attr_lengths
         }
         if prefix == "train":
-            metadata.pop("names")
+            metadata.pop("item_names")
             metadata.pop("ph_texts")
             metadata.pop("spk_names")
         metadata = {

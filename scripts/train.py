@@ -176,63 +176,38 @@ def train_model(
     trainer.fit(model=pl_module, ckpt_path=resume_from)
 
 
-@click.group()
-def main():
-    pass
+def _get_config_scope(key: str) -> int:
+    if key == "acoustic":
+        return ConfigurationScope.ACOUSTIC
+    elif key == "variance":
+        return ConfigurationScope.VARIANCE
+    elif key == "duration":
+        return ConfigurationScope.DURATION
+    else:
+        raise ValueError(f"Invalid config scope key: {key}")
 
 
-@main.command(name="acoustic", help="Train acoustic model.")
-@click.option(
-    "--config", type=click.Path(
-        exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
-    ),
-    required=True,
-    help="Path to the configuration file."
-)
-@click.option(
-    "--override", multiple=True,
-    type=click.STRING, required=False,
-    help="Override configuration values in dotlist format."
-)
-@click.option(
-    "--work-dir", type=click.Path(
-        dir_okay=True, file_okay=False, path_type=pathlib.Path
-    ),
-    required=False, default=pathlib.Path(__file__).parent.parent / "experiments",
-    show_default=True,
-    help="Path to the working directory. The experiment subdirectory will be created here."
-)
-@click.option(
-    "--exp-name", type=click.STRING,
-    required=True,
-    help="Experiment name. Checkpoints will be saved in subdirectory with this name."
-)
-@click.option(
-    "--log-dir", type=click.Path(
-        dir_okay=True, file_okay=False, path_type=pathlib.Path
-    ),
-    required=False,
-    help="Directory to save logs. If not specified, logs will be saved in the checkpoints directory."
-)
-@click.option(
-    "--restart", is_flag=True, default=False,
-    help="Ignore existing checkpoints and start new training."
-)
-@click.option(
-    "--resume-from", type=click.Path(
-        exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
-    ),
-    required=False,
-    help="Resume training from this specific checkpoint."
-)
-def _train_acoustic_model_cli(
+def _get_lightning_module_cls(key: str):
+    if key == "acoustic":
+        from training.acoustic_module import AcousticLightningModule
+        return AcousticLightningModule
+    elif key == "variance":
+        from training.variance_module import VarianceLightningModule
+        return VarianceLightningModule
+    else:
+        raise ValueError(f"Invalid lightning module key: {key}")
+
+
+def _exec_training(
+        recipe_key: str,
         config: pathlib.Path, override: list[str],
         exp_name: str, work_dir: pathlib.Path,
         log_dir: pathlib.Path,
         restart: bool,
-        resume_from: pathlib.Path,
+        resume_from: pathlib.Path
 ):
-    config = _load_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
+    scope = _get_config_scope(recipe_key)
+    config = _load_config(config, scope=scope, overrides=override)
     ckpt_save_dir = work_dir / exp_name
     if log_dir is None:
         log_save_dir = ckpt_save_dir
@@ -261,12 +236,100 @@ def _train_acoustic_model_cli(
         print(formatter.format(cfg.model))
         print(formatter.format(cfg.training))
 
-    from training.acoustic_module import AcousticLightningModule
+    pl_module_cls = _get_lightning_module_cls(recipe_key)
     log_config(config)
     train_model(
-        config=config, pl_module_cls=AcousticLightningModule,
+        config=config, pl_module_cls=pl_module_cls,
         ckpt_save_dir=ckpt_save_dir, log_save_dir=log_save_dir,
         resume_from=resume_from
+    )
+
+
+@click.group()
+def main():
+    pass
+
+
+def shared_options(func):
+    func = click.option(
+        "--config", type=click.Path(
+            exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+        ),
+        required=True,
+        help="Path to the configuration file."
+    )(func)
+    func = click.option(
+        "--override", multiple=True,
+        type=click.STRING, required=False,
+        help="Override configuration values in dotlist format."
+    )(func)
+    func = click.option(
+        "--work-dir", type=click.Path(
+            dir_okay=True, file_okay=False, path_type=pathlib.Path
+        ),
+        required=False, default=pathlib.Path(__file__).parent.parent / "experiments",
+        show_default=True,
+        help="Path to the working directory. The experiment subdirectory will be created here."
+    )(func)
+    func = click.option(
+        "--exp-name", type=click.STRING,
+        required=True,
+        help="Experiment name. Checkpoints will be saved in subdirectory with this name."
+    )(func)
+    func = click.option(
+        "--log-dir", type=click.Path(
+            dir_okay=True, file_okay=False, path_type=pathlib.Path
+        ),
+        required=False,
+        help="Directory to save logs. If not specified, logs will be saved in the checkpoints directory."
+    )(func)
+    func = click.option(
+        "--restart", is_flag=True, default=False,
+        help="Ignore existing checkpoints and start new training."
+    )(func)
+    func = click.option(
+        "--resume-from", type=click.Path(
+            exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+        ),
+        required=False,
+        help="Resume training from this specific checkpoint."
+    )(func)
+    return func
+
+
+@main.command(name="acoustic", help="Train acoustic model.")
+@shared_options
+def _train_acoustic_model_cli(
+        config: pathlib.Path, override: list[str],
+        exp_name: str, work_dir: pathlib.Path,
+        log_dir: pathlib.Path,
+        restart: bool,
+        resume_from: pathlib.Path,
+):
+    _exec_training(
+        recipe_key="acoustic",
+        config=config, override=override,
+        exp_name=exp_name, work_dir=work_dir,
+        log_dir=log_dir,
+        restart=restart, resume_from=resume_from,
+    )
+
+
+@main.command(name="variance", help="Train variance model.")
+@shared_options
+def _train_variance_model_cli(
+        config: pathlib.Path, override: list[str],
+        exp_name: str, work_dir: pathlib.Path,
+        log_dir: pathlib.Path,
+        restart: bool,
+        resume_from: pathlib.Path,
+):
+    _exec_training(
+        recipe_key="variance",
+        config=config, override=override,
+        exp_name=exp_name, work_dir=work_dir,
+        log_dir=log_dir,
+        restart=restart, resume_from=resume_from,
     )
 
 

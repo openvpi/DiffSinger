@@ -57,31 +57,27 @@ class DiffSingerVariance(nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.predict_pitch = config.prediction.predict_pitch
-        variance_list = []
         var_norm_mins = []
         var_norm_maxs = []
         var_clip_mins = []
         var_clip_maxs = []
+        variance_list = config.prediction.predicted_variance_names
         if config.prediction.predict_energy:
-            variance_list.append("energy")
             var_norm_mins.append(config.normalization.energy_db_min)
             var_norm_maxs.append(config.normalization.energy_db_max)
             var_clip_mins.append(config.normalization.energy_db_min)
             var_clip_maxs.append(0.)
         if config.prediction.predict_breathiness:
-            variance_list.append("breathiness")
             var_norm_mins.append(config.normalization.breathiness_db_min)
             var_norm_maxs.append(config.normalization.breathiness_db_max)
             var_clip_mins.append(config.normalization.breathiness_db_min)
             var_clip_maxs.append(0.)
         if config.prediction.predict_voicing:
-            variance_list.append("voicing")
             var_norm_mins.append(config.normalization.voicing_db_min)
             var_norm_maxs.append(config.normalization.voicing_db_max)
             var_clip_mins.append(config.normalization.voicing_db_min)
             var_clip_maxs.append(0.)
         if config.prediction.predict_tension:
-            variance_list.append("tension")
             var_norm_mins.append(config.normalization.tension_logit_min)
             var_norm_maxs.append(config.normalization.tension_logit_max)
             var_clip_mins.append(config.normalization.tension_logit_min)
@@ -134,7 +130,8 @@ class DiffSingerVariance(nn.Module):
 
     def forward(
             self, tokens, durations, languages, spk_ids=None, spk_embed=None,
-            note_midi=None, note_rest=None, note_dur=None, note_glide=None, pitch=None,
+            note_midi=None, note_rest=None, note_dur=None, note_glide=None,
+            base_pitch=None, pitch=None,
             infer=True, **kwargs
     ):
         linguistic_encoder_out = self.linguistic_encoder(tokens=tokens, durations=durations, languages=languages)
@@ -149,8 +146,10 @@ class DiffSingerVariance(nn.Module):
             )
             # TODO: add pitch retaking and expressiveness
             pitch_cond = cond + self.local_upsample(melody_encoder_out, ups=note_dur)[0]
-            pitch_predictor_out = self.pitch_predictor(condition=pitch_cond, sample_gt=pitch, infer=infer)
+            pitch_predictor_out = self.pitch_predictor(condition=pitch_cond, sample_gt=pitch - base_pitch, infer=infer)
             pitch_predictor_out = pitch_predictor_out.diff_out  # no shallow diffusion yet
+            if infer:
+                pitch_predictor_out = pitch_predictor_out + base_pitch
         else:
             pitch_predictor_out = None
         if self.predict_variances:

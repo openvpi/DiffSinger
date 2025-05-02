@@ -45,24 +45,29 @@ def main():
     pass
 
 
+def shared_options(func):
+    func = click.option(
+        "--config", type=click.Path(
+            exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
+        ),
+        required=True,
+        help="Path to the configuration file."
+    )(func)
+    func = click.option(
+        "--override", multiple=True,
+        type=click.STRING, required=False,
+        help="Override configuration values in dotlist format."
+    )(func)
+    func = click.option(
+        "--coverage-check-option",
+        type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
+        default="strict", required=False
+    )(func)
+    return func
+
+
 @main.command(name="acoustic", help="Binarize raw acoustic datasets.")
-@click.option(
-    "--config", type=click.Path(
-        exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
-    ),
-    required=True,
-    help="Path to the configuration file."
-)
-@click.option(
-    "--override", multiple=True,
-    type=click.STRING, required=False,
-    help="Override configuration values in dotlist format."
-)
-@click.option(
-    "--coverage-check-option",
-    type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
-    default="strict", required=False
-)
+@shared_options
 def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
     config = _load_and_log_config(config, scope=ConfigurationScope.ACOUSTIC, overrides=override)
     from preprocessing.acoustic_binarizer import AcousticBinarizer
@@ -73,23 +78,7 @@ def _binarize_acoustic_datasets_cli(config: pathlib.Path, override: list[str], c
 
 
 @main.command(name="variance", help="Binarize raw variance datasets.")
-@click.option(
-    "--config", type=click.Path(
-        exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
-    ),
-    required=True,
-    help="Path to the configuration file."
-)
-@click.option(
-    "--override", multiple=True,
-    type=click.STRING, required=False,
-    help="Override configuration values in dotlist format."
-)
-@click.option(
-    "--coverage-check-option",
-    type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
-    default="strict", required=False
-)
+@shared_options
 def _binarize_variance_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
     config = _load_and_log_config(config, scope=ConfigurationScope.VARIANCE, overrides=override)
     from preprocessing.variance_binarizer import VarianceBinarizer
@@ -100,23 +89,7 @@ def _binarize_variance_datasets_cli(config: pathlib.Path, override: list[str], c
 
 
 @main.command(name="duration", help="Binarize raw duration datasets.")
-@click.option(
-    "--config", type=click.Path(
-        exists=True, dir_okay=False, file_okay=True, readable=True, path_type=pathlib.Path
-    ),
-    required=True,
-    help="Path to the configuration file."
-)
-@click.option(
-    "--override", multiple=True,
-    type=click.STRING, required=False,
-    help="Override configuration values in dotlist format."
-)
-@click.option(
-    "--coverage-check-option",
-    type=click.Choice(["strict", "bypass", "compat"], case_sensitive=False),
-    default="strict", required=False
-)
+@shared_options
 def _binarize_duration_datasets_cli(config: pathlib.Path, override: list[str], coverage_check_option: str):
     config = _load_and_log_config(config, scope=ConfigurationScope.DURATION, overrides=override)
     from preprocessing.duration_binarizer import DurationBinarizer

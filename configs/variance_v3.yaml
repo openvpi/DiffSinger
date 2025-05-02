@@ -28,7 +28,7 @@ data:
       language: zh
 
 binarizer:
-  binary_data_dir: "data/qixuan_v4/binary"
+  binary_data_dir: "data/qixuan_v4/binary/variance"
   num_workers: 4
   prefer_ds: false
   extractors:
@@ -96,7 +96,7 @@ model:
       rel_pos: true
   prediction:
     predict_pitch: true
-    predict_energy: true
+    predict_energy: false
     predict_breathiness: true
     predict_voicing: true
     predict_tension: true
@@ -120,36 +120,30 @@ model:
     time_scale_factor: 1000
     sampling_algorithm: euler
     sampling_steps: 20
-    backbone_arch: lynxnet
+    backbone_arch: wavenet
     backbone_kwargs:
-      num_channels: 1024
-      num_layers: 6
-      kernel_size: 31
-      dropout_rate: 0.0
-      strong_cond: true
+      num_layers: 20
+      num_channels: 256
+      dilation_cycle_length: 5
   variance_predictor:
     diffusion_type: reflow
     time_scale_factor: 1000
     sampling_algorithm: euler
     sampling_steps: 20
-    backbone_arch: lynxnet
+    backbone_arch: wavenet
     backbone_kwargs:
-      num_channels: 1024
-      num_layers: 6
-      kernel_size: 31
-      dropout_rate: 0.0
-      strong_cond: true
+      num_layers: 10
+      num_channels: 192
+      dilation_cycle_length: 4
 
 training:
   loss:
     pitch_predictor:
       main_loss_type: L2
-      main_loss_log_norm: false
-      aux_loss_type: L1
+      main_loss_log_norm: true
     variance_predictor:
       main_loss_type: L2
-      main_loss_log_norm: false
-      aux_loss_type: L1
+      main_loss_log_norm: true
   dataloader:
     max_batch_frames: 50000
     max_batch_size: 64
@@ -177,7 +171,7 @@ training:
     min_epochs: 0
     max_epochs: 1000
     val_every_n_units: 2000
-    log_every_n_steps: 1
+    log_every_n_steps: 100
     num_sanity_val_steps: 1
     checkpoints:
       - tag: "best"
