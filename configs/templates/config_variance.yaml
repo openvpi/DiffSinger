@@ -66,6 +66,7 @@ tension_logit_max: 10.0
 enc_ffn_kernel_size: 3
 use_rope: true
 use_variance_scaling: true
+use_retake_scaling: true
 hidden_size: 256
 dur_prediction_args:
   arch: resnet
@@ -105,6 +106,7 @@ pitch_prediction_args:
     num_layers: 6
     num_channels: 512
     dropout_rate: 0.0
+    use_conditioner_cache: true
 
 variances_prediction_args:
   total_repeat_bins: 48
@@ -118,6 +120,7 @@ variances_prediction_args:
     num_layers: 6
     num_channels: 384
     dropout_rate: 0.0
+    use_conditioner_cache: true
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0

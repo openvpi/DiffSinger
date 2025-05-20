@@ -252,10 +252,16 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         base_pitch = self.smooth(frame_midi_pitch)
         if self.use_melody_encoder:
             delta_pitch = (pitch - base_pitch) * ~retake
-            pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None])
+            if self.use_variance_scaling:
+                pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None] / 12)
+            else:
+                pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None])
         else:
             base_pitch = base_pitch * retake + pitch * ~retake
-            pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+            if self.use_variance_scaling:
+                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None] / 128)
+            else:
+                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
         if hparams['use_spk_id'] and spk_embed is not None:
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
@@ -275,13 +281,16 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             variances: dict = None, retake=None, spk_embed=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        variance_cond = condition + self.pitch_embed(pitch[:, :, None])
+        if self.use_variance_scaling:
+            variance_cond = condition + self.pitch_embed(pitch[:, :, None] / 12)
+        else:
+            variance_cond = condition + self.pitch_embed(pitch[:, :, None])
         non_retake_masks = [
             v_retake.float()  # [B, T, 1]
             for v_retake in (~retake).split(1, dim=2)
         ]
         variance_embeds = [
-            self.variance_embeds[v_name](variances[v_name][:, :, None]) * v_masks
+            self.variance_embeds[v_name](variances[v_name][:, :, None]) * v_masks * self.variance_retake_scaling[v_name]
             for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)

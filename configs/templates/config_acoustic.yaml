@@ -83,6 +83,7 @@ backbone_args:
   num_layers: 6
   kernel_size: 31
   dropout_rate: 0.0
+  use_conditioner_cache: true
 #backbone_type: 'wavenet'
 #backbone_args:
 #  num_channels: 512

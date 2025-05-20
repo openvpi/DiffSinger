@@ -33,7 +33,7 @@ class LYNXNet2Block(nn.Module):
 
 class LYNXNet2(nn.Module):
     def __init__(self, in_dims, n_feats, *, num_layers=6, num_channels=512, expansion_factor=1, kernel_size=31,
-                 dropout=0.0):
+                 dropout=0.0, use_conditioner_cache=False):
         """
         LYNXNet2(Linear Gated Depthwise Separable Convolution Network Version 2)
         """
@@ -41,9 +41,12 @@ class LYNXNet2(nn.Module):
         self.in_dims = in_dims
         self.n_feats = n_feats
         self.input_projection = nn.Linear(in_dims * n_feats, num_channels)
-        self.conditioner_projection = nn.Linear(hparams['hidden_size'], num_channels)
-        # It may need to be modified at some point to be compatible with the condition cache
-        # self.conditioner_projection = nn.Conv1d(hparams['hidden_size'], num_channels, 1)
+        self.use_conditioner_cache = use_conditioner_cache
+        if self.use_conditioner_cache:
+            # It may need to be modified at some point to be compatible with the condition cache
+            self.conditioner_projection = nn.Conv1d(hparams['hidden_size'], num_channels, 1)
+        else:
+            self.conditioner_projection = nn.Linear(hparams['hidden_size'], num_channels)
         self.diffusion_embedding = nn.Sequential(
             SinusoidalPosEmb(num_channels),
             nn.Linear(num_channels, num_channels * 4),
@@ -81,9 +84,11 @@ class LYNXNet2(nn.Module):
             x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
 
         x = self.input_projection(x.transpose(1, 2)) # [B, T, F x M]
-        x = x + self.conditioner_projection(cond.transpose(1, 2))
-        # It may need to be modified at some point to be compatible with the condition cache
-        # x = x + self.conditioner_projection(cond.transpose(1, 2))
+        if self.use_conditioner_cache:
+            # It may need to be modified at some point to be compatible with the condition cache
+            x = x + self.conditioner_projection(cond).transpose(1, 2)
+        else:
+            x = x + self.conditioner_projection(cond.transpose(1, 2))
         x = x + self.diffusion_embedding(diffusion_step).unsqueeze(1)
 
         for layer in self.residual_layers:

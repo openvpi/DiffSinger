@@ -37,6 +37,7 @@ predict_tension: false
 enc_ffn_kernel_size: 3
 use_rope: true
 use_variance_scaling: true
+use_retake_scaling: true
 rel_pos: true
 hidden_size: 256
 
@@ -71,6 +72,7 @@ pitch_prediction_args:
     num_layers: 6
     num_channels: 512
     dropout_rate: 0.0
+    use_conditioner_cache: true
 
 energy_db_min: -96.0
 energy_db_max: -12.0
@@ -94,6 +96,7 @@ variances_prediction_args:
     num_layers: 6
     num_channels: 384
     dropout_rate: 0.0
+    use_conditioner_cache: true
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
