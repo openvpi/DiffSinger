@@ -66,7 +66,6 @@ tension_logit_max: 10.0
 enc_ffn_kernel_size: 3
 use_rope: true
 use_variance_scaling: true
-use_retake_scaling: true
 hidden_size: 256
 dur_prediction_args:
   arch: resnet

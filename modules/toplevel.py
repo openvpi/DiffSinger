@@ -196,7 +196,6 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 raise NotImplementedError(self.diffusion_type)
 
         self.use_variance_scaling = hparams.get('use_variance_scaling', False)
-        self.use_retake_scaling = hparams.get('use_retake_scaling', False)
         self.custom_variance_scaling_factor = {
             'energy': 1. / 96,
             'breathiness': 1. / 96,
@@ -213,7 +212,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             'key_shift': 1.,
             'speed': 1.
         }
-        if self.use_variance_scaling and self.use_retake_scaling:
+        if self.use_variance_scaling:
             self.variance_retake_scaling = self.custom_variance_scaling_factor
         else:
             self.variance_retake_scaling = self.default_variance_scaling_factor
