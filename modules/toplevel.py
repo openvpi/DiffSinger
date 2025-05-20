@@ -188,6 +188,13 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 for v_name in self.variance_prediction_list
             })
 
+            if self.diffusion_type == 'ddpm':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusion)
+            elif self.diffusion_type == 'reflow':
+                self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlow)
+            else:
+                raise NotImplementedError(self.diffusion_type)
+
         self.use_variance_scaling = hparams.get('use_variance_scaling', False)
         self.use_retake_scaling = hparams.get('use_retake_scaling', False)
         self.custom_variance_scaling_factor = {
@@ -210,13 +217,6 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             self.variance_retake_scaling = self.custom_variance_scaling_factor
         else:
             self.variance_retake_scaling = self.default_variance_scaling_factor
-
-            if self.diffusion_type == 'ddpm':
-                self.variance_predictor = self.build_adaptor(cls=MultiVarianceDiffusion)
-            elif self.diffusion_type == 'reflow':
-                self.variance_predictor = self.build_adaptor(cls=MultiVarianceRectifiedFlow)
-            else:
-                raise NotImplementedError(self.diffusion_type)
 
     def forward(
             self, txt_tokens, midi, ph2word, ph_dur=None, word_dur=None, mel2ph=None,
