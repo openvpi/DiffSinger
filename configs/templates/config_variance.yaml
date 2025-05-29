@@ -111,7 +111,7 @@ pitch_prediction_args:
 #   strong_cond: true
 
 variances_prediction_args:
-  total_repeat_bins: 64
+  total_repeat_bins: 72
   backbone_type: 'wavenet'
   backbone_args:
     num_layers: 10
