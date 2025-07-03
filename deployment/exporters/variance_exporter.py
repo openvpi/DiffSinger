@@ -4,6 +4,7 @@ from typing import Union, List, Tuple, Dict
 
 import onnx
 import onnxsim
+import onnxslim
 import torch
 import yaml
 
@@ -81,6 +82,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     self.export_spk = [(name, {name: 1.0}) for name in self.spk_map.keys()]
             if self.freeze_spk is not None:
                 self.model.register_buffer('frozen_spk_embed', self._perform_spk_mix(self.freeze_spk[1]))
+
+        self.use_melody_encoder = hparams['use_melody_encoder']
 
     def build_model(self) -> DiffSingerVarianceONNX:
         model = DiffSingerVarianceONNX(
@@ -649,9 +652,11 @@ class DiffSingerVarianceExporter(BaseExporter):
                 'encoder_out': (1, 'n_tokens', hparams['hidden_size'])
             }
         )
-        print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
-        linguistic, check = onnxsim.simplify(linguistic, include_subgraph=True)
-        assert check, 'Simplified ONNX model could not be validated'
+        # print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
+        # linguistic, check = onnxsim.simplify(linguistic, include_subgraph=True)
+        # assert check, 'Simplified ONNX model could not be validated'
+        print(f'Running OnnxSlim on {self.fs2_class_name}...')
+        linguistic = onnxslim.slim(linguistic)
         onnx_helper.model_reorder_io_list(
             linguistic, 'input',
             target_name='languages', insert_after_name='tokens'
@@ -678,8 +683,11 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(
             pitch_pre, output_shapes={'pitch_cond': (1, 'n_frames', hparams['hidden_size'])}
         )
-        pitch_pre, check = onnxsim.simplify(pitch_pre, include_subgraph=True)
-        assert check, 'Simplified ONNX model could not be validated'
+        if self.use_melody_encoder:
+            pitch_pre = onnxslim.slim(pitch_pre)
+        else:
+            pitch_pre, check = onnxsim.simplify(pitch_pre, include_subgraph=True)
+            assert check, 'Simplified ONNX model could not be validated'
 
         onnx_helper.model_override_io_shapes(
             pitch_predictor, output_shapes={'pitch_pred': (1, 'n_frames')}

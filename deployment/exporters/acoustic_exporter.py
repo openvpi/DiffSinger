@@ -4,6 +4,7 @@ from typing import List, Union, Tuple, Dict
 
 import onnx
 import onnxsim
+import onnxslim
 import torch
 import yaml
 
@@ -344,9 +345,11 @@ class DiffSingerAcousticExporter(BaseExporter):
         return spk_mix_embed
 
     def _optimize_fs2_aux_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
-        print(f'Running ONNX Simplifier on {self.fs2_aux_class_name}...')
-        fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
-        assert check, 'Simplified ONNX model could not be validated'
+        # print(f'Running ONNX Simplifier on {self.fs2_aux_class_name}...')
+        # fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
+        # assert check, 'Simplified ONNX model could not be validated'
+        print(f'Running OnnxSlim on {self.fs2_aux_class_name}...')
+        fs2 = onnxslim.slim(fs2)
         onnx_helper.model_reorder_io_list(
             fs2, 'input',
             target_name='languages', insert_after_name='tokens'
