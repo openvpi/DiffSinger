@@ -69,7 +69,7 @@ augmentation_args:
 
 use_bbc_encoder: true
 bbc_mask_len: 8
-bbc_min_segment_length: 64
+bbc_min_segment_length: 16
 bbc_mask_prob: 1.
 # diffusion and shallow diffusion
 diffusion_type: reflow
