@@ -1,0 +1,125 @@
+base_config:
+  - configs/acoustic.yaml
+
+dictionaries:
+  zh: dictionaries/opencpop-extension.txt
+extra_phonemes: []
+merged_phoneme_groups: []
+
+datasets:
+  - raw_data_dir: data/xxx1/raw
+    speaker: speaker1
+    spk_id: 0
+    language: zh
+    test_prefixes:
+      - wav1
+      - wav2
+      - wav3
+      - wav4
+      - wav5
+  - raw_data_dir: data/xxx2/raw
+    speaker: speaker2
+    spk_id: 1
+    language: zh
+    test_prefixes:
+      - wav1
+      - wav2
+      - wav3
+      - wav4
+      - wav5
+
+binary_data_dir: data/xxx/binary
+binarization_args:
+  num_workers: 0
+pe: parselmouth
+pe_ckpt: 'checkpoints/rmvpe/model.pt'
+hnsep: vr
+hnsep_ckpt: 'checkpoints/vr/model.pt'
+vocoder: NsfHifiGAN
+vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
+
+use_lang_id: false
+num_lang: 1
+use_spk_id: false
+num_spk: 1
+
+# NOTICE: before enabling variance embeddings, please read the docs at
+# https://github.com/openvpi/DiffSinger/tree/main/docs/BestPractices.md#choosing-variance-parameters
+use_energy_embed: false
+use_breathiness_embed: false
+use_voicing_embed: false
+use_tension_embed: false
+
+use_key_shift_embed: true
+use_speed_embed: true
+
+augmentation_args:
+  random_pitch_shifting:
+    enabled: true
+    range: [-5., 5.]
+    scale: 0.75
+  fixed_pitch_shifting:
+    enabled: false
+    targets: [-5., 5.]
+    scale: 0.5
+  random_time_stretching:
+    enabled: true
+    range: [0.5, 2.]
+    scale: 0.75
+
+use_bbc_encoder: true
+bbc_mask_len: 8
+bbc_min_segment_length: 64
+bbc_mask_prob: 1.
+# diffusion and shallow diffusion
+diffusion_type: reflow
+enc_ffn_kernel_size: 3
+use_rope: true
+use_shallow_diffusion: true
+T_start: 0.4
+T_start_infer: 0.4
+K_step: 300
+K_step_infer: 300
+backbone_type: 'lynxnet'
+backbone_args:
+  num_channels: 1024
+  num_layers: 6
+  kernel_size: 31
+  dropout_rate: 0.0
+  strong_cond: true
+#backbone_type: 'wavenet'
+#backbone_args:
+#  num_channels: 512
+#  num_layers: 20
+#  dilation_cycle_length: 4
+shallow_diffusion_args:
+  train_aux_decoder: true
+  train_diffusion: true
+  val_gt_start: false
+  aux_decoder_arch: convnext
+  aux_decoder_args:
+    num_channels: 512
+    num_layers: 6
+    kernel_size: 7
+    dropout_rate: 0.1
+  aux_decoder_grad: 0.1
+lambda_aux_mel_loss: 0.2
+
+optimizer_args:
+  lr: 0.0006
+lr_scheduler_args:
+  scheduler_cls: torch.optim.lr_scheduler.StepLR
+  step_size: 10000
+  gamma: 0.75
+max_batch_frames: 50000
+max_batch_size: 64
+max_updates: 160000
+
+num_valid_plots: 10
+val_with_vocoder: true
+val_check_interval: 2000
+num_ckpt_keep: 5
+permanent_ckpt_start: 120000
+permanent_ckpt_interval: 20000
+pl_trainer_devices: 'auto'
+pl_trainer_precision: '16-mixed'

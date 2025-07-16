@@ -17,6 +17,7 @@ from modules.core import (
     RectifiedFlow, PitchRectifiedFlow, MultiVarianceRectifiedFlow
 )
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
+from modules.fastspeech.bbc_mask import fast_bbc_mask
 from modules.fastspeech.param_adaptor import ParameterAdaptorModule
 from modules.fastspeech.tts_modules import RhythmRegulator, LengthRegulator
 from modules.fastspeech.variance_encoder import FastSpeech2Variance, MelodyEncoder
@@ -181,6 +182,12 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             else:
                 raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
 
+        if self.use_bbc_encoder:
+            self.bbc_mask_len = hparams['bbc_mask_len']
+            self.bbc_min_segment_length=hparams['bbc_min_segment_length']
+            self.bbc_mask_prob=hparams['bbc_mask_prob']
+            self.bbc_mask_emb=nn.Parameter(torch.randn(1, 1, hparams['hidden_size']))
+
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
             self.variance_embeds = nn.ModuleDict({
@@ -229,9 +236,21 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             mel2ph = self.lr(dur_pred_align)
             mel2ph = F.pad(mel2ph, [0, base_pitch.shape[1] - mel2ph.shape[1]])
 
-        encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
-        mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
-        condition = torch.gather(encoder_out, 1, mel2ph_)
+        # encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
+        # mel2ph_ = mel2ph[..., None].repeat([1, 1, hparams['hidden_size']])
+        # condition = torch.gather(encoder_out, 1, mel2ph_)
+
+        if self.use_bbc_encoder:
+
+            encoder_out=torch.cat([self.bbc_mask_emb.expand(mel2ph.shape[0],1,encoder_out.shape[-1]),encoder_out],dim=1)
+            encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
+            mel2ph=fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
+            mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
+            condition = torch.gather(encoder_out, 1, mel2ph_)
+        else:
+            encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
+            mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
+            condition = torch.gather(encoder_out, 1, mel2ph_)
 
         if self.use_spk_id:
             condition += spk_embed

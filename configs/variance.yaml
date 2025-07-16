@@ -34,6 +34,11 @@ predict_breathiness: false
 predict_voicing: false
 predict_tension: false
 
+
+use_bbc_encoder: false
+bbc_mask_len: 8
+bbc_min_segment_length: 64
+bbc_mask_prob: 1.
 enc_ffn_kernel_size: 3
 use_rope: true
 rel_pos: true
