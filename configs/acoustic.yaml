@@ -58,6 +58,10 @@ use_tension_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
 
+use_bbc_encoder: true
+bbc_mask_len: 8
+bbc_min_segment_length: 64
+bbc_mask_prob: 1.
 diffusion_type: reflow
 time_scale_factor: 1000
 timesteps: 1000
