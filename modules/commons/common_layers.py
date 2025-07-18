@@ -114,9 +114,49 @@ class SwiGLU(nn.Module):
         # out, gate = x.chunk(2, dim=self.dim)
         # Using torch.split instead of chunk for ONNX export compatibility.
         out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
-        return out * F.silu(gate)
+        gate = F.silu(gate)
+        if x.dtype == torch.float16:
+            out_min, out_max = torch.aminmax(out.detach())
+            gate_min, gate_max = torch.aminmax(gate.detach())
+            max_abs_out = torch.max(-out_min, out_max).float()
+            max_abs_gate = torch.max(-gate_min, gate_max).float()
+            max_abs_value = max_abs_out * max_abs_gate
+            if max_abs_value > 1000:
+                ratio = (1000 / max_abs_value).half()
+                gate *= ratio
+                return (out * gate).clamp(-1000 * ratio, 1000 * ratio) / ratio
+        return out * gate
 
 
+class ATanGLU(nn.Module):
+    # ArcTan-Applies the gated linear unit function.
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        # out, gate = x.chunk(2, dim=self.dim)
+        # Using torch.split instead of chunk for ONNX export compatibility.
+        out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
+        return out * torch.atan(gate)
+        
+        
+class KaimingNormalConv1d(torch.nn.Conv1d):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        nn.init.kaiming_normal_(self.weight)
+
+
+class Transpose(nn.Module):
+    def __init__(self, dims):
+        super().__init__()
+        assert len(dims) == 2, 'dims must be a tuple of two dimensions'
+        self.dims = dims
+
+    def forward(self, x):
+        return x.transpose(*self.dims)
+        
+        
 class TransformerFFNLayer(nn.Module):
     def __init__(self, hidden_size, filter_size, kernel_size=1, dropout=0., act='gelu'):
         super().__init__()
@@ -132,6 +172,9 @@ class TransformerFFNLayer(nn.Module):
             self.act_fn = SiLU()
         elif self.act == 'swiglu':
             self.act_fn = SwiGLU()
+            filter_size_1 = filter_size * 2
+        elif self.act == 'atanglu':
+            self.act_fn = ATanGLU()
             filter_size_1 = filter_size * 2
         else:
             raise ValueError(f'{act} is not a valid activation')
@@ -166,9 +209,16 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         
         # Dropout layer
         self.dropout = nn.Dropout(dropout)
-
+        
         # Rotary Embeddings
         self.rotary_embed = rotary_embed
+        
+        # Initialization parameters
+        nn.init.xavier_uniform_(self.in_proj.weight)
+        nn.init.xavier_uniform_(self.out_proj.weight)
+        if bias:
+            nn.init.constant_(self.in_proj.bias, 0.0)
+            nn.init.constant_(self.out_proj.bias, 0.0)
         
     def forward(self, x, key_padding_mask=None):
         # x: (B, L, C)

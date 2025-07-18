@@ -42,10 +42,10 @@ spec_max: [0]
 mel_vmin: -14.
 mel_vmax: 4.
 mel_base: 'e'
-energy_smooth_width: 0.12
-breathiness_smooth_width: 0.12
-voicing_smooth_width: 0.12
-tension_smooth_width: 0.12
+energy_smooth_width: 0.06
+breathiness_smooth_width: 0.06
+voicing_smooth_width: 0.06
+tension_smooth_width: 0.06
 
 use_lang_id: false
 num_lang: 1
@@ -69,19 +69,21 @@ timesteps: 1000
 max_beta: 0.02
 enc_ffn_kernel_size: 3
 use_rope: true
+use_variance_scaling: true
 rel_pos: true
 sampling_algorithm: euler
 sampling_steps: 20
 diff_accelerator: ddim
 diff_speedup: 10
 hidden_size: 256
-backbone_type: 'lynxnet'
+backbone_type: 'lynxnet2'
 backbone_args:
   num_channels: 1024
   num_layers: 6
   kernel_size: 31
   dropout_rate: 0.0
-  strong_cond: true
+  use_conditioner_cache: true
+  glu_type: 'atanglu'
 main_loss_type: l2
 main_loss_log_norm: false
 schedule_type: 'linear'
@@ -110,20 +112,25 @@ lambda_aux_mel_loss: 0.2
 # train and eval
 num_sanity_val_steps: 1
 optimizer_args:
+  optimizer_cls: modules.optimizer.muon.Muon_AdamW
   lr: 0.0006
+  muon_args:
+    weight_decay: 0.1
+  adamw_args:
+    weight_decay: 0.0
 lr_scheduler_args:
-  step_size: 10000
-  gamma: 0.75
+  step_size: 5000
+  gamma: 0.8
 max_batch_frames: 50000
 max_batch_size: 64
 dataset_size_key: 'lengths'
 val_with_vocoder: true
 val_check_interval: 2000
 num_valid_plots: 10
-max_updates: 160000
+max_updates: 100000
 num_ckpt_keep: 5
-permanent_ckpt_start: 80000
-permanent_ckpt_interval: 20000
+permanent_ckpt_start: 60000
+permanent_ckpt_interval: 10000
 
 finetune_enabled: false
 finetune_ckpt_path: null

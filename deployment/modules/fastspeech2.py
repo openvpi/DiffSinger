@@ -75,7 +75,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         f0 = f0 * (mel2ph > 0)
-        
+
         if self.use_variance_scaling:
             dur_embed = self.dur_embed(torch.log(1 + durations.float())[:, :, None])
         else:
@@ -113,6 +113,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         if self.use_variance_embeds:
             variance_embeds = torch.stack([
                 self.variance_embeds[v_name](variances[v_name][:, :, None])
+                * self.variance_scaling_factor[v_name]
                 for v_name in self.variance_embed_list
             ], dim=-1).sum(-1)
             condition += variance_embeds
@@ -125,6 +126,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 gender_mask = (gender < 0.).float()
                 key_shift = gender * ((1. - gender_mask) * self.shift_max + gender_mask * abs(self.shift_min))
                 key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+            key_shift_embed *= self.variance_scaling_factor['key_shift']
             condition += key_shift_embed
 
         if hparams['use_speed_embed']:
@@ -133,6 +135,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 speed_embed = self.speed_embed(velocity[:, :, None])
             else:
                 speed_embed = self.speed_embed(torch.FloatTensor([1.]).to(condition.device)[:, None, None])
+            speed_embed *= self.variance_scaling_factor['speed']
             condition += speed_embed
 
         if hparams['use_spk_id']:
@@ -175,7 +178,10 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
 
     def forward_encoder_phoneme(self, tokens, ph_dur, languages=None):
         txt_embed = self.txt_embed(tokens)
-        ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
+        if self.use_variance_scaling:
+            ph_dur_embed = self.ph_dur_embed(torch.log(1 + ph_dur.float())[:, :, None])
+        else:
+            ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
         if self.use_lang_id:
             lang_mask = torch.any(
                 tokens[..., None] == self.cross_lingual_token_idx[None, None],

@@ -50,6 +50,26 @@ class FastSpeech2Acoustic(nn.Module):
                 for v_name in self.variance_embed_list
             })
 
+        self.use_variance_scaling = hparams.get('use_variance_scaling', False)
+        if self.use_variance_scaling:
+            self.variance_scaling_factor = {
+                'energy': 1. / 96,
+                'breathiness': 1. / 96,
+                'voicing': 1. / 96,
+                'tension': 0.1,
+                'key_shift': 1. / 12,
+                'speed': 1.
+            }
+        else:
+            self.variance_scaling_factor = {
+                'energy': 1.,
+                'breathiness': 1.,
+                'voicing': 1.,
+                'tension': 1.,
+                'key_shift': 1.,
+                'speed': 1.
+            }
+
         self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
         if self.use_key_shift_embed:
             self.key_shift_embed = Linear(1, hparams['hidden_size'])
@@ -72,17 +92,20 @@ class FastSpeech2Acoustic(nn.Module):
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
             variance_embeds = torch.stack([
-                self.variance_embeds[v_name](variances[v_name][:, :, None])
+                self.variance_embeds[v_name](variances[v_name][:, :, None]) 
+                * self.variance_scaling_factor[v_name]
                 for v_name in self.variance_embed_list
             ], dim=-1).sum(-1)
             condition += variance_embeds
 
         if self.use_key_shift_embed:
             key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
+            key_shift_embed *= self.variance_scaling_factor['key_shift']
             condition += key_shift_embed
 
         if self.use_speed_embed:
             speed_embed = self.speed_embed(speed[:, :, None])
+            speed_embed *= self.variance_scaling_factor['speed']
             condition += speed_embed
 
         return condition
@@ -95,7 +118,10 @@ class FastSpeech2Acoustic(nn.Module):
     ):
         txt_embed = self.txt_embed(txt_tokens)
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1]).float()
-        dur_embed = self.dur_embed(dur[:, :, None])
+        if self.use_variance_scaling:
+            dur_embed = self.dur_embed(torch.log(1 + dur[:, :, None]))
+        else:
+            dur_embed = self.dur_embed(dur[:, :, None])
         if self.use_lang_id:
             lang_embed = self.lang_embed(languages)
             extra_embed = dur_embed + lang_embed

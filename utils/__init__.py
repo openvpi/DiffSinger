@@ -315,8 +315,9 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
 
 
 def simulate_lr_scheduler(optimizer_args, scheduler_args, step_count, num_param_groups=1):
+    optimizer_cls = optimizer_args['optimizer_cls']
     optimizer = build_object_from_class_name(
-        optimizer_args['optimizer_cls'],
+        'torch.optim.AdamW' if optimizer_cls == 'modules.optimizer.muon.Muon_AdamW' else optimizer_cls,
         torch.optim.Optimizer,
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args
