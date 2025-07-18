@@ -87,7 +87,7 @@ class FastSpeech2Acoustic(nn.Module):
             self.bbc_mask_len = hparams['bbc_mask_len']
             self.bbc_min_segment_length=hparams['bbc_min_segment_length']
             self.bbc_mask_prob=hparams['bbc_mask_prob']
-            self.bbc_mask_emb=nn.Parameter(torch.randn(1, 1, hparams['hidden_size']))
+            self.bbc_mask_emb=nn.Parameter(torch.randn(hparams['hidden_size']))
 
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
@@ -130,7 +130,7 @@ class FastSpeech2Acoustic(nn.Module):
         encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
         if self.use_bbc_encoder:
 
-            encoder_out=torch.cat([self.bbc_mask_emb.expand(mel2ph.shape[0],1,encoder_out.shape[-1]),encoder_out],dim=1)
+            encoder_out=torch.cat([self.bbc_mask_emb.unsqueeze(0).unsqueeze(0).expand(mel2ph.shape[0],1,encoder_out.shape[-1]),encoder_out],dim=1)
             encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
             mel2ph=fast_fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
             mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])

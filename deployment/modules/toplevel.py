@@ -13,6 +13,7 @@ from deployment.modules.rectified_flow import (
     RectifiedFlowONNX, PitchRectifiedFlowONNX, MultiVarianceRectifiedFlowONNX
 )
 from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX, FastSpeech2VarianceONNX
+from modules.fastspeech.bbc_mask import fast_fast_bbc_mask
 from modules.toplevel import DiffSingerAcoustic, DiffSingerVariance
 from utils.hparams import hparams
 
@@ -211,8 +212,14 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi, spk_embed=spk_embed)
 
-    def forward_mel2x_gather(self, x_src, x_dur, x_dim=None):
+    def forward_mel2x_gather(self, x_src, x_dur, x_dim=None, flag='fs2'):
         mel2x = self.lr(x_dur)
+        if self.use_bbc_encoder and flag=='fs2':
+            x_src=torch.cat([self.bbc_mask_emb.unsqueeze(0).unsqueeze(0).expand(mel2x.shape[0],1,x_src.shape[-1]),x_src],dim=1)
+            mel2x=fast_fast_bbc_mask(mel2x,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
+        elif self.use_me_bbc_encoder and flag=='me':
+            x_src=torch.cat([self.me_bbc_mask_emb.unsqueeze(0).unsqueeze(0).expand(mel2x.shape[0],1,x_src.shape[-1]),x_src],dim=1)
+            mel2x=fast_fast_bbc_mask(mel2x,mask_length=self.me_bbc_mask_len,min_segment_length=self.me_bbc_min_segment_length,mask_prob=self.me_bbc_mask_prob)
         if x_dim is not None:
             x_src = F.pad(x_src, [0, 0, 1, 0])
             mel2x = mel2x[..., None].repeat([1, 1, x_dim])
@@ -234,7 +241,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
                 note_midi, note_rest, note_dur,
                 glide=note_glide
             )
-            melody_encoder_out = self.forward_mel2x_gather(melody_encoder_out, note_dur, x_dim=self.hidden_size)
+            melody_encoder_out = self.forward_mel2x_gather(melody_encoder_out, note_dur, x_dim=self.hidden_size, flag='me')
             condition += melody_encoder_out
         if expr is None:
             retake_embed = self.pitch_retake_embed(retake.long())
@@ -248,7 +255,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             expr = (expr * retake)[:, :, None]  # [B, T, 1]
             retake_embed = expr * retake_true_embed + (1. - expr) * retake_false_embed
         pitch_cond = condition + retake_embed
-        frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None)
+        frame_midi_pitch = self.forward_mel2x_gather(note_midi, note_dur, x_dim=None, flag='pitch')
         base_pitch = self.smooth(frame_midi_pitch)
         if self.use_melody_encoder:
             delta_pitch = (pitch - base_pitch) * ~retake

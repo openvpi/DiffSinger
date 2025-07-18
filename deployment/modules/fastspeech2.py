@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import NormalInitEmbedding as Embedding
-from modules.fastspeech.bbc_mask import fast_bbc_mask
+from modules.fastspeech.bbc_mask import fast_fast_bbc_mask
 from modules.fastspeech.acoustic_encoder import FastSpeech2Acoustic
 from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
@@ -92,9 +92,9 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX)
 
         if self.use_bbc_encoder:
-            encoded=torch.cat([self.bbc_mask_emb.expand(mel2ph.shape[0],1,encoded.shape[-1]),encoded],dim=1)
+            encoded=torch.cat([self.bbc_mask_emb.unsqueeze(0).unsqueeze(0).expand(mel2ph.shape[0],1,encoded.shape[-1]),encoded],dim=1)
             encoded = F.pad(encoded, (0, 0, 1, 0))
-            mel2ph=fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
+            mel2ph=fast_fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
             mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
             condition = torch.gather(encoded, 1, mel2ph)
         else:

@@ -186,13 +186,13 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             self.bbc_mask_len = hparams['bbc_mask_len']
             self.bbc_min_segment_length=hparams['bbc_min_segment_length']
             self.bbc_mask_prob=hparams['bbc_mask_prob']
-            self.bbc_mask_emb=nn.Parameter(torch.randn(1, 1, hparams['hidden_size']))
+            self.bbc_mask_emb=nn.Parameter(torch.randn(hparams['hidden_size']))
         self.use_me_bbc_encoder = hparams.get('use_me_bbc_encoder', False)
         if self.use_me_bbc_encoder:
             self.me_bbc_mask_len = hparams['me_bbc_mask_len']
             self.me_bbc_min_segment_length=hparams['me_bbc_min_segment_length']
             self.me_bbc_mask_prob=hparams['me_bbc_mask_prob']
-            self.me_bbc_mask_emb=nn.Parameter(torch.randn(1, 1, hparams['hidden_size']))
+            self.me_bbc_mask_emb=nn.Parameter(torch.randn(hparams['hidden_size']))
 
         if self.predict_variances:
             self.pitch_embed = Linear(1, hparams['hidden_size'])
@@ -269,8 +269,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         # condition = torch.gather(encoder_out, 1, mel2ph_)
 
         if self.use_bbc_encoder:
-
-            encoder_out=torch.cat([self.bbc_mask_emb.expand(mel2ph.shape[0],1,encoder_out.shape[-1]),encoder_out],dim=1)
+            encoder_out=torch.cat([self.bbc_mask_emb.unsqueeze(0).unsqueeze(0).expand(mel2ph.shape[0],1,encoder_out.shape[-1]),encoder_out],dim=1)
             encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
             mel2ph=fast_fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
             mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
@@ -292,13 +291,12 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
 
                 if self.use_me_bbc_encoder:
-
                     melody_encoder_out = torch.cat(
-                        [self.me_bbc_mask_emb.expand(mel2note.shape[0], 1, melody_encoder_out.shape[-1]), melody_encoder_out], dim=1)
+                        [self.me_bbc_mask_emb.unsqueeze(0).unsqueeze(0).expand(mel2note.shape[0], 1, melody_encoder_out.shape[-1]), melody_encoder_out], dim=1)
                     melody_encoder_out = F.pad(melody_encoder_out, [0, 0, 1, 0])
-                    mel2note = fast_fast_bbc_mask(mel2note, mask_length=self.bbc_mask_len,
-                                                min_segment_length=self.bbc_min_segment_length,
-                                                mask_prob=self.bbc_mask_prob)
+                    mel2note = fast_fast_bbc_mask(mel2note, mask_length=self.me_bbc_mask_len,
+                                                min_segment_length=self.me_bbc_min_segment_length,
+                                                mask_prob=self.me_bbc_mask_prob)
                     mel2note_ = mel2note[..., None].repeat([1, 1, hparams['hidden_size']])
                     melody_condition = torch.gather(melody_encoder_out, 1, mel2note_)
                 else:

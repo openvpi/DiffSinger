@@ -41,6 +41,53 @@ def fast_bbc_mask(mel2ph, mask_length=3, min_segment_length=5, mask_prob=1.):
 
     return result
 
+def very_fast_bbc_mask(mel2ph, mask_length=3, min_segment_length=5, mask_prob=1.):
+    batch_size, seq_len = mel2ph.shape
+    device = mel2ph.device
+
+    # Shift non-padding phonemes to reserve 1 for the mask token
+    masked_mel2ph = torch.where(mel2ph > 0, mel2ph + 1, mel2ph)
+    
+    # Find boundaries efficiently
+    padded = F.pad(masked_mel2ph, [1, 1], value=-1)
+    diff_mask = padded[:, 1:] != padded[:, :-1]
+    
+    b_indices, s_indices = torch.where(diff_mask)
+
+    is_same_sample = b_indices[:-1] == b_indices[1:]
+    start_b, start_s = b_indices[:-1][is_same_sample], s_indices[:-1][is_same_sample]
+    end_s = s_indices[1:][is_same_sample]
+    
+    lengths = end_s - start_s
+    values = masked_mel2ph[start_b, start_s]
+
+    valid_mask = (values != 0) & (lengths >= min_segment_length)
+    if not valid_mask.any():
+        return masked_mel2ph
+
+    # Filter to get segments that are valid for masking
+    valid_b, valid_start_s, valid_end_s = start_b[valid_mask], start_s[valid_mask], end_s[valid_mask]
+
+    # Probabilistically select which of the valid segments to actually mask
+    rand_mask = torch.rand(valid_b.shape[0], device=device) < mask_prob
+    if not rand_mask.any():
+        return masked_mel2ph
+        
+    selected_b = valid_b[rand_mask]
+    selected_start_s = valid_start_s[rand_mask]
+    selected_end_s = valid_end_s[rand_mask]
+
+    # --- The Core Vectorized Masking Logic ---
+    marker = torch.zeros(batch_size, seq_len + 1, dtype=torch.int32, device=device)
+    mask_start_s = torch.maximum(selected_start_s, selected_end_s - mask_length)
+    
+    marker[selected_b, mask_start_s] += 1
+    marker[selected_b, selected_end_s] -= 1
+
+    final_mask = torch.cumsum(marker, dim=1)[:, :-1].bool()
+    result = torch.where(final_mask, 1, masked_mel2ph)
+    
+    return result
 
 def fast_fast_bbc_mask(mel2ph, mask_length=3, min_segment_length=5, mask_prob=0.3):
 
