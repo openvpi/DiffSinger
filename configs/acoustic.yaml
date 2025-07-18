@@ -60,7 +60,7 @@ use_speed_embed: false
 
 use_bbc_encoder: false
 bbc_mask_len: 8
-bbc_min_segment_length: 64
+bbc_min_segment_length: 16
 bbc_mask_prob: 1.
 
 diffusion_type: reflow

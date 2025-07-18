@@ -67,6 +67,11 @@ use_bbc_encoder: true
 bbc_mask_len: 8
 bbc_min_segment_length: 16
 bbc_mask_prob: 1.
+
+use_me_bbc_encoder: true
+me_bbc_mask_len: 8
+me_bbc_min_segment_length: 16
+me_bbc_mask_prob: 1.
 enc_ffn_kernel_size: 3
 use_rope: true
 hidden_size: 256

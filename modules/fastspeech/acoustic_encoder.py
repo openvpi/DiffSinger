@@ -6,7 +6,7 @@ from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
 )
-from modules.fastspeech.bbc_mask import fast_bbc_mask
+from modules.fastspeech.bbc_mask import fast_bbc_mask, fast_fast_bbc_mask
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
@@ -106,7 +106,7 @@ class FastSpeech2Acoustic(nn.Module):
 
             encoder_out=torch.cat([self.bbc_mask_emb.expand(mel2ph.shape[0],1,encoder_out.shape[-1]),encoder_out],dim=1)
             encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
-            mel2ph=fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
+            mel2ph=fast_fast_bbc_mask(mel2ph,mask_length=self.bbc_mask_len,min_segment_length=self.bbc_min_segment_length,mask_prob=self.bbc_mask_prob)
             mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
             condition = torch.gather(encoder_out, 1, mel2ph_)
         else:
