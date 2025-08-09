@@ -64,46 +64,37 @@ class RectifiedFlow(nn.Module):
             return self.denorm_spec(x)
 
     @torch.no_grad()
-    def _get_velocity(self, x, t, cond, noise, base, expr, is_guidance):
-        v_pred = self.velocity_fn(x, t, cond)
-        if not is_guidance:
-            return v_pred
-        
-        v_guidance = base - noise
-        return expr * v_pred + (1 - expr) * v_guidance
-
-    @torch.no_grad()
-    def sample_euler(self, x, t, dt, cond, noise, base, expr, is_guidance):
-        x += self._get_velocity(x, self.time_scale_factor * t, cond, noise, base, expr, is_guidance) * dt
+    def sample_euler(self, x, t, dt, cond):
+        x += self.velocity_fn(x, self.time_scale_factor * t, cond) * dt
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk2(self, x, t, dt, cond, noise, base, expr, is_guidance):
-        k_1 = self._get_velocity(x, self.time_scale_factor * t, cond, noise, base, expr, is_guidance)
-        k_2 = self._get_velocity(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond, noise, base, expr, is_guidance)
+    def sample_rk2(self, x, t, dt, cond):
+        k_1 = self.velocity_fn(x, self.time_scale_factor * t, cond)
+        k_2 = self.velocity_fn(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
         x += k_2 * dt
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk4(self, x, t, dt, cond, noise, base, expr, is_guidance):
-        k_1 = self._get_velocity(x, self.time_scale_factor * t, cond, noise, base, expr, is_guidance)
-        k_2 = self._get_velocity(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond, noise, base, expr, is_guidance)
-        k_3 = self._get_velocity(x + 0.5 * k_2 * dt, self.time_scale_factor * (t + 0.5 * dt), cond, noise, base, expr, is_guidance)
-        k_4 = self._get_velocity(x + k_3 * dt, self.time_scale_factor * (t + dt), cond)
+    def sample_rk4(self, x, t, dt, cond):
+        k_1 = self.velocity_fn(x, self.time_scale_factor * t, cond)
+        k_2 = self.velocity_fn(x + 0.5 * k_1 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+        k_3 = self.velocity_fn(x + 0.5 * k_2 * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+        k_4 = self.velocity_fn(x + k_3 * dt, self.time_scale_factor * (t + dt), cond)
         x += (k_1 + 2 * k_2 + 2 * k_3 + k_4) * dt / 6
         t += dt
         return x, t
 
     @torch.no_grad()
-    def sample_rk5(self, x, t, dt, cond, noise, base, expr, is_guidance):
-        k_1 = self._get_velocity(x, self.time_scale_factor * t, cond, noise, base, expr, is_guidance)
-        k_2 = self._get_velocity(x + 0.25 * k_1 * dt, self.time_scale_factor * (t + 0.25 * dt), cond, noise, base, expr, is_guidance)
-        k_3 = self._get_velocity(x + 0.125 * (k_2 + k_1) * dt, self.time_scale_factor * (t + 0.25 * dt), cond, noise, base, expr, is_guidance)
-        k_4 = self._get_velocity(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.time_scale_factor * (t + 0.5 * dt), cond, noise, base, expr, is_guidance)
-        k_5 = self._get_velocity(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.time_scale_factor * (t + 0.75 * dt), cond, noise, base, expr, is_guidance)
-        k_6 = self._get_velocity(x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7,
+    def sample_rk5(self, x, t, dt, cond):
+        k_1 = self.velocity_fn(x, self.time_scale_factor * t, cond)
+        k_2 = self.velocity_fn(x + 0.25 * k_1 * dt, self.time_scale_factor * (t + 0.25 * dt), cond)
+        k_3 = self.velocity_fn(x + 0.125 * (k_2 + k_1) * dt, self.time_scale_factor * (t + 0.25 * dt), cond)
+        k_4 = self.velocity_fn(x + 0.5 * (-k_2 + 2 * k_3) * dt, self.time_scale_factor * (t + 0.5 * dt), cond)
+        k_5 = self.velocity_fn(x + 0.0625 * (3 * k_1 + 9 * k_4) * dt, self.time_scale_factor * (t + 0.75 * dt), cond)
+        k_6 = self.velocity_fn(x + (-3 * k_1 + 2 * k_2 + 12 * k_3 - 12 * k_4 + 8 * k_5) * dt / 7,
                                self.time_scale_factor * (t + dt),
                                cond)
         x += (7 * k_1 + 32 * k_3 + 12 * k_4 + 32 * k_5 + 7 * k_6) * dt / 90
@@ -111,59 +102,20 @@ class RectifiedFlow(nn.Module):
         return x, t
 
     @torch.no_grad()
-    def inference(self, cond, b=1, x_end=None, device=None, input_mel=None, inpaint_mask=None, inpaint_weight=None, base=None, expr=1.0, temperature=1.0):
-        # 在这里进行inpainting机制开启的判断和输入的处理
-        # input_mel与inference结果对齐（[B, T, M] or [B, F, T, M]），调整到与noise对齐（[B, F, M, T]）
-        # inpaint_mask是一个一维布尔值（[B, T]），**与retake对齐，True为mask部分**，调整到与时间维度对齐（[B, 1, 1, T]）
-        # inpaint_weight在这里定义为一个帧级数值（[B，F, T] or [B, T]），调整到与时间维度对齐（[B, F, 1, T]），取值范围为0~1
-        is_inpaint = inpaint_mask is not None and input_mel is not None and inpaint_weight is not None
-        
-        if is_inpaint:
-            inpaint_mask = inpaint_mask.float().to(device).unsqueeze(-2) # [B, F, 1, T] or [B, 1, T]
-            inpaint_weight = inpaint_weight.float().to(device).unsqueeze(-2) # [B, F, 1, T] or [B, 1, T]
-            input_mel = self.norm_spec(input_mel).transpose(-2, -1) # [B, F, M, T] or [B, M, T]
-            if self.num_feats == 1:
-                inpaint_mask = inpaint_mask[:, None, :, :] # [B, 1, 1, T]
-                inpaint_weight = inpaint_weight[:, None, :, :] # [B, 1, 1, T]
-                input_mel = input_mel[:, None, :, :] # [B, 1, M, T]
-
-        # Training-Free Guidance
-        # base:[B, T]
-        is_guidance = base is not None and expr < 1.0
-        
-        if is_guidance:
-            base = self.norm_spec(base).transpose(-2, -1).unsqueeze(-2)
-            if self.num_feats == 1:
-                base = base[:, None, :, :] # [B, 1, 1, T]
-
-        # 在这里noise要乘上temperature，temperature在默认情况下为1.0，降低temperature会降低结果的多样性，反之亦然
-        # temperature ≠ 1.0时，与训练不对齐，理论上会降低质量，实践中因为数据质量分布差异调节可能会有改善
-        noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device) * temperature
+    def inference(self, cond, b=1, x_end=None, device=None):
+        noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
         t_start = hparams.get('T_start_infer', self.t_start)
         if self.use_shallow_diffusion and t_start > 0:
             assert x_end is not None, 'Missing shallow diffusion source.'
-            # shallow diffusion的情况下，在这里构造x_end，把input_mel和前级的输出进行拼接
-            # 也就是说对于保留部分，渲染的起点也是input_mel
-            # 起点不考虑inpaint_weight
-            if is_inpaint:
-                x_end = x_end * inpaint_mask + input_mel * (1 - inpaint_mask)
             if t_start >= 1.:
                 t_start = 1.
                 x = x_end
             else:
                 x = t_start * x_end + (1 - t_start) * noise
         else:
-            # 考虑直接对input_mel进行shallow diffusion的情况, 也就是说对于全扩散模型也要考虑渲染深度问题
-            if is_inpaint:
-                if t_start >= 1.:
-                    t_start = 1.
-                    x = input_mel
-                else:
-                    x = t_start * input_mel + (1 - t_start) * noise
-            else:
-                t_start = 0.
-                x = noise
-        
+            t_start = 0.
+            x = noise
+
         algorithm = hparams['sampling_algorithm']
         infer_step = hparams['sampling_steps']
 
@@ -180,13 +132,7 @@ class RectifiedFlow(nn.Module):
             dts = torch.tensor([dt]).to(x)
             for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                ti = t_start + i * dts
-                x, _ = algorithm_fn(x, ti, dt, cond, noise, base, expr, is_guidance)
-                # **关键**，这里每一步要把去噪的结果修正到保留部分+对应噪声的结果
-                # 根据inpaint_weight修正到要保留的程度
-                if is_inpaint:
-                    weight = (1 - inpaint_mask) * inpaint_weight
-                    x = x * (1 - weight) + (input_mel * ti + noise * (1 - ti)) * weight
+                x, _ = algorithm_fn(x, t_start + i * dts, dt, cond)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
