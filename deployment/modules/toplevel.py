@@ -290,7 +290,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             for v_retake in (~retake).split(1, dim=2)
         ]
         variance_embeds = [
-            self.variance_embeds[v_name](variances[v_name][:, :, None]) * v_masks * self.variance_retake_scaling[v_name]
+            self.variance_embeds[v_name](variances[v_name][:, :, None] * self.variance_retake_scaling[v_name]) * v_masks
             for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)

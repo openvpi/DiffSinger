@@ -96,7 +96,6 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         if self.use_stretch_embed:
             stretch = self.sr(_mel2ph, durations)
             stretch_embed = self.stretch_embed(stretch * 1000)
-            stretch_embed = self.stretch_embed_mlp(stretch_embed)
             condition += stretch_embed
             stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)
             condition += stretch_embed_rnn_out

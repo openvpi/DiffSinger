@@ -23,8 +23,8 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_stretch_embed = hparams.get('use_stretch_embed', False)
         if self.use_stretch_embed:
             self.sr = StretchRegulator()
-            self.stretch_embed = SinusoidalPosEmb(hparams['hidden_size'])
-            self.stretch_embed_mlp = nn.Sequential(
+            self.stretch_embed = nn.Sequential(
+                SinusoidalPosEmb(hparams['hidden_size']),
                 nn.Linear(hparams['hidden_size'], hparams['hidden_size'] * 4),
                 nn.GELU(),
                 nn.Linear(hparams['hidden_size'] * 4, hparams['hidden_size']),
@@ -141,7 +141,6 @@ class FastSpeech2Acoustic(nn.Module):
         if self.use_stretch_embed:
             stretch = self.sr(mel2ph, dur)
             stretch_embed = self.stretch_embed(stretch * 1000)
-            stretch_embed = self.stretch_embed_mlp(stretch_embed)
             condition += stretch_embed
             self.stretch_embed_rnn.flatten_parameters()
             stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)

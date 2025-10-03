@@ -326,7 +326,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
 
         if variance_retake is not None:
             variance_embeds = [
-                self.variance_embeds[v_name](v_input[:, :, None]) * ~variance_retake[v_name][:, :, None] * self.variance_retake_scaling[v_name]
+                self.variance_embeds[v_name](v_input[:, :, None] * self.variance_retake_scaling[v_name]) * ~variance_retake[v_name][:, :, None]
                 for v_name, v_input in zip(self.variance_prediction_list, variance_inputs)
             ]
             var_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
