@@ -73,6 +73,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         txt_embed = self.txt_embed(tokens)
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
+        _mel2ph = mel2ph
         f0 = f0 * (mel2ph > 0)
         mel2ph = mel2ph[..., None].repeat((1, 1, hparams['hidden_size']))
         if self.use_variance_scaling:
@@ -91,6 +92,14 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)
+
+        if self.use_stretch_embed:
+            stretch = self.sr(_mel2ph, durations.float())
+            stretch_embed = self.stretch_embed(stretch * 1000)
+            stretch_embed = self.stretch_embed_mlp(stretch_embed)
+            condition += stretch_embed
+            stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)
+            condition += stretch_embed_rnn_out
 
         if self.f0_embed_type == 'discrete':
             pitch = f0_to_coarse(f0)

@@ -134,12 +134,19 @@ optimizer_args:
     weight_decay: 0.1
   adamw_args:
     weight_decay: 0.0
+#lr_scheduler_args:
+#  step_size: 5000
+#  gamma: 0.8
 lr_scheduler_args:
-  step_size: 5000
-  gamma: 0.8
+    scheduler_cls: utils.training_utils.WarmupCosineSchedule
+    warmup_steps: 1800
+    t_total: 36000
+    cycles: 0.5
+    warmup_min: 0.17
+    eta_min: 0.04
 max_batch_frames: 80000
 max_batch_size: 48
-max_updates: 100000
+max_updates: 36000
 
 num_valid_plots: 10
 val_check_interval: 2000

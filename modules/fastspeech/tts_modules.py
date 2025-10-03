@@ -347,12 +347,12 @@ class StretchRegulator(torch.nn.Module):
         """
         if dur is None:
             dur = mel2ph_to_dur(mel2ph, mel2ph.max())
-        dur = F.pad(dur, [1, 0], value=1)  # Avoid dividing by zero
+        dur = F.pad(dur, [1, 0], value=1.0)  # Avoid dividing by zero
         mel2dur = torch.gather(dur, 1, mel2ph)
         bound_mask = torch.gt(mel2ph[:, 1:], mel2ph[:, :-1])
         bound_mask = F.pad(bound_mask, [0, 1], mode='constant', value=True)
         stretch_delta = 1 - bound_mask * mel2dur
-        stretch_delta = F.pad(stretch_delta, [1, -1], mode='constant', value=0)
+        stretch_delta = F.pad(stretch_delta, [1, -1], mode='constant', value=0.0)
         stretch_denorm = torch.cumsum(stretch_delta, dim=1)
         stretch = stretch_denorm / mel2dur
         return stretch * (mel2ph > 0)

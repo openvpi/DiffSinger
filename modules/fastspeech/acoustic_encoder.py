@@ -5,8 +5,9 @@ from torch.nn import functional as F
 from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
+    SinusoidalPosEmb,
 )
-from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur
+from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur, StretchRegulator
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
@@ -18,6 +19,18 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_lang_id = hparams.get('use_lang_id', False)
         if self.use_lang_id:
             self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
+
+        self.use_stretch_embed = hparams.get('use_stretch_embed', False)
+        if self.use_stretch_embed:
+            self.sr = StretchRegulator()
+            self.stretch_embed = SinusoidalPosEmb(hparams['hidden_size'])
+            self.stretch_embed_mlp = nn.Sequential(
+                nn.Linear(hparams['hidden_size'], hparams['hidden_size'] * 4),
+                nn.GELU(),
+                nn.Linear(hparams['hidden_size'] * 4, hparams['hidden_size']),
+            )
+            self.stretch_embed_rnn = nn.GRU(hparams['hidden_size'], hparams['hidden_size'], 1, batch_first=True)
+
         self.dur_embed = Linear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -124,6 +137,15 @@ class FastSpeech2Acoustic(nn.Module):
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
         condition = torch.gather(encoder_out, 1, mel2ph_)
+
+        if self.use_stretch_embed:
+            stretch = self.sr(mel2ph, dur)
+            stretch_embed = self.stretch_embed(stretch * 1000)
+            stretch_embed = self.stretch_embed_mlp(stretch_embed)
+            condition += stretch_embed
+            self.stretch_embed_rnn.flatten_parameters()
+            stretch_embed_rnn_out, _ =self.stretch_embed_rnn(condition)
+            condition += stretch_embed_rnn_out
 
         if self.use_spk_id:
             spk_mix_embed = kwargs.get('spk_mix_embed')
