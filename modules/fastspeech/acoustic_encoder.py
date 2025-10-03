@@ -97,20 +97,17 @@ class FastSpeech2Acoustic(nn.Module):
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
             variance_embeds = torch.stack([
-                self.variance_embeds[v_name](variances[v_name][:, :, None]) 
-                * self.variance_scaling_factor[v_name]
+                self.variance_embeds[v_name](variances[v_name][:, :, None] * self.variance_scaling_factor[v_name])
                 for v_name in self.variance_embed_list
             ], dim=-1).sum(-1)
             condition += variance_embeds
 
         if self.use_key_shift_embed:
-            key_shift_embed = self.key_shift_embed(key_shift[:, :, None])
-            key_shift_embed *= self.variance_scaling_factor['key_shift']
+            key_shift_embed = self.key_shift_embed(key_shift[:, :, None] * self.variance_scaling_factor['key_shift'])
             condition += key_shift_embed
 
         if self.use_speed_embed:
-            speed_embed = self.speed_embed(speed[:, :, None])
-            speed_embed *= self.variance_scaling_factor['speed']
+            speed_embed = self.speed_embed(speed[:, :, None] * self.variance_scaling_factor['speed'])
             condition += speed_embed
 
         return condition
