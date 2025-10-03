@@ -1,7 +1,7 @@
 base_config:
   - configs/acoustic.yaml
 
-use_stretch_embed: false
+use_stretch_embed: true
 
 dictionaries:
   zh: dictionaries/opencpop-extension.txt
