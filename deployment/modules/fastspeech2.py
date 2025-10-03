@@ -94,7 +94,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         condition = torch.gather(encoded, 1, mel2ph)
 
         if self.use_stretch_embed:
-            stretch = self.sr(_mel2ph, durations.float())
+            stretch = self.sr(_mel2ph, durations)
             stretch_embed = self.stretch_embed(stretch * 1000)
             stretch_embed = self.stretch_embed_mlp(stretch_embed)
             condition += stretch_embed
