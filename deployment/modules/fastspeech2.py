@@ -11,6 +11,26 @@ from modules.fastspeech.variance_encoder import FastSpeech2Variance
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
+def kernel_attention_pooling(spk_embed, durations, sigma_scale=4.0):
+    B, T_mel, C = spk_embed.shape
+    T_ph = durations.shape[1]
+    ph_starts = torch.cumsum(torch.cat([torch.zeros_like(durations[:, :1]), durations[:, :-1]], dim=1), dim=1)
+    ph_ends = ph_starts + durations
+    mel_indices = torch.arange(T_mel, device=spk_embed.device).view(1, 1, T_mel)
+    phoneme_to_mel_mask = (mel_indices >= ph_starts.unsqueeze(-1)) & (mel_indices < ph_ends.unsqueeze(-1))
+    relative_positions = mel_indices - ph_starts.unsqueeze(-1)
+    mu = (durations.float() - 1) / 2.0
+    mu = mu.unsqueeze(-1)
+    sigma = durations.float() / sigma_scale
+    sigma = sigma.unsqueeze(-1).clamp(min=1e-5)
+    attn_scores = torch.exp(-0.5 * torch.pow((relative_positions - mu) / sigma, 2))
+    masked_scores = attn_scores.masked_fill(~phoneme_to_mel_mask, 0.0)
+    sum_scores = masked_scores.sum(dim=2, keepdim=True) + 1e-9
+    attn_weights = masked_scores / sum_scores # [B, T_ph, T_mel]
+    ph_spk_embed = torch.bmm(attn_weights, spk_embed)
+
+    return ph_spk_embed
+
 f0_bin = 256
 f0_max = 1100.0
 f0_min = 50.0
@@ -89,6 +109,12 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             extra_embed = dur_embed + lang_embed
         else:
             extra_embed = dur_embed
+
+        if hparams['use_mixln']:
+            ph_spk_embed = kernel_attention_pooling(spk_embed, durations)
+        else:
+            ph_spk_embed = None
+        encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)

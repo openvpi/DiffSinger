@@ -38,7 +38,7 @@ class FastSpeech2Acoustic(nn.Module):
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
             dropout=hparams['dropout'], num_heads=hparams['num_heads'],
             use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False)
+            use_rope=hparams.get('use_rope', False), use_mixln=hparams.get('use_mixln', False)
         )
 
         self.pitch_embed = Linear(1, hparams['hidden_size'])
@@ -119,6 +119,13 @@ class FastSpeech2Acoustic(nn.Module):
             spk_embed_id=None, languages=None,
             **kwargs
     ):
+        if self.use_spk_id:
+            spk_mix_embed = kwargs.get('spk_mix_embed')
+            if spk_mix_embed is not None:
+                spk_embed = spk_mix_embed
+            else:
+                spk_embed = self.spk_embed(spk_embed_id)
+        
         txt_embed = self.txt_embed(txt_tokens)
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1])
         if self.use_variance_scaling:
@@ -130,7 +137,7 @@ class FastSpeech2Acoustic(nn.Module):
             extra_embed = dur_embed + lang_embed
         else:
             extra_embed = dur_embed
-        encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
+        encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0, spk_embed)
 
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
@@ -150,11 +157,15 @@ class FastSpeech2Acoustic(nn.Module):
             condition = condition + stretch_embed_rnn_out
 
         if self.use_spk_id:
-            spk_mix_embed = kwargs.get('spk_mix_embed')
+            #spk_mix_embed = kwargs.get('spk_mix_embed')
+            #if spk_mix_embed is not None:
+            #    spk_embed = spk_mix_embed
+            #else:
+            #    spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
             if spk_mix_embed is not None:
                 spk_embed = spk_mix_embed
             else:
-                spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
+                spk_embed = spk_embed[:, None, :]
             condition += spk_embed
 
         f0_mel = (1 + f0 / 700).log()

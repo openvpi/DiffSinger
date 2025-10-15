@@ -1,6 +1,8 @@
 base_config:
   - configs/acoustic.yaml
 
+use_mixln: true
+
 dictionaries:
   zh: dictionaries/opencpop-extension.txt
 extra_phonemes: []
