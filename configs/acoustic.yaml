@@ -3,6 +3,8 @@ base_config:
 
 task_cls: training.acoustic_task.AcousticTask
 
+use_mixln: true
+
 dictionaries: {}
 extra_phonemes: []
 merged_phoneme_groups: []
