@@ -115,7 +115,6 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         else:
             ph_spk_embed = None
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
-        encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)
 
