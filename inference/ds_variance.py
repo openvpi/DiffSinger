@@ -327,7 +327,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         else:
             ph_spk_mix_embed = spk_mix_embed = None
 
-        dur_pred, pitch_pred, variance_pred = self.model(
+        dur_pred, pitch_pred, variance_pred, spd_loss, sdp_pred = self.model(
             txt_tokens, languages=sample.get('languages'),
             midi=midi, ph2word=ph2word, word_dur=word_dur, ph_dur=ph_dur, mel2ph=mel2ph,
             note_midi=note_midi, note_rest=note_rest, note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,

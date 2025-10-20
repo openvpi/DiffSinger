@@ -102,7 +102,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
 
         if hparams.get('use_mixln', False):
-            self.mixln_dsp_fn = hparams['mixln_dsp_fn']
+            self.mixln_dsp_fn = hparams.get('mixln_dsp_fn', 'local')
             if self.mixln_dsp_fn == 'local':
                 self.localdownsample = LocalDownsample()
 
@@ -247,9 +247,10 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)
         dur_cond = encoder_out + midi_embed
+        sdp_cond = encoder_out + midi_embed
         if hparams['use_spk_id'] and spk_embed is not None:
             dur_cond += spk_embed
-        ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
+        ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks, sdp_cond=sdp_cond, spk_embed=spk_embed)
         return ph_dur
 
     def view_as_encoder(self):

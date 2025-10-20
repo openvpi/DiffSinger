@@ -79,6 +79,8 @@ dur_prediction_args:
   lambda_pdur_loss: 0.3
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
+use_sdp: true
+sdp_ratio: 0.2
 
 use_melody_encoder: true
 melody_encoder_args:
