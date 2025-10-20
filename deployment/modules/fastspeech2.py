@@ -60,6 +60,25 @@ class LengthRegulator(nn.Module):
         return mel2ph
 
 
+class LocalDownsample(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lr = LengthRegulator()
+
+    def forward(self, x, durs):
+        """
+        Inputs: x: [B, T, H], durs: [B, N], T = sum(durs)
+        Outputs: x_down: [B, N, H]
+        """
+        seq2n = self.lr(durs)  # [B, N] => [B, T]
+        seq2dur = torch.gather(F.pad(durs, [1, 0], value=0), 1, seq2n)  # [B, T]
+        x_div = x / (seq2dur + (seq2dur == 0)).unsqueeze(-1)
+        x_down = x.new_zeros(x.size(0), durs.size(1) + 1, x.size(2)).scatter_add(
+            1, seq2n.unsqueeze(-1).expand(-1, -1, x.size(2)), x_div
+        )[:, 1:, :]  # [B, N, H]
+        return x_down
+
+
 class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
     def __init__(self, vocab_size, cross_lingual_token_idx=None):
         super().__init__(vocab_size=vocab_size)
@@ -81,6 +100,11 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             self.shift_min, self.shift_max = hparams['augmentation_args']['random_pitch_shifting']['range']
         if hparams['use_speed_embed']:
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
+
+        if hparams.get('use_mixln', False):
+            self.mixln_dsp_fn = hparams['mixln_dsp_fn']
+            if self.mixln_dsp_fn == 'local':
+                self.localdownsample = LocalDownsample()
 
     # noinspection PyMethodOverriding
     def forward(
@@ -110,8 +134,13 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         else:
             extra_embed = dur_embed
 
-        if hparams['use_mixln']:
-            ph_spk_embed = kernel_attention_pooling(spk_embed, durations)
+        if hparams.get('use_mixln', False):
+            if self.mixln_dsp_fn == 'local':
+                ph_spk_embed = self.localdownsample(spk_embed, durations)
+            elif self.mixln_dsp_fn == 'kernel':
+                ph_spk_embed = kernel_attention_pooling(spk_embed, durations)
+            else:
+                raise ValueError(f'{self.mixln_dsp_fn} is not a valid down sample function')
         else:
             ph_spk_embed = None
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)

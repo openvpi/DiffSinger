@@ -2,6 +2,7 @@ base_config:
   - configs/acoustic.yaml
 
 use_mixln: true
+mixln_dsp_fn: 'local'
 
 dictionaries:
   zh: dictionaries/opencpop-extension.txt
