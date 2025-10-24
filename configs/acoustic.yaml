@@ -4,6 +4,7 @@ base_config:
 task_cls: training.acoustic_task.AcousticTask
 
 use_mixln: true
+mixln_dsp_fn: 'kernel'
 
 dictionaries: {}
 extra_phonemes: []
