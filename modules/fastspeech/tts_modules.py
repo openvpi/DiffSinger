@@ -446,7 +446,7 @@ class FastSpeech2Encoder(nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
-    def forward(self, main_embed, extra_embed, padding_mask, spk_embed=None, attn_mask=None, return_hiddens=False):
+    def forward(self, main_embed, extra_embed, padding_mask, spk_embed=None, mixln_mask_embed=None, attn_mask=None, return_hiddens=False):
         x = self.forward_embedding(main_embed, extra_embed, padding_mask=padding_mask)  # [B, T, H]
         nonpadding_mask_BT = 1 - padding_mask.float()[:, :, None]  # [B, T, 1]
 
@@ -466,7 +466,7 @@ class FastSpeech2Encoder(nn.Module):
         x = x * nonpadding_mask_BT
         hiddens = []
         for layer in self.layers:
-            x = layer(x, encoder_padding_mask=padding_mask, cond=spk_embed, attn_mask=attn_mask) * nonpadding_mask_BT
+            x = layer(x, encoder_padding_mask=padding_mask, cond=spk_embed, mixln_mask_embed=mixln_mask_embed, attn_mask=attn_mask) * nonpadding_mask_BT
             if return_hiddens:
                 hiddens.append(x)
         x = self.layer_norm(x) * nonpadding_mask_BT

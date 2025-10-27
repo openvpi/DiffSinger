@@ -102,7 +102,7 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             self.speed_min, self.speed_max = hparams['augmentation_args']['random_time_stretching']['range']
 
         if hparams.get('use_mixln', False):
-            self.mixln_dsp_fn = hparams.get('mixln_dsp_fn', 'local')
+            self.mixln_dsp_fn = hparams.get('mixln_dsp_fn', 'kernel')
             if self.mixln_dsp_fn == 'local':
                 self.localdownsample = LocalDownsample()
 

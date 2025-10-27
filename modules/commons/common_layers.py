@@ -311,7 +311,8 @@ class Correct_Mixed_LayerNorm(torch.nn.LayerNorm):
     def forward(
         self,
         x: torch.FloatTensor,
-        condition: torch.FloatTensor # -> shape [Batch, Cond_d]
+        condition: torch.FloatTensor, # -> shape [Batch, Cond_d]
+        mixln_mask_embed: torch.FloatTensor = None  # -> shape [Batch, Cond_d]
         ) -> torch.FloatTensor:
         x = super().forward(x)  # [Batch, Time, X_d]
         affine_params = self.affine(condition) # .unsqueeze(1) 
@@ -329,7 +330,34 @@ class Correct_Mixed_LayerNorm(torch.nn.LayerNorm):
         mixed_betas = beta_samples * betas + (1 - beta_samples) * shuffled_betas
         mixed_gammas = beta_samples * gammas + (1 - beta_samples) * shuffled_gammas
 
+        if mixln_mask_embed is not None:
+            replacement_mask = torch.abs(mixln_mask_embed).sum(dim=1) > 0
+            if replacement_mask.any():
+                mask_affine_params = self.affine(mixln_mask_embed)
+                if mask_affine_params.ndim == 2:
+                    mask_affine_params = mask_affine_params.unsqueeze(1)
+                mask_betas, mask_gammas = torch.split(mask_affine_params, self.channels, dim=-1)
+                mixed_betas[replacement_mask] = mask_betas[replacement_mask].to(mixed_betas.dtype)
+                mixed_gammas[replacement_mask] = mask_gammas[replacement_mask].to(mixed_betas.dtype)
+
         return mixed_gammas * x + mixed_betas
+
+
+class LlamaRMSNorm(nn.Module):
+    def __init__(self, hidden_size, eps=1e-6):
+        """
+        LlamaRMSNorm is equivalent to T5LayerNorm
+        """
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.variance_epsilon = eps
+
+    def forward(self, hidden_states):
+        input_dtype = hidden_states.dtype
+        hidden_states = hidden_states.to(torch.float32)
+        variance = hidden_states.pow(2).mean(-1, keepdim=True)
+        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+        return self.weight * hidden_states.to(input_dtype)
 
 
 class EncSALayer(nn.Module):
@@ -363,14 +391,14 @@ class EncSALayer(nn.Module):
             c, 4 * c, kernel_size=kernel_size, dropout=relu_dropout, act=act
         )
 
-    def forward(self, x, encoder_padding_mask=None, cond=None, **kwargs):
+    def forward(self, x, encoder_padding_mask=None, cond=None, mixln_mask_embed=None, **kwargs):
         layer_norm_training = kwargs.get('layer_norm_training', None)
         if layer_norm_training is not None:
             self.layer_norm1.training = layer_norm_training
             self.layer_norm2.training = layer_norm_training
         residual = x
         if self.use_mix_ln:
-            x = self.layer_norm1(x, cond)
+            x = self.layer_norm1(x, cond, mixln_mask_embed)
         else:
             x = self.layer_norm1(x)
         if self.use_rope:
@@ -390,7 +418,7 @@ class EncSALayer(nn.Module):
 
         residual = x
         if self.use_mix_ln:
-            x = self.layer_norm2(x, cond)
+            x = self.layer_norm2(x, cond, mixln_mask_embed)
         else:
             x = self.layer_norm2(x)
         x = self.ffn(x)

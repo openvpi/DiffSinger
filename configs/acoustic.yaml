@@ -5,6 +5,7 @@ task_cls: training.acoustic_task.AcousticTask
 
 use_mixln: true
 mixln_dsp_fn: 'kernel'
+mix_ln_blacklist: []
 
 dictionaries: {}
 extra_phonemes: []
