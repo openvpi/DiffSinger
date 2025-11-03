@@ -31,6 +31,20 @@ def kernel_attention_pooling(spk_embed, durations, sigma_scale=4.0):
 
     return ph_spk_embed
 
+def uniform_attention_pooling(spk_embed, durations):
+    B, T_mel, C = spk_embed.shape
+    T_ph = durations.shape[1]
+    ph_starts = torch.cumsum(torch.cat([torch.zeros_like(durations[:, :1]), durations[:, :-1]], dim=1), dim=1)
+    ph_ends = ph_starts + durations
+    mel_indices = torch.arange(T_mel, device=spk_embed.device).view(1, 1, T_mel)
+    phoneme_to_mel_mask = (mel_indices >= ph_starts.unsqueeze(-1)) & (mel_indices < ph_ends.unsqueeze(-1))
+    uniform_scores = phoneme_to_mel_mask.float()
+    sum_scores = uniform_scores.sum(dim=2, keepdim=True) + 1e-9
+    attn_weights = uniform_scores / sum_scores  # [B, T_ph, T_mel]
+    ph_spk_embed = torch.bmm(attn_weights, spk_embed)
+
+    return ph_spk_embed
+
 f0_bin = 256
 f0_max = 1100.0
 f0_min = 50.0
@@ -139,6 +153,8 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 ph_spk_embed = self.localdownsample(spk_embed, durations)
             elif self.mixln_dsp_fn == 'kernel':
                 ph_spk_embed = kernel_attention_pooling(spk_embed, durations)
+            elif self.mixln_dsp_fn == 'uniform':
+                ph_spk_embed = uniform_attention_pooling(spk_embed, durations)
             else:
                 raise ValueError(f'{self.mixln_dsp_fn} is not a valid down sample function')
         else:

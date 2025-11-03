@@ -2,7 +2,7 @@ base_config:
   - configs/acoustic.yaml
 
 use_mixln: true
-mixln_dsp_fn: 'kernel'
+mixln_dsp_fn: 'uniform'
 mix_ln_blacklist: []
 
 dictionaries:
