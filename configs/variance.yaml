@@ -36,7 +36,7 @@ predict_tension: false
 
 enc_ffn_kernel_size: 3
 use_rope: true
-use_stretch_embed: true
+use_stretch_embed: false
 use_variance_scaling: true
 rel_pos: true
 hidden_size: 384
