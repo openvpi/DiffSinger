@@ -128,6 +128,22 @@ class SwiGLU(nn.Module):
         return out * gate
 
 
+class ATanGLUFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, out, gate):
+        atan_gate = torch.atan(gate)
+        decay_out = out / gate.square().add(1.0)
+        ctx.save_for_backward(decay_out, atan_gate)
+        return out * atan_gate
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        decay_out, atan_gate = ctx.saved_tensors
+        grad_out_part = grad_output * atan_gate
+        grad_gate_part = grad_output * decay_out
+        return grad_out_part, grad_gate_part   
+
+       
 class ATanGLU(nn.Module):
     # ArcTan-Applies the gated linear unit function.
     def __init__(self, dim=-1):
@@ -136,9 +152,9 @@ class ATanGLU(nn.Module):
 
     def forward(self, x):
         # out, gate = x.chunk(2, dim=self.dim)
-        # Using torch.split instead of chunk for ONNX export compatibility.
+        # Using torch.split instead of chunk for ONNX export compatibility.        
         out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
-        return out * torch.atan(gate)
+        return ATanGLUFunction.apply(out, gate)
         
         
 class KaimingNormalConv1d(torch.nn.Conv1d):
