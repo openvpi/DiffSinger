@@ -65,10 +65,13 @@ tension_logit_max: 10.0
 
 enc_ffn_kernel_size: 3
 use_rope: true
-hidden_size: 256
+rope_interleaved: false
+use_stretch_embed: false
+use_variance_scaling: true
+hidden_size: 384
 dur_prediction_args:
-  arch: fs2
-  hidden_size: 512
+  arch: resnet
+  hidden_size: 256
   dropout: 0.1
   num_layers: 5
   kernel_size: 3
@@ -78,7 +81,7 @@ dur_prediction_args:
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
 
-use_melody_encoder: false
+use_melody_encoder: true
 melody_encoder_args:
   hidden_size: 128
   enc_layers: 4
@@ -94,50 +97,56 @@ pitch_prediction_args:
   pitd_clip_min: -12.0
   pitd_clip_max: 12.0
   repeat_bins: 64
-  backbone_type: 'wavenet'
-  backbone_args:
-    num_layers: 20
-    num_channels: 256
-    dilation_cycle_length: 5
-# backbone_type: 'lynxnet'
+# backbone_type: 'wavenet'
 # backbone_args:
-#   num_layers: 6
-#   num_channels: 512
-#   dropout_rate: 0.0
-#   strong_cond: true
+#   num_layers: 20
+#   num_channels: 256
+#   dilation_cycle_length: 5
+  backbone_type: 'lynxnet2'
+  backbone_args:
+    num_layers: 6
+    num_channels: 512
+    dropout_rate: 0.0
+    use_conditioner_cache: true
+    glu_type: 'atanglu'
 
 variances_prediction_args:
-  total_repeat_bins: 48
-  backbone_type: 'wavenet'
-  backbone_args:
-    num_layers: 10
-    num_channels: 192
-    dilation_cycle_length: 4
-# backbone_type: 'lynxnet'
+  total_repeat_bins: 72
+# backbone_type: 'wavenet'
 # backbone_args:
-#   num_layers: 6
-#   num_channels: 384
-#   dropout_rate: 0.0
-#   strong_cond: true
+#   num_layers: 10
+#   num_channels: 192
+#   dilation_cycle_length: 4
+  backbone_type: 'lynxnet2'
+  backbone_args:
+    num_layers: 6
+    num_channels: 384
+    dropout_rate: 0.0
+    use_conditioner_cache: true
+    glu_type: 'atanglu'
 
 lambda_dur_loss: 1.0
 lambda_pitch_loss: 1.0
 lambda_var_loss: 1.0
 
 optimizer_args:
+  optimizer_cls: modules.optimizer.muon.Muon_AdamW
   lr: 0.0006
+  muon_args:
+    weight_decay: 0.1
+  adamw_args:
+    weight_decay: 0.0
 lr_scheduler_args:
-  scheduler_cls: torch.optim.lr_scheduler.StepLR
-  step_size: 10000
-  gamma: 0.75
+  step_size: 5000
+  gamma: 0.8
 max_batch_frames: 80000
 max_batch_size: 48
-max_updates: 160000
+max_updates: 100000
 
 num_valid_plots: 10
 val_check_interval: 2000
 num_ckpt_keep: 5
-permanent_ckpt_start: 80000
+permanent_ckpt_start: 60000
 permanent_ckpt_interval: 10000
 pl_trainer_devices: 'auto'
 pl_trainer_precision: '16-mixed'

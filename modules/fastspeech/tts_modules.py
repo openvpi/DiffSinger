@@ -353,14 +353,14 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 class FastSpeech2Encoder(nn.Module):
     def __init__(self, hidden_size, num_layers,
                  ffn_kernel_size=9, ffn_act='gelu',
-                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True, use_rope=False):
+                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True, use_rope=False, rope_interleaved=True):
         super().__init__()
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
         self.dropout = dropout
         self.use_pos_embed = use_pos_embed
         if use_pos_embed and use_rope:
-            rotary_embed = RotaryEmbedding(dim = embed_dim // num_heads)
+            rotary_embed = RotaryEmbedding(dim = embed_dim // num_heads, interleaved = rope_interleaved)
         else:
             rotary_embed = None
         self.layers = nn.ModuleList([
