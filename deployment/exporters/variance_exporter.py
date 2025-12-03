@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Union, List, Tuple, Dict
+import warnings
 
 import onnx
 import onnxsim
@@ -81,6 +82,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                     self.export_spk = [(name, {name: 1.0}) for name in self.spk_map.keys()]
             if self.freeze_spk is not None:
                 self.model.register_buffer('frozen_spk_embed', self._perform_spk_mix(self.freeze_spk[1]))
+        self.rope_interleaved = hparams.get('rope_interleaved', None)
 
     def build_model(self) -> DiffSingerVarianceONNX:
         model = DiffSingerVarianceONNX(
@@ -90,6 +92,19 @@ class DiffSingerVarianceExporter(BaseExporter):
                 for p in self.phoneme_dictionary.cross_lingual_phonemes
             })
         ).eval().to(self.device)
+        if self.rope_interleaved is None:
+            warnings.warn(
+                "After RoPE is refactored, the checkpoint no longer contains relevant parameters. "
+                "(https://github.com/openvpi/DiffSinger/pull/276)"
+                "In order to export ONNX with behavior compatible with past checkpoints, "
+                "it will be set to 'strict=False', which will no longer check the validity of the checkpoint. "
+                "Please understand what you are doing.",
+                UserWarning,
+                stacklevel=2
+            )
+            strict=False
+        else:
+            strict=True
         load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps,
                   prefix_in_ckpt='model', strict=True, device=self.device)
         model.build_smooth_op(self.device)

@@ -65,6 +65,7 @@ tension_logit_max: 10.0
 
 enc_ffn_kernel_size: 3
 use_rope: true
+rope_interleaved: false
 use_stretch_embed: false
 use_variance_scaling: true
 hidden_size: 384
