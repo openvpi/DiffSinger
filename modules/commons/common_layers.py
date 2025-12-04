@@ -212,7 +212,7 @@ class TransformerFFNLayer(nn.Module):
 
 
 class MultiheadSelfAttentionWithRoPE(nn.Module):
-    def __init__(self, embed_dim, num_heads, dropout=0.1, bias=False, rotary_embed=None):
+    def __init__(self, embed_dim, num_heads, dropout=0.1, bias=False, rotary_embed=None, use_gate_attn=False, use_qk_norm=False):
         super().__init__()
         assert embed_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
         
@@ -223,6 +223,12 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         # Linear layers for Q, K, V projections
         self.in_proj = nn.Linear(embed_dim, embed_dim * 3, bias=bias)
         
+        # refer to Qwen 3
+        self.use_qk_norm = use_qk_norm
+        if self.use_qk_norm:
+            self.q_norm = LayerNorm(embed_dim // num_heads)
+            self.k_norm = LayerNorm(embed_dim // num_heads)
+        
         # Final linear layer after concatenation
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
         
@@ -231,6 +237,15 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         
         # Rotary Embeddings
         self.rotary_embed = rotary_embed
+        
+        # refer to NIPS 2025 best paper: "Gated Attention for Large Language Models: Non-linearity, Sparsity, and Attention-Sink-Free"
+        # (arxiv: 2505.06708)
+        self.use_gate_attn = use_gate_attn
+        if self.use_gate_attn:
+            self.gate_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+            nn.init.xavier_uniform_(self.gate_proj.weight)
+            if bias:
+                nn.init.constant_(self.gate_proj.bias, 0.0)
         
         # Initialization parameters
         nn.init.xavier_uniform_(self.in_proj.weight)
@@ -246,6 +261,11 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         
         # Project inputs to Q, K, V
         Q, K, V = torch.split(self.in_proj(x), self.embed_dim, dim=-1)
+        
+        # Query-Key Normalization
+        if self.use_qk_norm:
+            Q = self.q_norm(Q)
+            K = self.k_norm(K)
         
         # Reshape Q, K, V for multi-head attention
         Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
@@ -276,6 +296,11 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         # Reshape and concatenate heads
         attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, embed_dim)  # (B, L, C)
         
+        if self.use_gate:
+            # Formula (5): Y' = Y ⊙ σ(XW_θ)
+            gate_score = torch.sigmoid(self.gate_proj(x)) # (B, L, C)
+            attn_output = attn_output * gate_score
+        
         # Final linear projection
         output = self.out_proj(attn_output)  # (B, L, C)
         
@@ -284,7 +309,8 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
 
 class EncSALayer(nn.Module):
     def __init__(self, c, num_heads, dropout, attention_dropout=0.1,
-                 relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None):
+                 relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None,
+                 use_gate_attn=False, use_qk_norm=False):
         super().__init__()
         self.dropout = dropout
         self.layer_norm1 = LayerNorm(c)
@@ -295,7 +321,8 @@ class EncSALayer(nn.Module):
             self.use_rope = False
         else:
             self.self_attn = MultiheadSelfAttentionWithRoPE(
-                c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
+                c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed,
+                use_gate_attn=use_gate_attn, use_qk_norm=use_qk_norm
             )
             self.use_rope = True
         self.layer_norm2 = LayerNorm(c)

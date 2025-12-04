@@ -38,7 +38,8 @@ class FastSpeech2Acoustic(nn.Module):
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
             dropout=hparams['dropout'], num_heads=hparams['num_heads'],
             use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True)
+            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True),
+            use_gate_attn=hparams.get('use_gate_attn', False), use_qk_norm=hparams.get('use_qk_norm', False)
         )
 
         self.pitch_embed = Linear(1, hparams['hidden_size'])
