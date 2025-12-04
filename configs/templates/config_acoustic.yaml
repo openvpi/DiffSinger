@@ -72,6 +72,8 @@ diffusion_type: reflow
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
+use_gate_attn: false
+use_qk_norm: false
 use_stretch_embed: true
 use_variance_scaling: true
 use_shallow_diffusion: true
