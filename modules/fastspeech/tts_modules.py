@@ -13,7 +13,7 @@ DEFAULT_MAX_TARGET_POSITIONS = 2000
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None, use_mixln=False, 
+    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None, layer_idx=None, use_mixln=False, 
         use_gate_attn=False, use_qk_norm=False):
         super().__init__()
         if use_mixln==False:
