@@ -406,7 +406,7 @@ class LlamaRMSNorm(nn.Module):
 
 class EncSALayer(nn.Module):
     def __init__(self, c, num_heads, dropout, attention_dropout=0.1,
-                 relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None, layer_idx=None
+                 relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None, layer_idx=None,
                  use_gate_attn=False, use_qk_norm=False):
         super().__init__()
         self.dropout = dropout
