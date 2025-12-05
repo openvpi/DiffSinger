@@ -12,13 +12,15 @@ DEFAULT_MAX_TARGET_POSITIONS = 2000
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None):
+    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None,
+                        use_gated_attn=False, use_qk_norm=False):
         super().__init__()
         self.op = EncSALayer(
             hidden_size, num_heads, dropout=dropout,
             attention_dropout=0.0, relu_dropout=dropout,
             kernel_size=kernel_size,
-            act=act, rotary_embed=rotary_embed
+            act=act, rotary_embed=rotary_embed,
+            use_gated_attn=use_gated_attn, use_qk_norm=use_qk_norm
         )
 
     def forward(self, x, **kwargs):
@@ -369,7 +371,8 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 class FastSpeech2Encoder(nn.Module):
     def __init__(self, hidden_size, num_layers,
                  ffn_kernel_size=9, ffn_act='gelu',
-                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True, use_rope=False, rope_interleaved=True):
+                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True, use_rope=False, rope_interleaved=True,
+                 use_gated_attn=False, use_qk_norm=False):
         super().__init__()
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
@@ -383,7 +386,8 @@ class FastSpeech2Encoder(nn.Module):
             TransformerEncoderLayer(
                 self.hidden_size, self.dropout,
                 kernel_size=ffn_kernel_size, act=ffn_act,
-                num_heads=num_heads, rotary_embed=rotary_embed
+                num_heads=num_heads, rotary_embed=rotary_embed,
+                use_gated_attn=use_gated_attn, use_qk_norm=use_qk_norm
             )
             for _ in range(self.num_layers)
         ])

@@ -33,7 +33,8 @@ class FastSpeech2Variance(nn.Module):
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
             dropout=hparams['dropout'], num_heads=hparams['num_heads'],
             use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True)
+            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True),
+            use_qk_norm=hparams.get('use_qk_norm', False), use_qk_norm=hparams.get('use_qk_norm', False)
         )
 
         dur_hparams = hparams['dur_prediction_args']
@@ -127,7 +128,8 @@ class MelodyEncoder(nn.Module):
             ffn_kernel_size=get_hparam('enc_ffn_kernel_size'), ffn_act=get_hparam('ffn_act'),
             dropout=get_hparam('dropout'), num_heads=get_hparam('num_heads'),
             use_pos_embed=get_hparam('use_pos_embed'), rel_pos=get_hparam('rel_pos'),
-            use_rope=get_hparam('use_rope'), rope_interleaved=hparams.get('rope_interleaved', True)
+            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True),
+            use_qk_norm=hparams.get('use_qk_norm', False), use_qk_norm=hparams.get('use_qk_norm', False)
         )
         self.out_proj = Linear(hidden_size, hparams['hidden_size'])
 
