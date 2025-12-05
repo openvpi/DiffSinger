@@ -6,20 +6,23 @@ from torch.nn import functional as F
 from modules.commons.rotary_embedding_torch import RotaryEmbedding
 from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
+from modules.sdp.sdp import StochasticDurationPredictor
 
 DEFAULT_MAX_SOURCE_POSITIONS = 2000
 DEFAULT_MAX_TARGET_POSITIONS = 2000
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None,
+    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None, use_mixln=False, 
         use_gate_attn=False, use_qk_norm=False):
         super().__init__()
+        if use_mixln==False:
+            layer_idx=None
         self.op = EncSALayer(
             hidden_size, num_heads, dropout=dropout,
             attention_dropout=0.0, relu_dropout=dropout,
             kernel_size=kernel_size,
-            act=act, rotary_embed=rotary_embed,
+            act=act, rotary_embed=rotary_embed, layer_idx=layer_idx, 
             use_gate_attn=use_gate_attn, use_qk_norm=use_qk_norm
         )
 
@@ -64,7 +67,7 @@ class DurationPredictor(torch.nn.Module):
     """
 
     def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
-                 dropout_rate=0.1, offset=1.0, dur_loss_type='mse', arch='resnet'):
+                 dropout_rate=0.1, offset=1.0, dur_loss_type='mse', arch='resnet', use_sdp=False, sdp_ratio=0.2, sdp_n_chans=192, gin_channels=0):
         """Initialize duration predictor module.
         Args:
             in_dims (int): Input dimension.
@@ -113,6 +116,10 @@ class DurationPredictor(torch.nn.Module):
         else:
             raise NotImplementedError()
         self.linear = torch.nn.Linear(n_chans, self.out_dims)
+        self.use_sdp = use_sdp
+        self.sdp_ratio = sdp_ratio
+        if self.use_sdp:
+            self.sdp = StochasticDurationPredictor(in_dims, sdp_n_chans, 3, 0.5, 4, gin_channels=gin_channels)
 
     def out2dur(self, xs):
         if self.loss_type in ['mse', 'huber']:
@@ -124,7 +131,7 @@ class DurationPredictor(torch.nn.Module):
             raise NotImplementedError()
         return dur
 
-    def forward(self, xs, x_masks=None, infer=True):
+    def forward(self, xs, x_masks=None, infer=True, ph_dur=None, sdp_cond=None, spk_embed=None):
         """Calculate forward propagation.
         Args:
             xs (Tensor): Batch of input sequences (B, Tmax, idim).
@@ -134,8 +141,19 @@ class DurationPredictor(torch.nn.Module):
             (train) FloatTensor, (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
         """
         xs = xs.transpose(1, -1)  # (B, idim, Tmax)
+        sdp_cond = sdp_cond.transpose(1, -1)  # (B, idim, Tmax)
         masks = 1 - x_masks.float()
         masks_ = masks[:, None, :]
+        if spk_embed is not None:
+            g = spk_embed.transpose(1, -1)
+        else:
+            g = None
+        if self.use_sdp:
+            if not infer:
+                noise_scale = 1
+            else:
+                noise_scale = 0.8
+            xs_spd = self.sdp(sdp_cond, masks_, ph_dur, g=g, reverse=infer, noise_scale=noise_scale)
         for idx, f in enumerate(self.conv):
             if self.use_resnet:
                 residual = self.res_conv(xs) if idx == 0 and self.res_conv is not None else xs
@@ -149,8 +167,21 @@ class DurationPredictor(torch.nn.Module):
 
         dur_pred = self.out2dur(xs)
         if infer:
-            dur_pred = dur_pred.clamp(min=0.)  # avoid negative value
-        return dur_pred
+            dur_pred = dur_pred #   # avoid negative value
+            if self.use_sdp:
+                sdp_pred = self.out2dur(xs_spd.transpose(1, -1) * masks[:, :, None])
+                dur_pred = sdp_pred * self.sdp_ratio + dur_pred * (1 - self.sdp_ratio)
+            return dur_pred.clamp(min=0.), None, None
+        else:
+            if self.use_sdp:
+                sdp_pred = self.sdp(sdp_cond, masks_, g=g, reverse=True, noise_scale=1.0)
+                sdp_pred = self.out2dur(sdp_pred.transpose(1, -1) * masks[:, :, None])
+                l_length_sdp = xs_spd / torch.sum(masks_)
+                loss_sdp = torch.sum(l_length_sdp.float())
+            else:
+                loss_sdp = 0
+                sdp_pred = None
+            return dur_pred, loss_sdp, sdp_pred
 
 
 class VariancePredictor(torch.nn.Module):
@@ -371,7 +402,7 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 class FastSpeech2Encoder(nn.Module):
     def __init__(self, hidden_size, num_layers,
                  ffn_kernel_size=9, ffn_act='gelu',
-                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True, use_rope=False, rope_interleaved=True,
+                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True, use_rope=False, use_mixln=False, rope_interleaved=True,
                  use_gate_attn=False, use_qk_norm=False):
         super().__init__()
         self.num_layers = num_layers
@@ -386,10 +417,10 @@ class FastSpeech2Encoder(nn.Module):
             TransformerEncoderLayer(
                 self.hidden_size, self.dropout,
                 kernel_size=ffn_kernel_size, act=ffn_act,
-                num_heads=num_heads, rotary_embed=rotary_embed,
+                num_heads=num_heads, rotary_embed=rotary_embed, layer_idx=i, use_mixln=use_mixln,
                 use_gate_attn=use_gate_attn, use_qk_norm=use_gate_attn
             )
-            for _ in range(self.num_layers)
+            for i in range(self.num_layers)
         ])
         self.layer_norm = nn.LayerNorm(embed_dim)
 
@@ -419,7 +450,7 @@ class FastSpeech2Encoder(nn.Module):
         x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
-    def forward(self, main_embed, extra_embed, padding_mask, attn_mask=None, return_hiddens=False):
+    def forward(self, main_embed, extra_embed, padding_mask, spk_embed=None, mixln_mask_embed=None, attn_mask=None, return_hiddens=False):
         x = self.forward_embedding(main_embed, extra_embed, padding_mask=padding_mask)  # [B, T, H]
         nonpadding_mask_BT = 1 - padding_mask.float()[:, :, None]  # [B, T, 1]
 
@@ -439,7 +470,7 @@ class FastSpeech2Encoder(nn.Module):
         x = x * nonpadding_mask_BT
         hiddens = []
         for layer in self.layers:
-            x = layer(x, encoder_padding_mask=padding_mask, attn_mask=attn_mask) * nonpadding_mask_BT
+            x = layer(x, encoder_padding_mask=padding_mask, cond=spk_embed, mixln_mask_embed=mixln_mask_embed, attn_mask=attn_mask) * nonpadding_mask_BT
             if return_hiddens:
                 hiddens.append(x)
         x = self.layer_norm(x) * nonpadding_mask_BT

@@ -38,7 +38,7 @@ class FastSpeech2Acoustic(nn.Module):
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
             dropout=hparams['dropout'], num_heads=hparams['num_heads'],
             use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True),
+            use_rope=hparams.get('use_rope', False), use_mixln=hparams.get('use_mixln', False), rope_interleaved=hparams.get('rope_interleaved', True),
             use_gate_attn=hparams.get('use_gate_attn', False), use_qk_norm=hparams.get('use_qk_norm', False)
         )
 
@@ -94,7 +94,13 @@ class FastSpeech2Acoustic(nn.Module):
 
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
-            self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
+            self.use_mix_ln = hparams.get('use_mixln', False)
+            if self.use_mix_ln:
+                self.mix_ln_blacklist = set(hparams.get('mix_ln_blacklist', []))
+                self.mix_ln_mask_id = hparams['num_spk']
+                self.spk_embed = Embedding(hparams['num_spk'] + 1, hparams['hidden_size'])
+            else:
+                self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
@@ -120,6 +126,27 @@ class FastSpeech2Acoustic(nn.Module):
             spk_embed_id=None, languages=None,
             **kwargs
     ):
+        spk_embed=None
+        mixln_mask_embed = None
+        if self.use_spk_id:
+            spk_mix_embed = kwargs.get('spk_mix_embed')
+            if spk_mix_embed is not None:
+                spk_embed = spk_mix_embed
+            else:
+                spk_embed = self.spk_embed(spk_embed_id)
+            if self.training and self.use_mix_ln and self.mix_ln_blacklist:
+                blacklist_mask = torch.tensor(
+                    [sid.item() in self.mix_ln_blacklist for sid in spk_embed_id],
+                    device=spk_embed_id.device
+                )
+                if blacklist_mask.any():
+                    mask_id_tensor = torch.tensor(self.mix_ln_mask_id, device=spk_embed_id.device)
+                    mask_embedding_vector = self.spk_embed(mask_id_tensor)
+                    mixln_mask_embed = torch.zeros_like(spk_embed)
+                    mixln_mask_embed[blacklist_mask] = mask_embedding_vector
+            else:
+                mixln_mask_embed = None
+
         txt_embed = self.txt_embed(txt_tokens)
         dur = mel2ph_to_dur(mel2ph, txt_tokens.shape[1])
         if self.use_variance_scaling:
@@ -131,7 +158,7 @@ class FastSpeech2Acoustic(nn.Module):
             extra_embed = dur_embed + lang_embed
         else:
             extra_embed = dur_embed
-        encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0)
+        encoder_out = self.encoder(txt_embed, extra_embed, txt_tokens == 0, spk_embed, mixln_mask_embed=mixln_mask_embed)
 
         encoder_out = F.pad(encoder_out, [0, 0, 1, 0])
         mel2ph_ = mel2ph[..., None].repeat([1, 1, encoder_out.shape[-1]])
@@ -151,11 +178,15 @@ class FastSpeech2Acoustic(nn.Module):
             condition = condition + stretch_embed_rnn_out
 
         if self.use_spk_id:
-            spk_mix_embed = kwargs.get('spk_mix_embed')
+            #spk_mix_embed = kwargs.get('spk_mix_embed')
+            #if spk_mix_embed is not None:
+            #    spk_embed = spk_mix_embed
+            #else:
+            #    spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
             if spk_mix_embed is not None:
                 spk_embed = spk_mix_embed
             else:
-                spk_embed = self.spk_embed(spk_embed_id)[:, None, :]
+                spk_embed = spk_embed[:, None, :]
             condition += spk_embed
 
         f0_mel = (1 + f0 / 700).log()

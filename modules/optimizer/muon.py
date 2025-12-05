@@ -6,6 +6,9 @@ from torch.nn import Module, Parameter, Embedding
 from typing import List
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
 
+from modules.fastspeech.tts_modules import DurationPredictor
+from modules.commons.common_layers import Correct_Mixed_LayerNorm
+
 
 def get_bf16_support_map():
     bf16_support_map = {}
@@ -130,7 +133,11 @@ def get_params_for_muon(model) -> List[Parameter]:
         A list of parameters that should be optimized with muon.
     """
     muon_params = []
+    
+    excluded_module_types = (DurationPredictor, Correct_Mixed_LayerNorm)
     for module in model.modules():
+        if isinstance(module, excluded_module_types):
+            continue
         for param in module.parameters(recurse=False):
             if not param.requires_grad:
                 continue

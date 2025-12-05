@@ -3,6 +3,10 @@ base_config:
 
 task_cls: training.acoustic_task.AcousticTask
 
+use_mixln: true
+mixln_dsp_fn: 'uniform'
+mix_ln_blacklist: []
+
 dictionaries: {}
 extra_phonemes: []
 merged_phoneme_groups: []

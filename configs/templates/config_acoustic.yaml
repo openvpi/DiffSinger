@@ -1,6 +1,10 @@
 base_config:
   - configs/acoustic.yaml
 
+use_mixln: true
+mixln_dsp_fn: 'uniform'
+mix_ln_blacklist: []
+
 dictionaries:
   zh: dictionaries/opencpop-extension.txt
 extra_phonemes: []
@@ -72,8 +76,8 @@ diffusion_type: reflow
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
-use_gate_attn: false
-use_qk_norm: false
+use_gate_attn: true
+use_qk_norm: true
 use_stretch_embed: true
 use_variance_scaling: true
 use_shallow_diffusion: true

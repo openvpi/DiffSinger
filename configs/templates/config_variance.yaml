@@ -66,9 +66,9 @@ tension_logit_max: 10.0
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
-use_gate_attn: false
-use_qk_norm: false
-use_stretch_embed: false
+use_gate_attn: true
+use_qk_norm: true
+use_stretch_embed: true
 use_variance_scaling: true
 hidden_size: 384
 dur_prediction_args:
@@ -82,6 +82,8 @@ dur_prediction_args:
   lambda_pdur_loss: 0.3
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
+use_sdp: true
+sdp_ratio: 0.2
 
 use_melody_encoder: true
 melody_encoder_args:
