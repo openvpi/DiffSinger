@@ -211,6 +211,17 @@ class TransformerFFNLayer(nn.Module):
         return x
 
 
+class AtanSigmoid(nn.Module):
+    def __init__(self):
+        super(AtanSigmoid, self).__init__()
+        self.pi = math.pi
+        self.pi_half = math.pi / 2
+        self.inv_pi = 1.0 / math.pi
+    
+    def forward(self, x):
+        return (torch.atan(x) + self.pi_half) * self.inv_pi
+
+
 class MultiheadSelfAttentionWithRoPE(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0.1, bias=False, rotary_embed=None,
                         use_gated_attn=False, use_qk_norm=False):
@@ -244,6 +255,7 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         self.use_gated_attn = use_gated_attn
         if self.use_gated_attn:
             self.gate_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+            self.atan_sigmoid = AtanSigmoid()
             nn.init.xavier_uniform_(self.gate_proj.weight)
             if bias:
                 nn.init.constant_(self.gate_proj.bias, 0.0)
@@ -263,15 +275,15 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         # Project inputs to Q, K, V
         Q, K, V = torch.split(self.in_proj(x), self.embed_dim, dim=-1)
         
-        # Query-Key Normalization
-        if self.use_qk_norm:
-            Q = self.q_norm(Q)
-            K = self.k_norm(K)
-        
         # Reshape Q, K, V for multi-head attention
         Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
         K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
         V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
+        
+        # Query-Key Normalization
+        if self.use_qk_norm:
+            Q = self.q_norm(Q)
+            K = self.k_norm(K)
         
         # Apply RoPE
         if self.rotary_embed is not None:
@@ -299,7 +311,7 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         
         if self.use_gated_attn:
             # Formula (5): Y' = Y ⊙ σ(XW_θ)
-            gate_score = torch.sigmoid(self.gate_proj(x)) # (B, L, C)
+            gate_score = self.atan_sigmoid(self.gate_proj(x)) # (B, L, C)
             attn_output = attn_output * gate_score
         
         # Final linear projection
