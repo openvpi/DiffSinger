@@ -255,7 +255,7 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         self.use_gated_attn = use_gated_attn
         if self.use_gated_attn:
             self.gate_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-            self.atan_sigmoid = AtanSigmoid()
+            # self.atan_sigmoid = AtanSigmoid()
             nn.init.xavier_uniform_(self.gate_proj.weight)
             if bias:
                 nn.init.constant_(self.gate_proj.bias, 0.0)
@@ -311,7 +311,8 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         
         if self.use_gated_attn:
             # Formula (5): Y' = Y ⊙ σ(XW_θ)
-            gate_score = self.atan_sigmoid(self.gate_proj(x)) # (B, L, C)
+            # gate_score = self.atan_sigmoid(self.gate_proj(x)) # (B, L, C)
+            gate_score = torch.sigmoid(self.gate_proj(x)) # (B, L, C)
             attn_output = attn_output * gate_score
         
         # Final linear projection
