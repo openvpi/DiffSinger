@@ -35,6 +35,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         self.lang_map: dict = self.build_lang_map()
         self.phoneme_dictionary = load_phoneme_dictionary()
         self.use_lang_id = hparams.get('use_lang_id', False) and len(self.phoneme_dictionary.cross_lingual_phonemes) > 0
+        self.rope_interleaved = hparams.get('rope_interleaved', None)
         self.model = self.build_model()
         self.fs2_aux_cache_path = self.cache_dir / (
             'fs2_aux.onnx' if self.model.use_shallow_diffusion else 'fs2.onnx'
@@ -79,7 +80,6 @@ class DiffSingerAcousticExporter(BaseExporter):
                     self.export_spk = [(name, {name: 1.0}) for name in self.spk_map.keys()]
             if self.freeze_spk is not None:
                 self.model.fs2.register_buffer('frozen_spk_embed', self._perform_spk_mix(self.freeze_spk[1]))
-        self.rope_interleaved = hparams.get('rope_interleaved', None)
 
     def build_model(self) -> DiffSingerAcousticONNX:
         model = DiffSingerAcousticONNX(
