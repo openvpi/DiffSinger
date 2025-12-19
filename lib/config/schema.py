@@ -323,30 +323,30 @@ class EmbeddingsConfig(ConfigBaseModel):
     })
     use_energy_embed: bool = Field(False, json_schema_extra={
         "dynamic_check": DynamicCheck(
-            expr=or_(ref("binarizer.features.energy.used"), not_(this())),
+            expr=or_(ref("binarizer.features.energy.enabled"), not_(this())),
             message="Energy embedding cannot be enabled if energy is not extracted. "
-                    "Enable binarizer.features.energy.used and re-binarize the dataset."
+                    "Enable binarizer.features.energy.enabled and re-binarize the dataset."
         )
     })
     use_breathiness_embed: bool = Field(False, json_schema_extra={
         "dynamic_check": DynamicCheck(
-            expr=or_(ref("binarizer.features.breathiness.used"), not_(this())),
+            expr=or_(ref("binarizer.features.breathiness.enabled"), not_(this())),
             message="Breathiness embedding cannot be enabled if breathiness is not extracted. "
-                    "Enable binarizer.features.breathiness.used and re-binarize the dataset."
+                    "Enable binarizer.features.breathiness.enabled and re-binarize the dataset."
         )
     })
     use_voicing_embed: bool = Field(False, json_schema_extra={
         "dynamic_check": DynamicCheck(
-            expr=or_(ref("binarizer.features.voicing.used"), not_(this())),
+            expr=or_(ref("binarizer.features.voicing.enabled"), not_(this())),
             message="Voicing embedding cannot be enabled if voicing is not extracted. "
-                    "Enable binarizer.features.voicing.used and re-binarize the dataset."
+                    "Enable binarizer.features.voicing.enabled and re-binarize the dataset."
         )
     })
     use_tension_embed: bool = Field(False, json_schema_extra={
         "dynamic_check": DynamicCheck(
-            expr=or_(ref("binarizer.features.tension.used"), not_(this())),
+            expr=or_(ref("binarizer.features.tension.enabled"), not_(this())),
             message="Tension embedding cannot be enabled if tension is not extracted. "
-                    "Enable binarizer.features.tension.used and re-binarize the dataset."
+                    "Enable binarizer.features.tension.enabled and re-binarize the dataset."
         )
     })
     use_key_shift_embed: bool = Field(False, json_schema_extra={
