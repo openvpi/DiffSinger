@@ -43,7 +43,7 @@ num_lang: 1
 use_spk_id: false
 num_spk: 1
 
-use_mix_ln: false
+use_mix_ln: true
 mix_ln_layer: [0, 2]
 
 # NOTICE: before enabling variance embeddings, please read the docs at
