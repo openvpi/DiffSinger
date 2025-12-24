@@ -357,9 +357,9 @@ class EncSALayer(nn.Module):
             )
             self.use_rope = True
         if self.use_mix_ln:
-            self.layer_norm1 = Mixed_LayerNorm(c, c)
+            self.layer_norm2 = Mixed_LayerNorm(c, c)
         else:
-            self.layer_norm1 = LayerNorm(c)
+            self.layer_norm2 = LayerNorm(c)
         self.ffn = TransformerFFNLayer(
             c, 4 * c, kernel_size=kernel_size, dropout=relu_dropout, act=act
         )
@@ -369,6 +369,7 @@ class EncSALayer(nn.Module):
         if layer_norm_training is not None:
             self.layer_norm1.training = layer_norm_training
             self.layer_norm2.training = layer_norm_training
+        residual = x
         if self.use_mix_ln:
             x = self.layer_norm1(x, cond)
         else:
