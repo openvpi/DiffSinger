@@ -18,6 +18,21 @@ f0_mel_min = 1127 * np.log(1 + f0_min / 700)
 f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
 
+def uniform_attention_pooling(spk_embed, durations):
+    B, T_mel, C = spk_embed.shape
+    T_ph = durations.shape[1]
+    ph_starts = torch.cumsum(torch.cat([torch.zeros_like(durations[:, :1]), durations[:, :-1]], dim=1), dim=1)
+    ph_ends = ph_starts + durations
+    mel_indices = torch.arange(T_mel, device=spk_embed.device).view(1, 1, T_mel)
+    phoneme_to_mel_mask = (mel_indices >= ph_starts.unsqueeze(-1)) & (mel_indices < ph_ends.unsqueeze(-1))
+    uniform_scores = phoneme_to_mel_mask.float()
+    sum_scores = uniform_scores.sum(dim=2, keepdim=True)
+    attn_weights = uniform_scores / (sum_scores + (sum_scores == 0).float())  # [B, T_ph, T_mel]
+    ph_spk_embed = torch.bmm(attn_weights, spk_embed)
+
+    return ph_spk_embed
+
+
 def f0_to_coarse(f0):
     f0_mel = 1127 * (1 + f0 / 700).log()
     a = (f0_bin - 2) / (f0_mel_max - f0_mel_min)
@@ -89,7 +104,11 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             extra_embed = dur_embed + lang_embed
         else:
             extra_embed = dur_embed
-        encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX)
+        if hparams.get('use_mix_ln', False):
+            ph_spk_embed = uniform_attention_pooling(spk_embed, durations)
+        else:
+            ph_spk_embed = None
+        encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
         encoded = F.pad(encoded, (0, 0, 1, 0))
         condition = torch.gather(encoded, 1, mel2ph)
 

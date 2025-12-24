@@ -51,6 +51,8 @@ use_lang_id: false
 num_lang: 1
 use_spk_id: false
 num_spk: 1
+use_mix_ln: false
+mix_ln_layer: [0, 2]
 use_energy_embed: false
 use_breathiness_embed: false
 use_voicing_embed: false
