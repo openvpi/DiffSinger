@@ -102,8 +102,6 @@ class BaseTask(pl.LightningModule):
         freeze_key = self.get_need_freeze_state_dict_key(model_state_dict=model_state_dict)
 
         for i in freeze_key:
-            if 'cached_freqs' or 'inv_freq' in name:
-                continue
             params=self.get_parameter(i)
 
             params.requires_grad = False
