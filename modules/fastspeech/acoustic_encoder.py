@@ -43,7 +43,7 @@ class FastSpeech2Acoustic(nn.Module):
         if self.use_tension_embed:
             self.variance_embed_list.append('tension')
         if self.use_falsetto_embed:
-            self.variance_embed_list.append('falsetto_dev')
+            self.variance_embed_list.append('falsetto')
 
         self.use_variance_embeds = len(self.variance_embed_list) > 0
         if self.use_variance_embeds:

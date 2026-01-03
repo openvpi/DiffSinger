@@ -45,7 +45,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'breathiness',
     'voicing',
     'tension',
-    'falsetto_dev',
+    'falsetto',
     'key_shift',
     'speed',
 ]
@@ -229,7 +229,7 @@ class AcousticBinarizer(BaseBinarizer):
                 ).eval().to(self.device)
             falsetto = falsetto_smooth(torch.from_numpy(falsetto).to(self.device)[None])[0]
 
-            processed_input['falsetto_dev'] = falsetto.cpu().numpy()
+            processed_input['falsetto'] = falsetto.cpu().numpy()
 
         if hparams['use_key_shift_embed']:
             processed_input['key_shift'] = 0.

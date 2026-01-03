@@ -7,7 +7,7 @@ from modules.core.ddpm import MultiVarianceDiffusion
 from utils import filter_kwargs
 from utils.hparams import hparams
 
-VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension', 'falsetto_dev']
+VARIANCE_CHECKLIST = ['energy', 'breathiness', 'voicing', 'tension', 'falsetto']
 
 
 class ParameterAdaptorModule(torch.nn.Module):
@@ -28,7 +28,7 @@ class ParameterAdaptorModule(torch.nn.Module):
         if self.predict_tension:
             self.variance_prediction_list.append('tension')
         if self.predict_falsetto:
-            self.variance_prediction_list.append('falsetto_dev')
+            self.variance_prediction_list.append('falsetto')
         self.predict_variances = len(self.variance_prediction_list) > 0
 
     def build_adaptor(self, cls=MultiVarianceDiffusion):

@@ -35,7 +35,7 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             if hparams.get('use_tension_embed', False):
                 self.variances_to_embed.add('tension')
             if hparams.get('use_falsetto_embed', False):
-                self.variances_to_embed.add('falsetto_dev')
+                self.variances_to_embed.add('falsetto')
 
             self.phoneme_dictionary = load_phoneme_dictionary()
             if hparams['use_spk_id']:

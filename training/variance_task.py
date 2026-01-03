@@ -69,7 +69,7 @@ class VarianceDataset(BaseDataset):
         if hparams['predict_tension']:
             batch['tension'] = utils.collate_nd([s['tension'] for s in samples], 0)
         if hparams['predict_falsetto']:
-            batch['falsetto_dev'] = utils.collate_nd([s['falsetto_dev'] for s in samples], 0)
+            batch['falsetto'] = utils.collate_nd([s['falsetto'] for s in samples], 0)
 
         return batch
 
@@ -116,7 +116,7 @@ class VarianceTask(BaseTask):
         if predict_tension:
             self.variance_prediction_list.append('tension')
         if predict_falsetto:
-            self.variance_prediction_list.append('falsetto_dev')
+            self.variance_prediction_list.append('falsetto')
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
         super()._finish_init()
@@ -186,7 +186,7 @@ class VarianceTask(BaseTask):
         breathiness = sample.get('breathiness')  # [B, T_s]
         voicing = sample.get('voicing')  # [B, T_s]
         tension = sample.get('tension')  # [B, T_s]
-        falsetto = sample.get('falsetto_dev')  # [B, T_s]
+        falsetto = sample.get('falsetto')  # [B, T_s]
 
         pitch_retake = variance_retake = None
         if (self.predict_pitch or self.predict_variances) and not infer:
@@ -209,7 +209,7 @@ class VarianceTask(BaseTask):
             note_midi=note_midi, note_rest=note_rest,
             note_dur=note_dur, note_glide=note_glide, mel2note=mel2note,
             base_pitch=base_pitch, pitch=pitch,
-            energy=energy, breathiness=breathiness, voicing=voicing, tension=tension, falsetto_dev=falsetto,
+            energy=energy, breathiness=breathiness, voicing=voicing, tension=tension, falsetto=falsetto,
             pitch_retake=pitch_retake, variance_retake=variance_retake,
             spk_id=spk_ids, infer=infer
         )

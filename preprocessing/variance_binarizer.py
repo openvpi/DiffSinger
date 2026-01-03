@@ -49,7 +49,7 @@ VARIANCE_ITEM_ATTRIBUTES = [
     'breathiness',  # frame-level RMS of aperiodic parts (dB), float32[T_s,]
     'voicing',  # frame-level RMS of harmonic parts (dB), float32[T_s,]
     'tension',  # frame-level tension (logit), float32[T_s,]
-    'falsetto_dev',  # frame-level falsetto (ratio), float32[T_s,]
+    'falsetto',  # frame-level falsetto (ratio), float32[T_s,]
 ]
 DS_INDEX_SEP = '#'
 
@@ -544,7 +544,7 @@ class VarianceBinarizer(BaseBinarizer):
                     ).eval().to(self.device)
                 falsetto = falsetto_smooth(torch.from_numpy(falsetto).to(self.device)[None])[0].cpu().numpy()
 
-            processed_input['falsetto_dev'] = falsetto
+            processed_input['falsetto'] = falsetto
 
         return processed_input
 
