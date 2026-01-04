@@ -11,7 +11,7 @@ from modules.aux_decoder import AuxDecoderAdaptor
 from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding,
-    SinusoidalPosEmb
+    SinusoidalPosEmb, AdamWLinear,
 )
 from modules.core import (
     GaussianDiffusion, PitchDiffusion, MultiVarianceDiffusion,
@@ -160,9 +160,9 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             self.use_melody_encoder = hparams.get('use_melody_encoder', False)
             if self.use_melody_encoder:
                 self.melody_encoder = MelodyEncoder(enc_hparams=hparams['melody_encoder_args'])
-                self.delta_pitch_embed = Linear(1, hparams['hidden_size'])
+                self.delta_pitch_embed = AdamWLinear(1, hparams['hidden_size'])
             else:
-                self.base_pitch_embed = Linear(1, hparams['hidden_size'])
+                self.base_pitch_embed = AdamWLinear(1, hparams['hidden_size'])
 
             self.pitch_retake_embed = Embedding(2, hparams['hidden_size'])
             pitch_hparams = hparams['pitch_prediction_args']
@@ -195,9 +195,9 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
                 raise ValueError(f"Invalid diffusion type: {self.diffusion_type}")
 
         if self.predict_variances:
-            self.pitch_embed = Linear(1, hparams['hidden_size'])
+            self.pitch_embed = AdamWLinear(1, hparams['hidden_size'])
             self.variance_embeds = nn.ModuleDict({
-                v_name: Linear(1, hparams['hidden_size'])
+                v_name: AdamWLinear(1, hparams['hidden_size'])
                 for v_name in self.variance_prediction_list
             })
 

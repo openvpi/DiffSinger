@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb
+from modules.commons.common_layers import SinusoidalPosEmb, AdamWCov1d
 from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from utils.hparams import hparams
 
@@ -64,7 +64,7 @@ class WaveNet(nn.Module):
             for i in range(num_layers)
         ])
         self.skip_projection = Conv1d(num_channels, num_channels, 1)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, 1)
+        self.output_projection = AdamWCov1d(num_channels, in_dims * n_feats, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):

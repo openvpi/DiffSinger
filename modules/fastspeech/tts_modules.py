@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from modules.commons.rotary_embedding_torch import RotaryEmbedding
-from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer
+from modules.commons.common_layers import SinusoidalPositionalEmbedding, EncSALayer, AdamWLinear
 from modules.commons.espnet_positional_embedding import RelPositionalEncoding
 
 DEFAULT_MAX_SOURCE_POSITIONS = 2000
@@ -110,7 +110,7 @@ class DurationPredictor(torch.nn.Module):
         #     self.crf = CRF(out_dims, batch_first=True)
         else:
             raise NotImplementedError()
-        self.linear = torch.nn.Linear(n_chans, self.out_dims)
+        self.linear = AdamWLinear(n_chans, self.out_dims)
 
     def out2dur(self, xs):
         if self.loss_type in ['mse', 'huber']:

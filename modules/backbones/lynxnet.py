@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose
+from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose, AdamWCov1d
 from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from utils.hparams import hparams
 
@@ -106,7 +106,7 @@ class LYNXNet(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(num_channels)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, kernel_size=1)
+        self.output_projection = AdamWCov1d(num_channels, in_dims * n_feats, kernel_size=1)
         self.strong_cond = strong_cond
         nn.init.zeros_(self.output_projection.weight)
 

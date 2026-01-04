@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, ATanGLU, Transpose
+from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, ATanGLU, Transpose, AdamWLinear
 from utils.hparams import hparams
 
 
@@ -72,7 +72,7 @@ class LYNXNet2(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(num_channels)
-        self.output_projection = nn.Linear(num_channels, in_dims * n_feats)
+        self.output_projection = AdamWLinear(num_channels, in_dims * n_feats)
         nn.init.kaiming_normal_(self.input_projection.weight)
         nn.init.kaiming_normal_(self.conditioner_projection.weight)
         nn.init.zeros_(self.output_projection.weight)

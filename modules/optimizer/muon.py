@@ -1,3 +1,4 @@
+import collections
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,6 +6,8 @@ from torch import Tensor
 from torch.nn import Module, Parameter, Embedding
 from typing import List
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
+
+from modules.commons.common_layers import AdamWLinear, AdamWCov1d
 
 
 def get_bf16_support_map():
@@ -129,13 +132,20 @@ def get_params_for_muon(model) -> List[Parameter]:
     Returns:
         A list of parameters that should be optimized with muon.
     """
+    excluded_module_classes = (AdamWLinear, AdamWCov1d)
     muon_params = []
-    for module in model.modules():
+    # BFS through all submodules and exclude parameters from certain module types
+    queue = collections.deque([model])
+    while queue:
+        module = queue.popleft()
+        if isinstance(module, excluded_module_classes):
+            continue
         for param in module.parameters(recurse=False):
             if not param.requires_grad:
                 continue
             if not isinstance(module, nn.Embedding) and param.ndim >= 2:
                 muon_params.append(param)
+        queue.extend(list(module.children()))
     return muon_params
 
 
