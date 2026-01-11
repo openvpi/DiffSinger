@@ -50,6 +50,7 @@ predict_energy: false
 predict_breathiness: false
 predict_voicing: false
 predict_tension: false
+predict_falsetto: false
 
 energy_db_min: -96.0
 energy_db_max: -12.0
@@ -62,6 +63,9 @@ voicing_db_max: -12.0
 
 tension_logit_min: -10.0
 tension_logit_max: 10.0
+
+falsetto_ratio_min: 0
+falsetto_ratio_max: 1
 
 enc_ffn_kernel_size: 3
 use_rope: true
@@ -107,11 +111,11 @@ pitch_prediction_args:
 #   strong_cond: true
 
 variances_prediction_args:
-  total_repeat_bins: 48
+  total_repeat_bins: 72
   backbone_type: 'wavenet'
   backbone_args:
     num_layers: 10
-    num_channels: 192
+    num_channels: 256
     dilation_cycle_length: 4
 # backbone_type: 'lynxnet'
 # backbone_args:
