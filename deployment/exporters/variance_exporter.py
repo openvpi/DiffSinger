@@ -653,8 +653,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         spk_mix_value_N /= spk_mix_value_sum  # normalize
         spk_mix_embed = torch.sum(
             self.model.spk_embed(spk_mix_id_N) * spk_mix_value_N.unsqueeze(2),  # => [1, N, H]
-            dim=1, keepdim=False
-        )  # => [1, H]
+            dim=1, keepdim=True
+        )  # => [1, 1, H]
         return spk_mix_embed
 
     def _optimize_linguistic_graph(self, linguistic: onnx.ModelProto) -> onnx.ModelProto:
