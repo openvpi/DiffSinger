@@ -354,8 +354,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         spk_mix_value_N /= spk_mix_value_sum  # normalize
         spk_mix_embed = torch.sum(
             self.model.fs2.spk_embed(spk_mix_id_N) * spk_mix_value_N.unsqueeze(2),  # => [1, N, H]
-            dim=1, keepdim=False
-        )  # => [1, H]
+            dim=1, keepdim=True
+        )  # => [1, 1, H]
         return spk_mix_embed
 
     def _optimize_fs2_aux_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
