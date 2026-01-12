@@ -47,6 +47,7 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'key_shift',
     'speed',
 ]
+WAV_CANDIDATE_EXTENSIONS = ['.wav', '.flac']
 
 pitch_extractor: BasePE = None
 energy_smooth: SinusoidalSmoothingConv1d = None
@@ -73,14 +74,25 @@ class AcousticBinarizer(BaseBinarizer):
         with open(raw_data_dir / 'transcriptions.csv', 'r', encoding='utf-8') as f:
             for utterance_label in csv.DictReader(f):
                 item_name = utterance_label['name']
+                wav_fn = None
+                for ext in WAV_CANDIDATE_EXTENSIONS:
+                    candidate_fn = raw_data_dir / 'wavs' / f'{item_name}{ext}'
+                    if candidate_fn.exists():
+                        wav_fn = candidate_fn
+                        break
+                if wav_fn is None:
+                    raise FileNotFoundError(
+                        f'Waveform file not found for item \'{item_name}\'. '
+                        f'Candidate extensions: {WAV_CANDIDATE_EXTENSIONS}'
+                    )
                 temp_dict = {
-                    'wav_fn': str(raw_data_dir / 'wavs' / f'{item_name}.wav'),
+                    'wav_fn': str(wav_fn),
                     'spk_id': self.spk_map[spk],
                     'spk_name': spk,
                     'lang_seq': [
                         (
                             self.lang_map[lang if '/' not in p else p.split('/', maxsplit=1)[0]]
-                            if self.phoneme_dictionary.is_cross_lingual(p)
+                            if self.phoneme_dictionary.is_cross_lingual(p if '/' in p else f'{lang}/{p}')
                             else 0
                         )
                         for p in utterance_label['ph_seq'].split()
