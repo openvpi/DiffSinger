@@ -20,7 +20,6 @@ f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
 def uniform_attention_pooling(spk_embed, durations):
     B, T_mel, C = spk_embed.shape
-    T_ph = durations.shape[1]
     ph_starts = torch.cumsum(torch.cat([torch.zeros_like(durations[:, :1]), durations[:, :-1]], dim=1), dim=1)
     ph_ends = ph_starts + durations
     mel_indices = torch.arange(T_mel, device=spk_embed.device).view(1, 1, T_mel)
@@ -105,7 +104,10 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         else:
             extra_embed = dur_embed
         if hparams.get('use_mix_ln', False):
-            ph_spk_embed = uniform_attention_pooling(spk_embed, durations)
+            if hasattr(self, 'frozen_spk_embed'):
+                ph_spk_embed = self.frozen_spk_embed.repeat(1, tokens.shape[1], 1)
+            else:
+                ph_spk_embed = uniform_attention_pooling(spk_embed, durations)
         else:
             ph_spk_embed = None
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
