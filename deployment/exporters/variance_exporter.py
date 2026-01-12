@@ -106,7 +106,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         else:
             strict=True
         load_ckpt(model, hparams['work_dir'], ckpt_steps=self.ckpt_steps,
-                  prefix_in_ckpt='model', strict=True, device=self.device)
+                  prefix_in_ckpt='model', strict=strict, device=self.device)
         model.build_smooth_op(self.device)
         return model
 
