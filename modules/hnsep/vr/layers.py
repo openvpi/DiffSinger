@@ -64,8 +64,14 @@ class Decoder(nn.Module):
         # self.conv2 = Conv2DBNActiv(nout, nout, ksize, 1, pad, activ=activ)
         self.dropout = nn.Dropout2d(0.1) if dropout else None
 
-    def forward(self, x, skip=None):
-        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=True)
+    def forward(self, x, skip=None, fixed_length=True):
+        if fixed_length:
+            x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=True)
+        else:
+            _, _, h, w = x.size() 
+            x = F.pad(x, (0, 1, 0, 1), mode='replicate')
+            x = F.interpolate(x, size=(2*h+1,2*w+1), mode='bilinear', align_corners=True)
+            x = x[:, :, :-1, :-1]
 
         if skip is not None:
             skip = crop_center(skip, x)

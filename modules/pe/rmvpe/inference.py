@@ -19,6 +19,8 @@ class RMVPE(BasePE):
         self.model = E2E0(4, 1, (2, 2)).eval().to(self.device)
         ckpt = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(ckpt['model'], strict=False)
+        self.hop_length = hop_length
+        self.seg_length = 32 * hop_length
         self.mel_extractor = MelSpectrogram(
             N_MELS, SAMPLE_RATE, WINDOW_LENGTH, hop_length, None, MEL_FMIN, MEL_FMAX
         ).to(self.device)
@@ -26,7 +28,7 @@ class RMVPE(BasePE):
     @torch.no_grad()
     def mel2hidden(self, mel):
         n_frames = mel.shape[-1]
-        mel = F.pad(mel, (0, 32 * ((n_frames - 1) // 32 + 1) - n_frames), mode='constant')
+        mel = F.pad(mel, (0, 32 * ((n_frames - 1) // 32 + 1) - n_frames), mode='reflecr')
         hidden = self.model(mel)
         return hidden[:, :n_frames]
 
@@ -47,9 +49,15 @@ class RMVPE(BasePE):
                 self.resample_kernel[key_str] = Resample(sample_rate, 16000, lowpass_filter_width=128)
             self.resample_kernel[key_str] = self.resample_kernel[key_str].to(self.device)
             audio_res = self.resample_kernel[key_str](audio)
+        B, T = audio_res.shape
+        n_frames = T // self.hop_length + 1 
+        T1 = T + self.hop_length
+        T_pad = self.seg_length * ((T1 - 1) // self.seg_length + 1) - T1
+        audio_res = F.pad(audio_res, (0, T_pad))
         mel = self.mel_extractor(audio_res, center=True)
-        hidden = self.mel2hidden(mel)
-        f0 = self.decode(hidden, thred=thred, use_viterbi=use_viterbi)
+        with torch.no_grad():
+            hidden = self.model(mel)
+        f0 = self.decode(hidden[:, :n_frames], thred=thred, use_viterbi=use_viterbi)
         return f0
 
     def get_pitch(
