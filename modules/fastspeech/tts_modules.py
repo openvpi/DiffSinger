@@ -378,7 +378,7 @@ class FastSpeech2Encoder(nn.Module):
         self.dropout = dropout
         self.use_pos_embed = use_pos_embed
         if use_pos_embed and use_rope:
-            rotary_embed = RotaryEmbedding(dim = embed_dim // num_heads, interleaved = rope_interleaved)
+            rotary_embed = RotaryEmbedding(dim=embed_dim // num_heads, interleaved=rope_interleaved)
         else:
             rotary_embed = None
         self.layers = nn.ModuleList([
