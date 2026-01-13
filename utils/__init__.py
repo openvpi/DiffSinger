@@ -5,6 +5,7 @@ import re
 import time
 import types
 from collections import OrderedDict
+from fnmatch import fnmatch
 
 import numpy as np
 import torch
@@ -165,12 +166,14 @@ def filter_kwargs(dict_to_filter, kwarg_obj):
 
 def load_ckpt(
         cur_model, ckpt_base_dir, ckpt_steps=None,
-        prefix_in_ckpt='model', ignored_prefixes=None, key_in_ckpt='state_dict',
+        prefix_in_ckpt='model', exclude_key_patterns=None, key_in_ckpt='state_dict',
         strict=True, device='cpu'
 ):
-    if ignored_prefixes is None:
-        # NOTICE: this is for compatibility with old checkpoints which have duplicate txt_embed layer in them.
-        ignored_prefixes = ['model.fs2.encoder.embed_tokens']
+    if exclude_key_patterns is None:
+        # Pop all RoPE buffers from some old checkpoints,
+        # Because these buffers are all computed during initialization now.
+        # TODO: this is a legacy handling and should be removed in the future.
+        exclude_key_patterns = ['*.rotary_embed.*']
     if not isinstance(ckpt_base_dir, pathlib.Path):
         ckpt_base_dir = pathlib.Path(ckpt_base_dir)
     if ckpt_base_dir.is_file():
@@ -197,11 +200,19 @@ def load_ckpt(
     else:
         state_dict = ckpt_loaded[key_in_ckpt]
     if prefix_in_ckpt is not None:
-        state_dict = OrderedDict({
-            k[len(prefix_in_ckpt) + 1:]: v
-            for k, v in state_dict.items() if k.startswith(f'{prefix_in_ckpt}.')
-            if all(not k.startswith(p) for p in ignored_prefixes)
-        })
+        state_dict = OrderedDict()
+        for k, v in ckpt_loaded[key_in_ckpt].items():
+            if not k.startswith(f'{prefix_in_ckpt}.'):
+                continue
+            k = k[len(prefix_in_ckpt) + 1:]
+            excluded = False
+            for pat in exclude_key_patterns:
+                if fnmatch(k, pat):
+                    excluded = True
+                    break
+            if excluded:
+                continue
+            state_dict[k] = v
     if not strict:
         cur_model_state_dict = cur_model.state_dict()
         unmatched_keys = []
