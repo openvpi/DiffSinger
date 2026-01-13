@@ -298,5 +298,5 @@ def nsf_hifigan(
 
 
 if __name__ == '__main__':
-    # check_pytorch_version()
+    check_pytorch_version()
     main()
