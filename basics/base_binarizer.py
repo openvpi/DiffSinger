@@ -326,7 +326,7 @@ class BaseBinarizer:
                             extra_info[k] = {}
                         extra_info[k][aug_item_no] = v.shape[0]
                 extra_info['names'][aug_item_no] = aug_item['name'].split(':', 1)[-1]
-                extra_info['main_langs'][item_no] = _item['main_lang']
+                extra_info['main_langs'][aug_item_no] = _item['main_lang']
                 extra_info['ph_texts'][aug_item_no] = aug_item['ph_text']
                 extra_info['spk_ids'][aug_item_no] = aug_item['spk_id']
                 extra_info['spk_names'][aug_item_no] = aug_item['spk_name']
