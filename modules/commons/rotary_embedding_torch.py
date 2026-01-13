@@ -46,7 +46,7 @@ class RotaryEmbedding(Module):
         self._cache_max_seq_len = max(precompute_len, cache_max_seq_len)
         self._precomputed_len = precompute_len
 
-        self.register_buffer('cached_freqs', None, persistent=False)
+        self.register_buffer('cached_freqs', None, persistent=True)
         self.cached_freqs_seq_len = 0
         
         if self._precomputed_len > 0:
