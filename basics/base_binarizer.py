@@ -209,6 +209,7 @@ class BaseBinarizer:
             json.dump(self.lang_map, f, ensure_ascii=False)
         for lang, dict_path in hparams['dictionaries'].items():
             shutil.copy(dict_path, self.binary_data_dir / f'dictionary-{lang}.txt')
+        self.phoneme_dictionary.dump(self.binary_data_dir / 'ph_map.json')
         self.check_coverage()
 
         # Process valid set and train set
@@ -287,7 +288,7 @@ class BaseBinarizer:
         builder = IndexedDatasetBuilder(self.binary_data_dir, prefix=prefix, allowed_attr=self.data_attrs)
         total_sec = {k: 0.0 for k in self.spk_map}
         total_raw_sec = {k: 0.0 for k in self.spk_map}
-        extra_info = {'names': {}, 'ph_texts': {}, 'spk_ids': {}, 'spk_names': {}, 'lengths': {}}
+        extra_info = {'names': {}, 'main_langs': {}, 'ph_texts': {}, 'spk_ids': {}, 'spk_names': {}, 'lengths': {}}
         max_no = -1
 
         for item_name, meta_data in self.meta_data_iterator(prefix):
@@ -307,6 +308,7 @@ class BaseBinarizer:
                         extra_info[k] = {}
                     extra_info[k][item_no] = v.shape[0]
             extra_info['names'][item_no] = _item['name'].split(':', 1)[-1]
+            extra_info['main_langs'][item_no] = _item['main_lang']
             extra_info['ph_texts'][item_no] = _item['ph_text']
             extra_info['spk_ids'][item_no] = _item['spk_id']
             extra_info['spk_names'][item_no] = _item['spk_name']
@@ -324,6 +326,7 @@ class BaseBinarizer:
                             extra_info[k] = {}
                         extra_info[k][aug_item_no] = v.shape[0]
                 extra_info['names'][aug_item_no] = aug_item['name'].split(':', 1)[-1]
+                extra_info['main_langs'][item_no] = _item['main_lang']
                 extra_info['ph_texts'][aug_item_no] = aug_item['ph_text']
                 extra_info['spk_ids'][aug_item_no] = aug_item['spk_id']
                 extra_info['spk_names'][aug_item_no] = aug_item['spk_name']

@@ -101,6 +101,7 @@ class AcousticBinarizer(BaseBinarizer):
                     'ph_seq': self.phoneme_dictionary.encode(utterance_label['ph_seq'], lang=lang),
                     'ph_dur': [float(x) for x in utterance_label['ph_dur'].split()],
                     'ph_text': utterance_label['ph_seq'],
+                    'main_lang': lang,
                 }
                 assert len(temp_dict['ph_seq']) == len(temp_dict['ph_dur']), \
                     f'Lengths of ph_seq and ph_dur mismatch in \'{item_name}\'.'
@@ -133,6 +134,7 @@ class AcousticBinarizer(BaseBinarizer):
             'tokens': np.array(meta_data['ph_seq'], dtype=np.int64),
             'ph_dur': np.array(meta_data['ph_dur']).astype(np.float32),
             'ph_text': meta_data['ph_text'],
+            'main_lang': meta_data['main_lang'],
         }
 
         # get ground truth dur

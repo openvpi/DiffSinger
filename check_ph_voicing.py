@@ -1,3 +1,4 @@
+import json
 import pathlib
 import pickle
 
@@ -17,17 +18,23 @@ frame_threshold = 5
 save_dir = pathlib.Path(r"data/_check")
 
 save_dir.mkdir(parents=True, exist_ok=True)
-
+with open(ph_map_file, 'r', encoding='utf-8') as f:
+    ph_set = set(json.load(f).keys())
 with open(meta_file, 'rb') as f:
     metadata = pickle.load(f)
 data = IndexedDataset(data_file.parent, data_file.stem)
 for i, name in enumerate(metadata["names"]):
     spk = metadata["spk_names"][i]
     sample = data[i]
+    main_lang = metadata["main_langs"][i]
     ph_text = metadata["ph_texts"][i].split()
+    ph_full_text = [
+        ph if "/" in ph or ph in ph_set else f"{main_lang}/{ph}"
+        for ph in ph_text
+    ]
     inspect_mask_ph = torch.tensor([
         ph in inspect_phonemes
-        for ph in ph_text
+        for ph in ph_full_text
     ])  # [T_ph,]
     if not inspect_mask_ph.any():
         continue
@@ -56,8 +63,8 @@ for i, name in enumerate(metadata["names"]):
     ph_edges = torch.cumsum(durations, dim=0)[:-1]
     plt.vlines(ph_edges.cpu().numpy(), 0, mel.shape[0], colors='cyan', linestyles='--', label='boundaries')
     x_pos = 0
-    for ph_name, duration in zip(ph_text, durations.cpu().tolist()):
-        color = "yellow" if ph_name in inspect_phonemes else "white"
+    for ph_name, ph_full_name, duration in zip(ph_text, ph_full_text, durations.cpu().tolist()):
+        color = "yellow" if ph_full_name in inspect_phonemes else "white"
         plt.text(
             x_pos + duration / 2, 10, ph_name,
             size=12, horizontalalignment='center', color=color
