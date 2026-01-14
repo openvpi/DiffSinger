@@ -12,6 +12,7 @@ from utils.indexed_datasets import IndexedDataset
 
 data_file = pathlib.Path(r"data/qixuan_v4/binary/acoustic/train.data")
 meta_file = pathlib.Path(r"data/qixuan_v4/binary/acoustic/train.meta")
+ph_map_file = pathlib.Path(r"data/qixuan_v4/binary/acoustic/ph_map.json")
 inspect_phonemes = ["SP", "AP"]
 value_threshold = -40
 frame_threshold = 5
