@@ -46,11 +46,19 @@ for i, name in enumerate(metadata["names"]):
     voicing = sample["voicing"]  # [T_mel,]
     inspect_voicing_max = voicing[inspect_mask_mel].max()
     inspect_over_threshold = (voicing >= value_threshold) & inspect_mask_mel  # [T_mel,]
-    inspect_over_threshold_frames = inspect_over_threshold.sum()
-    if inspect_over_threshold_frames < frame_threshold:
+    max_consecutive = 0
+    current_consecutive = 0
+    for flag in inspect_over_threshold.cpu().tolist():
+        if flag:
+            current_consecutive += 1
+            if current_consecutive > max_consecutive:
+                max_consecutive = current_consecutive
+        else:
+            current_consecutive = 0
+    if max_consecutive < frame_threshold:
         continue
     durations = mel2ph_to_dur(mel2ph[None], len(ph_text))[0]  # [T_ph,]
-    print(f"{i:06d}_{spk}_{name}: frameCount = {inspect_over_threshold_frames}, maxVoicing = {inspect_voicing_max:.2f}")
+    print(f"{i:06d}_{spk}_{name}: longestRegion = {max_consecutive}, maxVoicing = {inspect_voicing_max:.2f}")
     mel = sample["mel"].cpu().numpy().T
     emphasis_mask = inspect_over_threshold[None].repeat(mel.shape[0], 1).cpu().numpy()
     alpha = numpy.where(emphasis_mask, 0.4, 0)
@@ -72,7 +80,7 @@ for i, name in enumerate(metadata["names"]):
         )
         x_pos += duration
     plt.ylim(0, mel.shape[0])
-    plt.title(f"{spk} - {name}: frameCount = {inspect_over_threshold_frames}, maxVoicing = {inspect_voicing_max:.2f}")
+    plt.title(f"{spk} - {name}: longestRegion = {max_consecutive}, maxVoicing = {inspect_voicing_max:.2f}")
     plt.legend()
     plt.tight_layout()
     fig.savefig(save_dir / f"{i:06d}_{spk}_{name}.jpg")
