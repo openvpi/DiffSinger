@@ -79,7 +79,7 @@ dur_prediction_args:
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
 
-use_melody_encoder: false
+use_melody_encoder: true
 melody_encoder_args:
   hidden_size: 128
   enc_layers: 4
