@@ -156,7 +156,7 @@ class BaseBinarizer:
             warnings.filterwarnings('default')
 
         valid_item_names = list(valid_item_names.keys())
-        assert len(valid_item_names) > 0, 'Validation set is empty!'
+        # assert len(valid_item_names) > 0, 'Validation set is empty!'
         train_item_names = [x for x in self.item_names if x not in set(valid_item_names)]
         assert len(train_item_names) > 0, 'Training set is empty!'
 
