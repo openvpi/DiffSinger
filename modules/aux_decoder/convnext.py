@@ -3,6 +3,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
+from modules.commons.common_layers import AdamWCov1d
+
 
 class ConvNeXtBlock(nn.Module):
     """ConvNeXt Block adapted from https://github.com/facebookresearch/ConvNeXt to 1D audio signal.
@@ -71,7 +73,7 @@ class ConvNeXtDecoder(nn.Module):
                 layer_scale_init_value=1e-6, drop_out=dropout_rate
             ) for _ in range(num_layers)
         )
-        self.outconv = nn.Conv1d(
+        self.outconv = AdamWCov1d(
             num_channels, out_dims, kernel_size,
             stride=1, padding=(kernel_size - 1) // 2
         )

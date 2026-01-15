@@ -6,6 +6,7 @@ from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
     SinusoidalPosEmb,
+    AdamWLinear,
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, mel2ph_to_dur, StretchRegulator
 from utils.hparams import hparams
@@ -32,7 +33,7 @@ class FastSpeech2Acoustic(nn.Module):
             )
             self.stretch_embed_rnn = nn.GRU(hparams['hidden_size'], hparams['hidden_size'], 1, batch_first=True)
 
-        self.dur_embed = Linear(1, hparams['hidden_size'])
+        self.dur_embed = AdamWLinear(1, hparams['hidden_size'])
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
@@ -41,7 +42,7 @@ class FastSpeech2Acoustic(nn.Module):
             use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True)
         )
 
-        self.pitch_embed = Linear(1, hparams['hidden_size'])
+        self.pitch_embed = AdamWLinear(1, hparams['hidden_size'])
         self.variance_embed_list = []
         self.use_energy_embed = hparams.get('use_energy_embed', False)
         self.use_breathiness_embed = hparams.get('use_breathiness_embed', False)
@@ -59,7 +60,7 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_variance_embeds = len(self.variance_embed_list) > 0
         if self.use_variance_embeds:
             self.variance_embeds = nn.ModuleDict({
-                v_name: Linear(1, hparams['hidden_size'])
+                v_name: AdamWLinear(1, hparams['hidden_size'])
                 for v_name in self.variance_embed_list
             })
 
@@ -85,11 +86,11 @@ class FastSpeech2Acoustic(nn.Module):
 
         self.use_key_shift_embed = hparams.get('use_key_shift_embed', False)
         if self.use_key_shift_embed:
-            self.key_shift_embed = Linear(1, hparams['hidden_size'])
+            self.key_shift_embed = AdamWLinear(1, hparams['hidden_size'])
 
         self.use_speed_embed = hparams.get('use_speed_embed', False)
         if self.use_speed_embed:
-            self.speed_embed = Linear(1, hparams['hidden_size'])
+            self.speed_embed = AdamWLinear(1, hparams['hidden_size'])
 
         self.use_spk_id = hparams['use_spk_id']
         if self.use_spk_id:
