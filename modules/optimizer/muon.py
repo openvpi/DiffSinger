@@ -132,7 +132,7 @@ def get_params_for_muon(model) -> List[Parameter]:
     Returns:
         A list of parameters that should be optimized with muon.
     """
-    excluded_module_classes = (AdamWLinear, AdamWCov1d)
+    excluded_module_classes = (nn.Embedding, AdamWLinear, AdamWCov1d)
     muon_params = []
     # BFS through all submodules and exclude parameters from certain module types
     queue = collections.deque([model])
@@ -143,7 +143,7 @@ def get_params_for_muon(model) -> List[Parameter]:
         for param in module.parameters(recurse=False):
             if not param.requires_grad:
                 continue
-            if not isinstance(module, nn.Embedding) and param.ndim >= 2:
+            if param.ndim >= 2:
                 muon_params.append(param)
         queue.extend(list(module.children()))
     return muon_params
