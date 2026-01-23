@@ -147,7 +147,7 @@ class ExpressionModelCheckpoint(FriendlyModelCheckpoint):
         metric_key = f"expr_{base64.b16encode(expression.encode('utf8')).decode()}"
         super().__init__(
             dirpath=dirpath,
-            filename=f"model-{tag}-steps={{step:07d}}-epochs={{epoch:04d}}-{metric_name}={{{metric_key}:06.3f}}",
+            filename=f"model-{tag}-steps={{step:07d}}-epochs={{epoch:04d}}-{metric_name}={{{metric_key}:06.4f}}",
             monitor=metric_key,
             verbose=False,
             save_last=False,
