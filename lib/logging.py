@@ -16,32 +16,6 @@ logger.level("DEBUG", color="")
 logger.level("INFO", color="<green>")
 logger.remove()
 logger.add(sys.stdout, colorize=True, format=LOGGER_FORMAT)
-_param_stack = []
-
-
-def _param_stack_push(sink, fmt=LOGGER_FORMAT):
-    logger.remove()
-    logger.add(sink, colorize=True, format=fmt)
-    _param_stack.append((sink, fmt))
-
-
-def _param_stack_pop():
-    if _param_stack:
-        _param_stack.pop()
-    if not _param_stack:
-        sink, fmt = sys.stdout, LOGGER_FORMAT
-    else:
-        sink, fmt = _param_stack[-1]
-    logger.remove()
-    logger.add(sink, colorize=True, format=fmt)
-
-
-def _format_string(callback, message: str):
-    with io.StringIO() as string:
-        _param_stack_push(string, _PRIVATE_LOGGER_FORMAT)
-        callback(message)
-        _param_stack_pop()
-        return string.getvalue().rstrip()
 
 
 def _get_bind(last=1):
@@ -60,9 +34,11 @@ def _get_bind(last=1):
 
 def _log(logger_callback, sink_callback, message: str):
     with io.StringIO() as string:
-        _param_stack_push(string, _PRIVATE_LOGGER_FORMAT)
+        logger.remove()
+        logger.add(string, colorize=True, format=_PRIVATE_LOGGER_FORMAT)
         logger_callback(message)
-        _param_stack_pop()
+        logger.remove()
+        logger.add(sys.stdout, colorize=True, format=LOGGER_FORMAT)
         formatted_massage = string.getvalue().rstrip()
     if sink_callback is None:
         print(formatted_massage)
