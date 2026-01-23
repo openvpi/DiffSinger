@@ -353,7 +353,12 @@ class FastSpeech2Encoder(nn.Module):
         self.dropout = dropout
         self.use_pos_embed = use_pos_embed
         if use_pos_embed and use_rope:
-            rotary_embed = RotaryEmbedding(dim = embed_dim // num_heads)
+            if embed_dim % (num_heads * 2) != 0:
+                raise ValueError(
+                    "RoPE requires the hidden size to be multiple of "
+                    f"num_heads * 2 = {num_heads * 2}, but got {embed_dim}."
+                )
+            rotary_embed = RotaryEmbedding(dim=embed_dim // num_heads)
         else:
             rotary_embed = None
         self.layers = nn.ModuleList([
