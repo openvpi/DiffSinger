@@ -329,6 +329,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             # self.val_losses is a built-in dict, so we need to move them to device manually
             metric.to(self.device)
             metric.reset()
+        for metric in self.metrics.values():
+            metric.reset()
         if self.use_ema:
             self.ema.apply()  # switch to EMA parameters for validation
 
