@@ -358,7 +358,13 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
 
     def on_validation_epoch_end(self):
         loss_vals = {k: v.compute() for k, v in self.val_losses.items()}
-        metric_vals = {k: v.compute() for k, v in self.metrics.items()}
+        metric_vals = {}
+        for k, v in self.metrics.items():
+            m = v.compute()
+            if isinstance(m, dict):
+                metric_vals.update(m)
+            else:
+                metric_vals[k] = m
         self.log_dict(
             {**loss_vals, **metric_vals},
             on_epoch=True, prog_bar=False, logger=False, sync_dist=True
