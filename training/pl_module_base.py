@@ -38,8 +38,8 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
         self.training_config = training_config
 
         self.model: nn.Module = self.build_model()
-        self.losses = nn.ModuleDict()
-        self.metrics = nn.ModuleDict()
+        self.losses: dict[str, nn.Module] = nn.ModuleDict()
+        self.metrics: dict[str, Metric] = nn.ModuleDict()
         self.val_losses: dict[str, Metric] = {  # use built-in dict to not be printed in the model summary
             "total_loss": MeanMetric()
         }
