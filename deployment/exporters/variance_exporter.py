@@ -388,33 +388,47 @@ class DiffSingerVarianceExporter(BaseExporter):
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
 
-            print(f'Tracing {self.pitch_backbone_class_name} backbone...')
             pitch_predictor = self.model.view_as_pitch_predictor()
-            pitch_predictor.pitch_predictor.set_backbone(
-                torch.jit.trace(
-                    pitch_predictor.pitch_predictor.backbone,
-                    (
-                        noise,
-                        dummy_time,
-                        condition
+
+            if torch.__version__.startswith('1.13.'):
+                print(f'Tracing {self.pitch_backbone_class_name} backbone...')
+                pitch_predictor.pitch_predictor.set_backbone(
+                    torch.jit.trace(
+                        pitch_predictor.pitch_predictor.backbone,
+                        (
+                            noise,
+                            dummy_time,
+                            condition
+                        )
                     )
                 )
-            )
 
-            print(f'Scripting {self.pitch_predictor_class_name}...')
-            pitch_predictor = torch.jit.script(
-                pitch_predictor,
-                example_inputs=[
-                    (
-                        condition.transpose(1, 2),
-                        1  # p_sample branch
-                    ),
-                    (
-                        condition.transpose(1, 2),
-                        dummy_steps  # p_sample_plms branch
-                    )
-                ]
-            )
+                print(f'Scripting {self.pitch_predictor_class_name}...')
+                pitch_predictor = torch.jit.script(
+                    pitch_predictor,
+                    example_inputs=[
+                        (
+                            condition.transpose(1, 2),
+                            1  # p_sample branch
+                        ),
+                        (
+                            condition.transpose(1, 2),
+                            dummy_steps  # p_sample_plms branch
+                        )
+                    ]
+                )
+            else:
+                print(f'Wrapping {self.pitch_predictor_class_name} for trace-based export...')
+
+                class _PitchPredWrapper(torch.nn.Module):
+                    def __init__(self, model):
+                        super().__init__()
+                        self.pitch_predictor = model.pitch_predictor
+
+                    def forward(self, pitch_cond, steps):
+                        return self.pitch_predictor(pitch_cond, steps=steps)
+
+                pitch_predictor = _PitchPredWrapper(pitch_predictor)
 
             print(f'Exporting {self.pitch_predictor_class_name}...')
             torch.onnx.export(
@@ -535,33 +549,47 @@ class DiffSingerVarianceExporter(BaseExporter):
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
             step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
 
-            print(f'Tracing {self.variance_backbone_class_name} backbone...')
             multi_var_predictor = self.model.view_as_variance_predictor()
-            multi_var_predictor.variance_predictor.set_backbone(
-                torch.jit.trace(
-                    multi_var_predictor.variance_predictor.backbone,
-                    (
-                        noise,
-                        step,
-                        condition
+
+            if torch.__version__.startswith('1.13.'):
+                print(f'Tracing {self.variance_backbone_class_name} backbone...')
+                multi_var_predictor.variance_predictor.set_backbone(
+                    torch.jit.trace(
+                        multi_var_predictor.variance_predictor.backbone,
+                        (
+                            noise,
+                            step,
+                            condition
+                        )
                     )
                 )
-            )
 
-            print(f'Scripting {self.multi_var_predictor_class_name}...')
-            multi_var_predictor = torch.jit.script(
-                multi_var_predictor,
-                example_inputs=[
-                    (
-                        condition.transpose(1, 2),
-                        1  # p_sample branch
-                    ),
-                    (
-                        condition.transpose(1, 2),
-                        dummy_steps  # p_sample_plms branch
-                    )
-                ]
-            )
+                print(f'Scripting {self.multi_var_predictor_class_name}...')
+                multi_var_predictor = torch.jit.script(
+                    multi_var_predictor,
+                    example_inputs=[
+                        (
+                            condition.transpose(1, 2),
+                            1  # p_sample branch
+                        ),
+                        (
+                            condition.transpose(1, 2),
+                            dummy_steps  # p_sample_plms branch
+                        )
+                    ]
+                )
+            else:
+                print(f'Wrapping {self.multi_var_predictor_class_name} for trace-based export...')
+
+                class _VarPredWrapper(torch.nn.Module):
+                    def __init__(self, model):
+                        super().__init__()
+                        self.variance_predictor = model.variance_predictor
+
+                    def forward(self, variance_cond, steps):
+                        return self.variance_predictor(variance_cond, steps=steps)
+
+                multi_var_predictor = _VarPredWrapper(multi_var_predictor)
 
             print(f'Exporting {self.multi_var_predictor_class_name}...')
             torch.onnx.export(

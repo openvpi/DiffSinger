@@ -15,10 +15,13 @@ from utils.hparams import set_hparams, hparams
 
 
 def check_pytorch_version():
-    # Require PyTorch version to be exactly 1.13.x
+    import warnings
     if torch.__version__.startswith('1.13.'):
         return
-    raise RuntimeError('This script requires PyTorch 1.13.x. Please install the correct version.')
+    warnings.warn(
+        f'ONNX export is tested on PyTorch 1.13.x, but you have {torch.__version__}. '
+        f'Proceeding with trace-based fallback for variance models.'
+    )
 
 
 def find_exp(exp):
