@@ -26,6 +26,13 @@ class ConfigBaseModel(BaseModel):
 
     __field_scopes__: ClassVar[dict] = {}  # {field_name: scope_bitmask}
 
+    def __init__(self, **data):
+        token = _current_scope.set(0)
+        try:
+            super().__init__(**data)
+        finally:
+            _current_scope.reset(token)
+
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs):
         """
