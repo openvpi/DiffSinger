@@ -65,6 +65,8 @@ max_beta: 0.02
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
+rope_theta: 8000
+rotary_dim: 192
 use_stretch_embed: true
 use_variance_scaling: true
 rel_pos: true

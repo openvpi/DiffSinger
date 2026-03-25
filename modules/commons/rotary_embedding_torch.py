@@ -33,12 +33,16 @@ class RotaryEmbedding(Module):
             dim,
             theta=10000,
             max_seq_len=8192,
-            interleaved: bool = True
+            interleaved: bool = True,
+            rotary_dim: int = None
     ):
         super().__init__()
         self.interleaved = interleaved
         self.cached_freqs_seq_len = max_seq_len
-        inv_freq = 1. / (theta ** (torch.arange(0, dim, 2).float() / dim))
+        self.rotary_dim = rotary_dim if rotary_dim is not None else dim
+        if self.rotary_dim > dim:
+            raise ValueError(f"rotary_dim ({self.rotary_dim}) cannot be larger than dim ({dim})")
+        inv_freq = 1. / (theta ** (torch.arange(0, self.rotary_dim, 2).float() / dim))
         self.register_buffer('inv_freq', inv_freq, persistent=False)
         self.register_buffer('cached_freqs', self._precompute_cache(max_seq_len), persistent=False)
 

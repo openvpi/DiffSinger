@@ -93,6 +93,7 @@ class VarianceTask(BaseTask):
         self.predict_dur = hparams['predict_dur']
         if self.predict_dur:
             self.lambda_dur_loss = hparams['lambda_dur_loss']
+            self.use_sdp = hparams.get('use_sdp', False)
 
         self.predict_pitch = hparams['predict_pitch']
         if self.predict_pitch:
@@ -134,6 +135,18 @@ class VarianceTask(BaseTask):
             self.register_validation_loss('dur_loss')
             self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))
             self.register_validation_metric('ph_dur_acc', PhonemeDurationAccuracy(tolerance=0.2))
+            if self.use_sdp:
+                self.dur_sdp_loss = DurationLoss(
+                    offset=dur_hparams['log_offset'],
+                    loss_type=dur_hparams['loss_type'],
+                    lambda_pdur=dur_hparams['lambda_pdur_loss'],
+                    lambda_wdur=dur_hparams['lambda_wdur_loss'],
+                    lambda_sdur=dur_hparams['lambda_sdur_loss']
+                )
+                self.register_validation_loss('dur_sdp_loss')
+                self.lambda_sdp_loss = hparams.get('lambda_sdp_loss', 0.005)
+                self.sdp_flow_loss = torch.nn.Identity()
+                self.register_validation_loss('sdp_flow_loss')
         if self.predict_pitch:
             if self.diffusion_type == 'ddpm':
                 self.pitch_loss = DiffusionLoss(loss_type=hparams['main_loss_type'])
@@ -207,7 +220,7 @@ class VarianceTask(BaseTask):
             spk_id=spk_ids, infer=infer
         )
 
-        dur_pred, pitch_pred, variances_pred = output
+        dur_pred, pitch_pred, variances_pred, sdp_loss, sdp_pred = output
         if infer:
             if dur_pred is not None:
                 dur_pred = dur_pred.round().long()
@@ -216,6 +229,14 @@ class VarianceTask(BaseTask):
             losses = {}
             if dur_pred is not None:
                 losses['dur_loss'] = self.lambda_dur_loss * self.dur_loss(dur_pred, ph_dur, ph2word=ph2word)
+                if self.use_sdp:
+                    losses['sdp_flow_loss'] = self.sdp_flow_loss(sdp_loss) * self.lambda_sdp_loss
+                    lambda_sdp_reg_base = hparams.get('lambda_sdp_reg_loss', 0.1)
+                    warmup_steps = hparams.get('sdp_reg_warmup_steps', 16000)
+                    step = getattr(self, 'global_step', 1)
+                    anneal_weight = min(1.0, step / warmup_steps) if warmup_steps > 0 else 1.0
+                    current_sdp_reg_weight = lambda_sdp_reg_base * anneal_weight
+                    losses['dur_sdp_loss'] = current_sdp_reg_weight * self.dur_sdp_loss(sdp_pred, ph_dur, ph2word=ph2word)
             non_padding = (mel2ph > 0).unsqueeze(-1) if mel2ph is not None else None
             if pitch_pred is not None:
                 if self.diffusion_type == 'ddpm':

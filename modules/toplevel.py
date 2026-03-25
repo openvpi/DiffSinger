@@ -249,7 +249,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         else:
             ph_spk_embed = spk_embed = None
 
-        encoder_out, dur_pred_out = self.fs2(
+        encoder_out, dur_pred_out, spd_loss, sdp_pred = self.fs2(
             txt_tokens, midi=midi, ph2word=ph2word,
             ph_dur=ph_dur, word_dur=word_dur,
             spk_embed=ph_spk_embed, languages=languages,
@@ -257,7 +257,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         )
 
         if not self.predict_pitch and not self.predict_variances:
-            return dur_pred_out, None, ({} if infer else None)
+            return dur_pred_out, None, ({} if infer else None), spd_loss, sdp_pred
 
         if mel2ph is None and word_dur is not None:  # inference from file
             dur_pred_align = self.rr(dur_pred_out, ph2word, word_dur)
@@ -339,7 +339,7 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             pitch_pred_out = None
 
         if not self.predict_variances:
-            return dur_pred_out, pitch_pred_out, ({} if infer else None)
+            return dur_pred_out, pitch_pred_out, ({} if infer else None), spd_loss, sdp_pred
 
         if pitch is None:
             pitch = base_pitch + pitch_pred_out
@@ -364,4 +364,4 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
         else:
             variances_pred_out = variance_outputs
 
-        return dur_pred_out, pitch_pred_out, variances_pred_out
+        return dur_pred_out, pitch_pred_out, variances_pred_out, spd_loss, sdp_pred
