@@ -73,7 +73,7 @@ enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
 rope_theta: 8000
-rotary_dim: 192
+rotary_dim: 64
 use_stretch_embed: true
 use_variance_scaling: true
 use_shallow_diffusion: true
