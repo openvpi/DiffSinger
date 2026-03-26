@@ -37,6 +37,8 @@ predict_tension: false
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
+rope_theta: 8000
+rotary_dim: 192
 use_stretch_embed: false
 use_variance_scaling: true
 rel_pos: true
@@ -53,11 +55,18 @@ dur_prediction_args:
   lambda_pdur_loss: 0.3
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
+use_sdp: true
+sdp_ratio: 0.2
+sdp_n_chans: 192
+lambda_sdp_loss: 0.005
+lambda_sdp_reg_loss: 0.1
+sdp_reg_warmup_steps: 16000
 
 use_melody_encoder: true
 melody_encoder_args:
   hidden_size: 128
   enc_layers: 4
+  rotary_dim: 64
 use_glide_embed: false
 glide_types: [up, down]
 glide_embed_scale: 11.313708498984760  # sqrt(128)
