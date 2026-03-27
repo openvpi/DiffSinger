@@ -67,7 +67,7 @@ class DurationPredictor(torch.nn.Module):
 
     def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
                  dropout_rate=0.1, offset=1.0, dur_loss_type='mse', arch='fs2',
-                 sdp_ratio=0.2, sdp_n_chans=192, gin_channels=0
+                 use_sdp=False, sdp_ratio=0.2, sdp_n_chans=192, gin_channels=0
                  ):
         """Initialize duration predictor module.
         Args:
