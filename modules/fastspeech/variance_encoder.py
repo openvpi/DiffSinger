@@ -107,7 +107,7 @@ class FastSpeech2Variance(nn.Module):
                 g = spk_embed
             else:
                 g = None
-            ph_dur_pred, sdp_loss, sdp_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer, infer=infer, ph_dur=ph_dur, sdp_cond=sdp_cond, spk_embed=g)
+            ph_dur_pred, sdp_loss, sdp_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer, ph_dur=ph_dur, sdp_cond=sdp_cond, spk_embed=g)
 
             return encoder_out, ph_dur_pred, sdp_loss, sdp_pred
         else:

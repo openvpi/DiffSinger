@@ -15,28 +15,52 @@ def spec_to_figure(spec, vmin=None, vmax=None, title=None):
     return fig
 
 
-def dur_to_figure(dur_gt, dur_pred, txt, title=None):
+def dur_to_figure(dur_gt, dur_pred, txt, title=None, sdp_pred=None, sdp_ratio=0.2):
     if isinstance(dur_gt, torch.Tensor):
         dur_gt = dur_gt.cpu().numpy()
     if isinstance(dur_pred, torch.Tensor):
         dur_pred = dur_pred.cpu().numpy()
+    if sdp_pred is not None and isinstance(sdp_pred, torch.Tensor):
+        sdp_pred = sdp_pred.cpu().numpy()
     dur_gt = dur_gt.astype(np.int64)
     dur_pred = dur_pred.astype(np.int64)
-    dur_gt = np.cumsum(dur_gt)
-    dur_pred = np.cumsum(dur_pred)
+    contribution = None
+    if sdp_pred is not None:
+        dp_pred = (dur_pred - sdp_pred * sdp_ratio) / (1.0 - sdp_ratio)
+        dp_pred_rounded = np.round(dp_pred).astype(np.int64)
+        err_dp = np.abs(dp_pred_rounded - dur_gt)
+        err_fused = np.abs(dur_pred - dur_gt)
+        contribution = err_dp - err_fused
+    dur_gt_cumsum = np.cumsum(dur_gt)
+    dur_pred_cumsum = np.cumsum(dur_pred)
     width = max(12, min(48, len(txt) // 2))
     fig = plt.figure(figsize=(width, 8))
-    plt.vlines(dur_pred, 12, 22, colors='r', label='pred')
-    plt.vlines(dur_gt, 0, 10, colors='b', label='gt')
+    plt.vlines(dur_pred_cumsum, 12, 22, colors='r', label='pred')
+    plt.vlines(dur_gt_cumsum, 0, 10, colors='b', label='gt')
     for i in range(len(txt)):
         shift = (i % 8) + 1
-        plt.text((dur_pred[i-1] + dur_pred[i]) / 2 if i > 0 else dur_pred[i] / 2, 12 + shift, txt[i],
+        x_pred = (dur_pred_cumsum[i-1] + dur_pred_cumsum[i]) / 2 if i > 0 else dur_pred_cumsum[i] / 2
+        plt.text(x_pred, 12 + shift, txt[i],
                  size=16, horizontalalignment='center')
-        plt.text((dur_gt[i-1] + dur_gt[i]) / 2 if i > 0 else dur_gt[i] / 2, shift, txt[i],
+        if contribution is not None:
+            cont = contribution[i]
+            if cont > 0:
+                cont_str = f"+{cont}"
+                color = 'green'
+            elif cont < 0:
+                cont_str = f"{cont}"
+                color = 'red'
+            else:
+                cont_str = "0"
+                color = 'black'
+            plt.text(x_pred, 12 + shift - 0.45, cont_str,
+                     size=12, color=color, horizontalalignment='center')
+        x_gt = (dur_gt_cumsum[i-1] + dur_gt_cumsum[i]) / 2 if i > 0 else dur_gt_cumsum[i] / 2
+        plt.text(x_gt, shift, txt[i],
                  size=16, horizontalalignment='center')
-        plt.plot([dur_pred[i], dur_gt[i]], [12, 10], color='black', linewidth=2, linestyle=':')
+        plt.plot([dur_pred_cumsum[i], dur_gt_cumsum[i]], [12, 10], color='black', linewidth=2, linestyle=':')
     plt.yticks([])
-    plt.xlim(0, max(dur_pred[-1], dur_gt[-1]))
+    plt.xlim(0, max(dur_pred_cumsum[-1], dur_gt_cumsum[-1]))
     plt.legend()
     if title is not None:
         plt.title(title, fontsize=15)

@@ -227,7 +227,7 @@ class DurationPredictor(torch.nn.Module):
                 dur_pred = (sdp_pred * self.sdp_ratio) + (dur_pred * (1.0 - self.sdp_ratio))
 
         if infer:
-            return dur_pred.clamp(min=0.0), None, None
+            return dur_pred.clamp(min=0.0), None, sdp_pred
         else:
             return dur_pred, loss_sdp, sdp_pred
 

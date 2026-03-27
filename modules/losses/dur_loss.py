@@ -28,12 +28,12 @@ class DurationLoss(nn.Module):
         return torch.log(any_dur + self.offset)
 
     def forward(self, dur_pred: Tensor, dur_gt: Tensor, ph2word: Tensor) -> Tensor:
+        dur_pred = dur_pred.clamp(min=0.)  # clip to avoid NaN loss
+        
         dur_gt = dur_gt.to(dtype=dur_pred.dtype)
 
         # pdur_loss
         pdur_loss = self.lambda_pdur * self.loss(self.linear2log(dur_pred), self.linear2log(dur_gt))
-
-        dur_pred = dur_pred.clamp(min=0.)  # clip to avoid NaN loss
 
         # wdur loss
         shape = dur_pred.shape[0], ph2word.max() + 1

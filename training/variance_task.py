@@ -224,7 +224,7 @@ class VarianceTask(BaseTask):
         if infer:
             if dur_pred is not None:
                 dur_pred = dur_pred.round().long()
-            return dur_pred, pitch_pred, variances_pred  # Tensor, Tensor, Dict[str, Tensor]
+            return dur_pred, pitch_pred, variances_pred, sdp_pred  # Tensor, Tensor, Dict[str, Tensor], Tensor
         else:
             losses = {}
             if dur_pred is not None:
@@ -275,7 +275,7 @@ class VarianceTask(BaseTask):
             def sample_get(key, idx, abs_idx):
                 return sample[key][idx][:self.valid_dataset.metadata[key][abs_idx]].unsqueeze(0)
 
-            dur_preds, pitch_preds, variances_preds = self.run_model(sample, infer=True)
+            dur_preds, pitch_preds, variances_preds, sdp_preds = self.run_model(sample, infer=True)
             for i in range(len(sample['indices'])):
                 data_idx = sample['indices'][i]
                 if data_idx < hparams['num_valid_plots']:
@@ -284,6 +284,9 @@ class VarianceTask(BaseTask):
                         tokens = sample_get('tokens', i, data_idx)
                         gt_dur = sample_get('ph_dur', i, data_idx)
                         pred_dur = dur_preds[i][:dur_len].unsqueeze(0)
+                        
+                        pred_sdp = sdp_preds[i][:dur_len].unsqueeze(0) if sdp_preds is not None else None
+                        
                         ph2word = sample_get('ph2word', i, data_idx)
                         mask = tokens != 0
                         self.valid_metrics['rhythm_corr'].update(
@@ -294,7 +297,8 @@ class VarianceTask(BaseTask):
                         )
                         self.plot_dur(
                             data_idx, gt_dur, pred_dur,
-                            txt=self.valid_dataset.metadata['ph_texts'][data_idx].split()
+                            txt=self.valid_dataset.metadata['ph_texts'][data_idx].split(),
+                            sdp_pred=pred_sdp
                         )
                     if pitch_preds is not None:
                         pitch_len = self.valid_dataset.metadata['pitch'][data_idx]
@@ -328,12 +332,16 @@ class VarianceTask(BaseTask):
     ############
     # validation plots
     ############
-    def plot_dur(self, data_idx, gt_dur, pred_dur, txt=None):
+    def plot_dur(self, data_idx, gt_dur, pred_dur, txt=None, sdp_pred=None):
         gt_dur = gt_dur[0].cpu().numpy()
         pred_dur = pred_dur[0].cpu().numpy()
+        if sdp_pred is not None:
+            sdp_pred = sdp_pred[0].cpu().numpy()
+            
         title_text = f"{self.valid_dataset.metadata['spk_names'][data_idx]} - {self.valid_dataset.metadata['names'][data_idx]}"
+        sdp_ratio = hparams.get('sdp_ratio', 0.2)
         self.logger.all_rank_experiment.add_figure(f'dur_{data_idx}', dur_to_figure(
-            gt_dur, pred_dur, txt, title_text
+            gt_dur, pred_dur, txt, title=title_text, sdp_pred=sdp_pred, sdp_ratio=sdp_ratio
         ), self.global_step)
 
     def plot_pitch(self, data_idx, gt_pitch, pred_pitch, note_midi, note_dur, note_rest):
