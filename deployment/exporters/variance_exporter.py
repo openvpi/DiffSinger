@@ -188,6 +188,8 @@ class DiffSingerVarianceExporter(BaseExporter):
 
     @torch.no_grad()
     def _torch_export_model(self):
+        is_torch_113 = torch.__version__.startswith('1.13.')
+
         # Prepare inputs for FastSpeech2 and dur predictor tracing
         tokens = torch.LongTensor([[1] * 5]).to(self.device)
         ph_dur = torch.LongTensor([[3, 5, 2, 1, 4]]).to(self.device)
@@ -390,7 +392,7 @@ class DiffSingerVarianceExporter(BaseExporter):
 
             pitch_predictor = self.model.view_as_pitch_predictor()
 
-            if torch.__version__.startswith('1.13.'):
+            if is_torch_113:
                 print(f'Tracing {self.pitch_backbone_class_name} backbone...')
                 pitch_predictor.pitch_predictor.set_backbone(
                     torch.jit.trace(
@@ -551,7 +553,7 @@ class DiffSingerVarianceExporter(BaseExporter):
 
             multi_var_predictor = self.model.view_as_variance_predictor()
 
-            if torch.__version__.startswith('1.13.'):
+            if is_torch_113:
                 print(f'Tracing {self.variance_backbone_class_name} backbone...')
                 multi_var_predictor.variance_predictor.set_backbone(
                     torch.jit.trace(

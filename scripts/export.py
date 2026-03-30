@@ -20,7 +20,7 @@ def check_pytorch_version():
         return
     warnings.warn(
         f'ONNX export is tested on PyTorch 1.13.x, but you have {torch.__version__}. '
-        f'Proceeding with trace-based fallback for variance models.'
+        f'Export may not behave as expected with this PyTorch version.'
     )
 
 
