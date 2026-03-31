@@ -122,9 +122,6 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]) -> Te
             A = torch.bmm(X, X.mT)
             B = torch.baddbmm(A, A, A, beta=b_i, alpha=c_i)
             X = torch.baddbmm(X, B, X, beta=a_i, alpha=1.0)
-            
-        if should_transpose:
-            X = X.mT
 
     return X.to(dtype).view(original_shape)
 
