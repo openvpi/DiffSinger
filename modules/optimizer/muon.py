@@ -89,12 +89,12 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]) -> Te
 
     X = G.to(torch.float32)
 
+    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
+    X = X.to(torch.float16)
+
     should_transpose = X.size(-2) > X.size(-1)
     if should_transpose:
         X = X.mT
-
-    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
-    X = X.to(torch.float16)
 
     if X.size(-2) != X.size(-1):
         R = torch.bmm(X, X.mT)
