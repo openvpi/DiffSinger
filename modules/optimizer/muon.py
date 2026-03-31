@@ -87,16 +87,16 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
     original_shape = G.shape
     dtype = G.dtype
 
-    X = G.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
+    X = G.to(torch.float32)
 
     X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
-    X = X.to(torch.float16)
 
     should_transpose = X.size(-2) > X.size(-1)
     if should_transpose:
         X = X.mT
 
     if X.size(-2) != X.size(-1):
+        X = X.to(torch.float16)
         R = torch.bmm(X, X.mT)
         Q = None
 
@@ -121,6 +121,7 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
         X = torch.bmm(Q, X) if not should_transpose else torch.bmm(X.mT, Q)
             
     else:
+        X = X.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
         for i, (a_i, b_i, c_i) in enumerate(ns_coefficients):
             A = torch.bmm(X, X.mT)
             B = torch.baddbmm(A, A, A, beta=b_i, alpha=c_i)
