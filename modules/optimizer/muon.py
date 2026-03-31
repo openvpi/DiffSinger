@@ -74,6 +74,61 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor
     return X
 
 
+def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]) -> Tensor:
+    """
+    Gram Newton-Schulz iteration to compute the orthogonalization of G.
+    Mathematically identical to standard Newton-Schulz but computes iterating 
+    on the smaller NxN Gram matrix to save up to 50% FLOPs.
+    """
+    assert G.ndim == 3
+    a, b, c = (3.4445, -4.7750, 2.0315)
+    ns_coefficients = [(a, b, c)] * steps
+
+    original_shape = G.shape
+    dtype = G.dtype
+
+    X = G.to(torch.float32)
+
+    should_transpose = X.size(-2) > X.size(-1)
+    if should_transpose:
+        X = X.mT
+
+    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
+    X = X.to(torch.float16)
+
+    if X.size(-2) != X.size(-1):
+        R = torch.bmm(X, X.mT)
+        Q = None
+
+        for i, (a_i, b_i, c_i) in enumerate(ns_coefficients):
+            if i in reset_iterations and i != 0:
+                X = torch.bmm(Q, X)
+                R = torch.bmm(X, X.mT)
+                Q = None
+
+            Z = torch.baddbmm(R, R, R, beta=b_i, alpha=c_i)
+            if i != 0 and i not in reset_iterations:
+                Q = torch.baddbmm(Q, Q, Z, beta=a_i, alpha=1.0)
+            else:
+                Q = Z.clone()
+                Q.diagonal(dim1=-2, dim2=-1).add_(a_i)
+            if i < steps - 1 and (i + 1) not in reset_iterations:
+                RZ = torch.baddbmm(R, R, Z, beta=a_i, alpha=1.0)
+                R = torch.baddbmm(RZ, Z, RZ, beta=a_i, alpha=1.0)
+
+        X = torch.bmm(Q, X) if not should_transpose else torch.bmm(X.mT, Q)
+    else:
+        for i, (a_i, b_i, c_i) in enumerate(ns_coefficients):
+            A = torch.bmm(X, X.mT)
+            B = torch.baddbmm(A, A, A, beta=b_i, alpha=c_i)
+            X = torch.baddbmm(X, B, X, beta=a_i, alpha=1.0)
+            
+        if should_transpose:
+            X = X.mT
+
+    return X.to(dtype).view(original_shape)
+
+
 class Muon(torch.optim.Optimizer):
     """
     Muon - MomentUm Orthogonalized by Newton-schulz
@@ -97,10 +152,12 @@ class Muon(torch.optim.Optimizer):
         ns_steps: The number of Newton-Schulz iteration steps to use.
     """
 
-    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5):
-        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
+    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5, reset_iterations=None):
+        if reset_iterations is None:
+            reset_iterations = [3]
+        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps, reset_iterations=reset_iterations)
         super().__init__(params, defaults)
-        self.bf16_support_map = get_bf16_support_map()
+        # self.bf16_support_map = get_bf16_support_map()
     
     @torch.no_grad()
     def step(self, closure=None):
@@ -129,8 +186,9 @@ class Muon(torch.optim.Optimizer):
                 original_shape = g.shape
                 if g.ndim >= 4:  # for the case of conv filters
                     g = g.view(g.size(0), g.size(1), -1)
-                use_bf16 = self.bf16_support_map.get(g.device, False)
-                g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"], use_bf16=use_bf16)
+                # use_bf16 = self.bf16_support_map.get(g.device, False)
+                # g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"], use_bf16=use_bf16)
+                g = gram_newton_schulz(g, steps=group["ns_steps"], reset_iterations=group["reset_iterations"])
                 if group["weight_decay"] > 0:
                     torch._foreach_mul_(p, 1 - group["lr"] * group["weight_decay"])
                 torch._foreach_add_(p, g.view(original_shape).unbind(0), alpha=-group["lr"] * max(g[0].size()) ** 0.5)
