@@ -179,6 +179,7 @@ def mud_whiten(G: Tensor, passes: int = 1, use_bf16: bool = False) -> Tensor:
         X = F.normalize(X, p=2.0, dim=-1, eps=1e-8) # Row normalization
         G_mat = torch.bmm(X, X.mT) # Row Gram (k,k)
         T = torch.tril(G_mat) # Lower-triangular of Gram
+        T.diagonal(dim1=-2, dim2=-1).clamp_min_(1e-5) # avoid T all zero
         X = torch.linalg.solve_triangular(T, X, upper=False) # Forward solve: T X = Q
         X = F.normalize(X, p=2.0, dim=-1, eps=1e-8) # Renormalize rows
         
