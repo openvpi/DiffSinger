@@ -158,6 +158,33 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
     return X.to(dtype).view(original_shape)
 
 
+def mud(G: Tensor, passes: int = 1, use_bf16: bool = False) -> Tensor:
+    """
+    MomentUm Decorrelation (MUD) iteration to compute the orthogonalization of G.
+    A lightweight PyTorch implementation based on "Beyond Muon: MUD for Faster Transformer Training".
+    Constructs a lower-triangular approximation to the Gram matrix and applies forward triangular solve.
+    """
+    assert G.ndim == 3
+    
+    X = G.to(dtype=torch.bfloat16 if use_bf16 else torch.float32)
+    
+    should_transpose = X.size(-2) > X.size(-1)
+    if should_transpose:
+        X = X.mT
+        
+    for _ in range(passes):
+        X = F.normalize(X, p=2.0, dim=-1, eps=1e-7) # Row normalization
+        G_mat = torch.bmm(X, X.mT) # Row Gram (k,k)
+        T = torch.tril(G_mat) # Lower-triangular of Gram
+        X = torch.linalg.solve_triangular(T, X, upper=False) # Forward solve: T X = Q
+        X = F.normalize(X, p=2.0, dim=-1, eps=1e-7) # Renormalize rows
+        
+    if should_transpose:
+        X = X.mT
+        
+    return X.contiguous()
+
+
 class Muon(torch.optim.Optimizer):
     """
     Muon - MomentUm Orthogonalized by Newton-schulz
@@ -180,12 +207,12 @@ class Muon(torch.optim.Optimizer):
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iteration steps to use.
         ns_coefficients: List of tuples (a, b, c) for each NS step. Defaults to standard 5-step NS coeffs.
-        use_gram_ns: Whether to use the FLOP-saving Gram-NS implementation instead of standard NS.
+        method: String selector for the orthogonalization strategy ('ns5', 'gram_ns', or 'mud').
     """
 
     def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, 
                  ns_steps=5, reset_iterations=[2], ns_coefficients=POLAR_EXPRESS_COEFFICIENTS, 
-                 use_gram_ns=True):
+                 method='gram_ns'):
         if reset_iterations is None:
             reset_iterations = [3]
             # set [3] on default and set [2] on POLAR_EXPRESS_COEFFICIENTS or YOU_COEFFICIENTS
@@ -206,7 +233,7 @@ class Muon(torch.optim.Optimizer):
             ns_steps=ns_steps, 
             reset_iterations=reset_iterations,
             ns_coefficients=parsed_coefficients,
-            use_gram_ns=use_gram_ns
+            method=method
         )
         super().__init__(params, defaults)
         self.bf16_support_map = get_bf16_support_map()
@@ -241,8 +268,9 @@ class Muon(torch.optim.Optimizer):
                 
                 use_bf16 = self.bf16_support_map.get(g.device, False)
                 
-                # Dynamic NS function invocation
-                if group["use_gram_ns"]:
+                # Dynamic orthogonalization method invocation
+                method = group.get("method", "gram_ns")
+                if method == 'gram_ns':
                     g = gram_newton_schulz(
                         g, 
                         steps=group["ns_steps"], 
@@ -250,13 +278,21 @@ class Muon(torch.optim.Optimizer):
                         reset_iterations=group["reset_iterations"],
                         ns_coefficients=group["ns_coefficients"]
                     )
-                else:
+                elif method == 'mud':
+                    g = mud(
+                        g, 
+                        passes=1, 
+                        use_bf16=use_bf16
+                    )
+                elif method == 'ns5':
                     g = zeropower_via_newtonschulz5(
                         g, 
                         steps=group["ns_steps"], 
                         use_bf16=use_bf16,
                         ns_coefficients=group["ns_coefficients"]
                     )
+                else:
+                    raise ValueError(f"Unknown orthogonalization method: {method}")
                 
                 if group["weight_decay"] > 0:
                     torch._foreach_mul_(p, 1 - group["lr"] * group["weight_decay"])
