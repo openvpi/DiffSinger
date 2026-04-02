@@ -158,31 +158,34 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
     return X.to(dtype).view(original_shape)
 
 
-def mud(G: Tensor, passes: int = 1, use_bf16: bool = False) -> Tensor:
+def mud_whiten(G: Tensor, passes: int = 1, use_bf16: bool = False) -> Tensor:
     """
     MomentUm Decorrelation (MUD) iteration to compute the orthogonalization of G.
     A lightweight PyTorch implementation based on "Beyond Muon: MUD for Faster Transformer Training".
     Constructs a lower-triangular approximation to the Gram matrix and applies forward triangular solve.
     """
     assert G.ndim == 3
-    
-    X = G.to(dtype=torch.bfloat16 if use_bf16 else torch.float32)
+    dtype = G.dtype
+
+    # X = X.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
+    # "triangular_solve_cuda" not implemented for 'BFloat16'
+    X = G.to(torch.float32)
     
     should_transpose = X.size(-2) > X.size(-1)
     if should_transpose:
-        X = X.mT
+        X = X.mT.contiguous()
         
     for _ in range(passes):
-        X = F.normalize(X, p=2.0, dim=-1, eps=1e-7) # Row normalization
+        X = F.normalize(X, p=2.0, dim=-1, eps=1e-8) # Row normalization
         G_mat = torch.bmm(X, X.mT) # Row Gram (k,k)
         T = torch.tril(G_mat) # Lower-triangular of Gram
         X = torch.linalg.solve_triangular(T, X, upper=False) # Forward solve: T X = Q
-        X = F.normalize(X, p=2.0, dim=-1, eps=1e-7) # Renormalize rows
+        X = F.normalize(X, p=2.0, dim=-1, eps=1e-8) # Renormalize rows
         
     if should_transpose:
         X = X.mT
         
-    return X.contiguous()
+    return X.to(dtype).contiguous()
 
 
 class Muon(torch.optim.Optimizer):
@@ -279,7 +282,7 @@ class Muon(torch.optim.Optimizer):
                         ns_coefficients=group["ns_coefficients"]
                     )
                 elif method == 'mud':
-                    g = mud(
+                    g = mud_whiten(
                         g, 
                         passes=1, 
                         use_bf16=use_bf16
