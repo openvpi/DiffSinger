@@ -44,7 +44,8 @@ _unmodified_polar_express_coefficients = [
 ]
 
 # safety factor for numerical stability (but exclude last polynomial )
-safety_factor = 1.01 # 'Dao-AILab/gram-newton-schulz' set 1.05
+# safety_factor = 1.01 # 'Dao-AILab/gram-newton-schulz' set 1.05
+safety_factor = 1.05
 POLAR_EXPRESS_COEFFICIENTS = [
     (a / safety_factor , b / safety_factor**3 , c / safety_factor**5)
     for (a, b, c) in _unmodified_polar_express_coefficients
