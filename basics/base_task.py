@@ -15,7 +15,6 @@ import torch.utils.data
 from torchmetrics import Metric, MeanMetric
 import lightning.pytorch as pl
 from lightning.pytorch.utilities.rank_zero import rank_zero_debug, rank_zero_info, rank_zero_only
-from lightning.pytorch.callbacks import Callback
 
 from basics.base_module import CategorizedModule
 from utils.hparams import hparams
@@ -31,37 +30,6 @@ torch.multiprocessing.set_sharing_strategy(os.getenv('TORCH_SHARE_STRATEGY', 'fi
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format=log_format, datefmt='%m/%d %I:%M:%S %p')
-
-
-class OptimizerTimerCallback(Callback):
-    def __init__(self):
-        super().__init__()
-        # 使用 CUDA Event 确保获取的是 GPU 真实执行时间，而非 CPU 发射时间
-        self.start_event = torch.cuda.Event(enable_timing=True)
-        self.end_event = torch.cuda.Event(enable_timing=True)
-
-    def on_before_optimizer_step(self, trainer, pl_module, optimizer):
-        # 只在第一个 Epoch 之后开始计时
-        if trainer.current_epoch > 0:
-            self.start_event.record()
-
-    def on_after_optimizer_step(self, trainer, pl_module, optimizer):
-        if trainer.current_epoch > 0:
-            self.end_event.record()
-            torch.cuda.synchronize()  # 等待 GPU 完成该 Step 的所有计算
-            
-            # 计算耗时（毫秒）
-            epoch_time_ms = self.start_event.elapsed_time(self.end_event)
-            
-            # 记录到 TensorBoard
-            # pl_module.log 会自动寻找当前配置的 Logger (如 TensorBoardLogger)
-            pl_module.log(
-                "stats/optimizer_step_duration_ms", 
-                epoch_time_ms, 
-                on_step=True, 
-                on_epoch=False, 
-                prog_bar=True
-            )
 
 
 class BaseTask(pl.LightningModule):
@@ -455,7 +423,6 @@ class BaseTask(pl.LightningModule):
                 ),
                 # LearningRateMonitor(logging_interval='step'),
                 DsTQDMProgressBar(),
-                OptimizerTimerCallback(),
             ],
             logger=DsTensorBoardLogger(
                 save_dir=str(work_dir),
