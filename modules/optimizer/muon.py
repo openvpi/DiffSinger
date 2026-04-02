@@ -22,6 +22,35 @@ coeffs_list = [
 coeffs_list = [(a / 1.01 , b / 1.01**3 , c / 1.01**5) for (a, b, c) in coeffs_list[: -1]] + [coeffs_list[-1]]
 
 
+# https://x.com/YouJiacheng/status/1905861218138804534
+YOU_COEFFICIENTS = [
+    [4.0848, -6.8946, 2.9270],
+    [3.9505, -6.3029, 2.6377],
+    [3.7418, -5.5913, 2.3037],
+    [2.8769, -3.1427, 1.2046],
+    [2.8366, -3.0525, 1.2012]
+]
+
+# https://arxiv.org/pdf/2505.16932
+_unmodified_polar_express_coefficients = [
+    (8.28721201814563, -23.595886519098837, 17.300387312530933),
+    (4.107059111542203, -2.9478499167379106, 0.5448431082926601),
+    (3.9486908534822946, -2.908902115962949, 0.5518191394370137),
+    (3.3184196573706015, -2.488488024314874, 0.51004894012372),
+    (2.300652019954817, -1.6689039845747493, 0.4188073119525673),
+    (1.891301407787398, -1.2679958271945868, 0.37680408948524835),
+    (1.8750014808534479, -1.2500016453999487, 0.3750001645474248),
+    (1.875, -1.25, 0.375), # subsequent coeffs equal this numerically
+]
+
+# safety factor for numerical stability (but exclude last polynomial )
+safety_factor = 1.01 # 'Dao-AILab/gram-newton-schulz' set 1.05
+POLAR_EXPRESS_COEFFICIENTS = [
+    (a / safety_factor , b / safety_factor**3 , c / safety_factor**5)
+    for (a, b, c) in _unmodified_polar_express_coefficients
+]
+
+
 def get_bf16_support_map():
     bf16_support_map = {}
 
@@ -39,8 +68,8 @@ def get_bf16_support_map():
         
     return bf16_support_map
     
-
-def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor:
+    
+def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool, ns_coefficients: List[tuple]) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
     quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
@@ -51,7 +80,6 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor
     performance at all relative to UV^T, where USV^T = G is the SVD.
     """
     assert G.ndim == 3 # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
-    #a, b, c = (3.4445, -4.7750,  2.0315)
     
     X = G.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
 
@@ -61,12 +89,14 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor
     # Perform the NS iterations
     hs = coeffs_list[: steps] + list(repeat(coeffs_list[-1], steps - len(coeffs_list)))
     if X.size(-2) < X.size(-1):
-        for a, b, c in hs:
+        for i in range(steps):
+            a, b, c = ns_coefficients[i]
             A = torch.bmm(X, X.mT)
             A = torch.baddbmm(A, A, A, beta=b, alpha=c)
             X = torch.baddbmm(X, A, X, beta=a, alpha=1)
     else:
-        for a, b, c in hs:
+        for i in range(steps):
+            a, b, c = ns_coefficients[i]
             A = torch.bmm(X.mT, X)
             A = torch.baddbmm(A, A, A, beta=b, alpha=c)
             X = torch.baddbmm(X, X, A, beta=a, alpha=1)
@@ -74,15 +104,13 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool) -> Tensor
     return X
 
 
-def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: List[int]) -> Tensor:
+def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: List[int], ns_coefficients: List[tuple]) -> Tensor:
     """
     Gram Newton-Schulz iteration to compute the orthogonalization of G.
     Mathematically identical to standard Newton-Schulz but computes iterating 
     on the smaller NxN Gram matrix to save up to 50% FLOPs.
     """
     assert G.ndim == 3
-    a, b, c = (3.4445, -4.7750, 2.0315)
-    ns_coefficients = [(a, b, c)] * steps
 
     original_shape = G.shape
     dtype = G.dtype
@@ -151,12 +179,35 @@ class Muon(torch.optim.Optimizer):
         momentum: The momentum used by the internal SGD.
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iteration steps to use.
+        ns_coefficients: List of tuples (a, b, c) for each NS step. Defaults to standard 5-step NS coeffs.
+        use_gram_ns: Whether to use the FLOP-saving Gram-NS implementation instead of standard NS.
     """
 
-    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5, reset_iterations=None):
+    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, 
+                 ns_steps=5, reset_iterations=[2], ns_coefficients=POLAR_EXPRESS_COEFFICIENTS, 
+                 use_gram_ns=True):
         if reset_iterations is None:
             reset_iterations = [3]
-        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps, reset_iterations=reset_iterations)
+            # set [3] on default and set [2] on POLAR_EXPRESS_COEFFICIENTS or YOU_COEFFICIENTS
+            
+        if ns_coefficients is None:
+            parsed_coefficients = [(3.4445, -4.7750, 2.0315)] * ns_steps
+        else:
+            parsed_coefficients = list(ns_coefficients)
+            if len(parsed_coefficients) < ns_steps:
+                parsed_coefficients += [parsed_coefficients[-1]] * (ns_steps - len(parsed_coefficients))
+            parsed_coefficients = parsed_coefficients[:ns_steps]
+
+        defaults = dict(
+            lr=lr, 
+            weight_decay=weight_decay, 
+            momentum=momentum, 
+            nesterov=nesterov, 
+            ns_steps=ns_steps, 
+            reset_iterations=reset_iterations,
+            ns_coefficients=parsed_coefficients,
+            use_gram_ns=use_gram_ns
+        )
         super().__init__(params, defaults)
         self.bf16_support_map = get_bf16_support_map()
     
@@ -187,9 +238,26 @@ class Muon(torch.optim.Optimizer):
                 original_shape = g.shape
                 if g.ndim >= 4:  # for the case of conv filters
                     g = g.view(g.size(0), g.size(1), -1)
+                
                 use_bf16 = self.bf16_support_map.get(g.device, False)
-                # g = zeropower_via_newtonschulz5(g, steps=group["ns_steps"], use_bf16=use_bf16)
-                g = gram_newton_schulz(g, steps=group["ns_steps"], use_bf16=use_bf16, reset_iterations=group["reset_iterations"])
+                
+                # Dynamic NS function invocation
+                if group["use_gram_ns"]:
+                    g = gram_newton_schulz(
+                        g, 
+                        steps=group["ns_steps"], 
+                        use_bf16=use_bf16, 
+                        reset_iterations=group["reset_iterations"],
+                        ns_coefficients=group["ns_coefficients"]
+                    )
+                else:
+                    g = zeropower_via_newtonschulz5(
+                        g, 
+                        steps=group["ns_steps"], 
+                        use_bf16=use_bf16,
+                        ns_coefficients=group["ns_coefficients"]
+                    )
+                
                 if group["weight_decay"] > 0:
                     torch._foreach_mul_(p, 1 - group["lr"] * group["weight_decay"])
                 torch._foreach_add_(p, g.view(original_shape).unbind(0), alpha=-group["lr"] * max(g[0].size()) ** 0.5)
