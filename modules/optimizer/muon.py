@@ -52,25 +52,7 @@ POLAR_EXPRESS_COEFFICIENTS = [
 ]
 
 
-def get_bf16_support_map():
-    bf16_support_map = {}
-
-    if not torch.cuda.is_available():
-        return bf16_support_map
-
-    device_count = torch.cuda.device_count()
-    if device_count == 0:
-        return bf16_support_map
-
-    for i in range(device_count):
-        device = torch.device(f'cuda:{i}')       
-        major, minor = torch.cuda.get_device_capability(device)
-        bf16_support_map[device] = (major >= 8)
-        
-    return bf16_support_map
-    
-    
-def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool, ns_coefficients: List[tuple]) -> Tensor:
+def zeropower_via_newtonschulz5(G: Tensor, steps: int, ns_coefficients: List[tuple]) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
     quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
@@ -82,7 +64,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool, ns_coeffi
     """
     assert G.ndim == 3 # batched Muon implementation by @scottjmaddox, and put into practice in the record by @YouJiacheng
     
-    X = G.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
+    X = G.to(torch.float32)
 
     # Ensure spectral norm is at most 1
     X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
@@ -105,7 +87,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, use_bf16: bool, ns_coeffi
     return X
 
 
-def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: List[int], ns_coefficients: List[tuple]) -> Tensor:
+def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int], ns_coefficients: List[tuple]) -> Tensor:
     """
     Gram Newton-Schulz iteration to compute the orthogonalization of G.
     Mathematically identical to standard Newton-Schulz but computes iterating 
@@ -124,8 +106,8 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
     if should_transpose:
         X = X.mT
 
+    X = X.to(torch.float16)
     if X.size(-2) != X.size(-1):
-        X = X.to(torch.float16)
         R = torch.bmm(X, X.mT)
         Q = None
 
@@ -150,7 +132,6 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
         X = torch.bmm(Q, X) if not should_transpose else torch.bmm(X.mT, Q)
             
     else:
-        X = X.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
         for i, (a_i, b_i, c_i) in enumerate(ns_coefficients):
             A = torch.bmm(X, X.mT)
             B = torch.baddbmm(A, A, A, beta=b_i, alpha=c_i)
@@ -159,7 +140,7 @@ def gram_newton_schulz(G: Tensor, steps: int, use_bf16: bool, reset_iterations: 
     return X.to(dtype).view(original_shape)
 
 
-def mud_whiten(G: Tensor, passes: int = 1, use_bf16: bool = False) -> Tensor:
+def mud_whiten(G: Tensor, passes: int = 1) -> Tensor:
     """
     MomentUm Decorrelation (MUD) iteration to compute the orthogonalization of G.
     A lightweight PyTorch implementation based on "Beyond Muon: MUD for Faster Transformer Training".
@@ -168,7 +149,6 @@ def mud_whiten(G: Tensor, passes: int = 1, use_bf16: bool = False) -> Tensor:
     assert G.ndim == 3
     dtype = G.dtype
 
-    # X = X.to(dtype = torch.bfloat16 if use_bf16 else torch.float32)
     # "triangular_solve_cuda" not implemented for 'BFloat16'
     X = G.to(torch.float32)
     
@@ -241,7 +221,6 @@ class Muon(torch.optim.Optimizer):
             method=method
         )
         super().__init__(params, defaults)
-        self.bf16_support_map = get_bf16_support_map()
     
     @torch.no_grad()
     def step(self, closure=None):
@@ -271,29 +250,24 @@ class Muon(torch.optim.Optimizer):
                 if g.ndim >= 4:  # for the case of conv filters
                     g = g.view(g.size(0), g.size(1), -1)
                 
-                use_bf16 = self.bf16_support_map.get(g.device, False)
-                
                 # Dynamic orthogonalization method invocation
                 method = group.get("method", "gram_ns")
                 if method == 'gram_ns':
                     g = gram_newton_schulz(
                         g, 
-                        steps=group["ns_steps"], 
-                        use_bf16=use_bf16, 
+                        steps=group["ns_steps"],
                         reset_iterations=group["reset_iterations"],
                         ns_coefficients=group["ns_coefficients"]
                     )
                 elif method == 'mud':
                     g = mud_whiten(
                         g, 
-                        passes=1, 
-                        use_bf16=use_bf16
+                        passes=1
                     )
                 elif method == 'ns5':
                     g = zeropower_via_newtonschulz5(
                         g, 
-                        steps=group["ns_steps"], 
-                        use_bf16=use_bf16,
+                        steps=group["ns_steps"],
                         ns_coefficients=group["ns_coefficients"]
                     )
                 else:
