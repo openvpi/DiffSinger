@@ -94,43 +94,34 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int], ns_co
     on the smaller NxN Gram matrix to save up to 50% FLOPs.
     """
     assert G.ndim == 3
-
     original_shape = G.shape
     dtype = G.dtype
 
     X = G.to(torch.float32)
-
     X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
-
     should_transpose = X.size(-2) > X.size(-1)
     if should_transpose:
         X = X.mT
-
     X = X.to(torch.float16)
+
     if X.size(-2) != X.size(-1):
         R = torch.bmm(X, X.mT)
         Q = None
-
         for i, (a_i, b_i, c_i) in enumerate(ns_coefficients):
             if i in reset_iterations and i != 0:
                 X = torch.bmm(Q, X)
                 R = torch.bmm(X, X.mT)
                 Q = None
-
             Z = torch.baddbmm(R, R, R, beta=b_i, alpha=c_i)
-            
             if i != 0 and i not in reset_iterations:
                 Q = torch.baddbmm(Q, Q, Z, beta=a_i, alpha=1.0)
             else:
                 Q = Z.clone()
                 Q.diagonal(dim1=-2, dim2=-1).add_(a_i)
-                
             if i < steps - 1 and (i + 1) not in reset_iterations:
                 RZ = torch.baddbmm(R, R, Z, beta=a_i, alpha=1.0)
                 R = torch.baddbmm(RZ, Z, RZ, beta=a_i, alpha=1.0)
-
         X = torch.bmm(Q, X) if not should_transpose else torch.bmm(X.mT, Q)
-            
     else:
         for i, (a_i, b_i, c_i) in enumerate(ns_coefficients):
             A = torch.bmm(X, X.mT)
