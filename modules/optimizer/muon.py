@@ -1,35 +1,12 @@
+import collections
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module, Parameter, Embedding
 from typing import List
-from itertools import repeat
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
 
-coeffs_list = [
-    (8.28721201814563, -23.595886519098837, 17.300387312530933),
-    (4.107059111542203, -2.9478499167379106, 0.5448431082926601),
-    (3.9486908534822946, -2.908902115962949, 0.5518191394370137),
-    (3.3184196573706015, -2.488488024314874, 0.51004894012372),
-    (2.300652019954817, -1.6689039845747493, 0.4188073119525673),
-    (1.891301407787398, -1.2679958271945868, 0.37680408948524835),
-    (1.8750014808534479, -1.2500016453999487, 0.3750001645474248),
-    (1.875, -1.25, 0.375), # subsequent coeffs equal this numerically
-]
-
-# safety factor for numerical stability (but exclude last polynomial )
-coeffs_list = [(a / 1.01 , b / 1.01**3 , c / 1.01**5) for (a, b, c) in coeffs_list[: -1]] + [coeffs_list[-1]]
-
-
-# https://x.com/YouJiacheng/status/1905861218138804534
-YOU_COEFFICIENTS = [
-    [4.0848, -6.8946, 2.9270],
-    [3.9505, -6.3029, 2.6377],
-    [3.7418, -5.5913, 2.3037],
-    [2.8769, -3.1427, 1.2046],
-    [2.8366, -3.0525, 1.2012]
-]
 
 # https://arxiv.org/pdf/2505.16932
 _unmodified_polar_express_coefficients = [
@@ -52,7 +29,7 @@ POLAR_EXPRESS_COEFFICIENTS = [
 ] + [_unmodified_polar_express_coefficients[-1]]
 
 
-def zeropower_via_newtonschulz5(G: Tensor, steps: int, ns_coefficients: List[tuple]) -> Tensor:
+def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
     quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
@@ -68,9 +45,10 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, ns_coefficients: List[tup
 
     # Ensure spectral norm is at most 1
     X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
+    X = X.to(torch.float16)
     
     # Perform the NS iterations
-    hs = coeffs_list[: steps] + list(repeat(coeffs_list[-1], steps - len(coeffs_list)))
+    ns_coefficients = POLAR_EXPRESS_COEFFICIENTS[:steps]
     if X.size(-2) < X.size(-1):
         for i in range(steps):
             a, b, c = ns_coefficients[i]
@@ -87,7 +65,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int, ns_coefficients: List[tup
     return X
 
 
-def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int], ns_coefficients: List[tuple]) -> Tensor:
+def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]=[2]) -> Tensor:
     """
     Gram Newton-Schulz iteration to compute the orthogonalization of G.
     Mathematically identical to standard Newton-Schulz but computes iterating 
@@ -104,6 +82,7 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int], ns_co
         X = X.mT
     X = X.to(torch.float16)
 
+    ns_coefficients = POLAR_EXPRESS_COEFFICIENTS[:steps]
     if X.size(-2) != X.size(-1):
         R = torch.bmm(X, X.mT)
         Q = None
@@ -131,36 +110,6 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int], ns_co
     return X.to(dtype).view(original_shape)
 
 
-def mud_whiten(G: Tensor, passes: int = 1) -> Tensor:
-    """
-    MomentUm Decorrelation (MUD) iteration to compute the orthogonalization of G.
-    A lightweight PyTorch implementation based on "Beyond Muon: MUD for Faster Transformer Training".
-    Constructs a lower-triangular approximation to the Gram matrix and applies forward triangular solve.
-    """
-    assert G.ndim == 3
-    dtype = G.dtype
-
-    # "triangular_solve_cuda" not implemented for 'BFloat16'
-    X = G.to(torch.float32)
-    
-    should_transpose = X.size(-2) > X.size(-1)
-    if should_transpose:
-        X = X.mT.contiguous()
-        
-    for _ in range(passes):
-        X = F.normalize(X, p=2.0, dim=-1, eps=1e-8) # Row normalization
-        G_mat = torch.bmm(X, X.mT) # Row Gram (k,k)
-        T = torch.tril(G_mat) # Lower-triangular of Gram
-        T.diagonal(dim1=-2, dim2=-1).clamp_min_(1e-5) # avoid T all zero
-        X = torch.linalg.solve_triangular(T, X, upper=False) # Forward solve: T X = Q
-        X = F.normalize(X, p=2.0, dim=-1, eps=1e-8) # Renormalize rows
-        
-    if should_transpose:
-        X = X.mT
-        
-    return X.to(dtype).contiguous()
-
-
 class Muon(torch.optim.Optimizer):
     """
     Muon - MomentUm Orthogonalized by Newton-schulz
@@ -182,35 +131,10 @@ class Muon(torch.optim.Optimizer):
         momentum: The momentum used by the internal SGD.
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iteration steps to use.
-        ns_coefficients: List of tuples (a, b, c) for each NS step. Defaults to standard 5-step NS coeffs.
-        method: String selector for the orthogonalization strategy ('ns5', 'gram_ns', or 'mud').
     """
 
-    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, 
-                 ns_steps=5, reset_iterations=[2], ns_coefficients=POLAR_EXPRESS_COEFFICIENTS, 
-                 method='gram_ns'):
-        if reset_iterations is None:
-            reset_iterations = [3]
-            # set [3] on default and set [2] on POLAR_EXPRESS_COEFFICIENTS or YOU_COEFFICIENTS
-            
-        if ns_coefficients is None:
-            parsed_coefficients = [(3.4445, -4.7750, 2.0315)] * ns_steps
-        else:
-            parsed_coefficients = list(ns_coefficients)
-            if len(parsed_coefficients) < ns_steps:
-                parsed_coefficients += [parsed_coefficients[-1]] * (ns_steps - len(parsed_coefficients))
-            parsed_coefficients = parsed_coefficients[:ns_steps]
-
-        defaults = dict(
-            lr=lr, 
-            weight_decay=weight_decay, 
-            momentum=momentum, 
-            nesterov=nesterov, 
-            ns_steps=ns_steps, 
-            reset_iterations=reset_iterations,
-            ns_coefficients=parsed_coefficients,
-            method=method
-        )
+    def __init__(self, params, lr=5e-4, weight_decay=0.1, momentum=0.95, nesterov=True, ns_steps=5):
+        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
         super().__init__(params, defaults)
     
     @torch.no_grad()
@@ -240,29 +164,7 @@ class Muon(torch.optim.Optimizer):
                 original_shape = g.shape
                 if g.ndim >= 4:  # for the case of conv filters
                     g = g.view(g.size(0), g.size(1), -1)
-                
-                # Dynamic orthogonalization method invocation
-                method = group.get("method", "gram_ns")
-                if method == 'gram_ns':
-                    g = gram_newton_schulz(
-                        g, 
-                        steps=group["ns_steps"],
-                        reset_iterations=group["reset_iterations"],
-                        ns_coefficients=group["ns_coefficients"]
-                    )
-                elif method == 'mud':
-                    g = mud_whiten(
-                        g, 
-                        passes=1
-                    )
-                elif method == 'ns5':
-                    g = zeropower_via_newtonschulz5(
-                        g, 
-                        steps=group["ns_steps"],
-                        ns_coefficients=group["ns_coefficients"]
-                    )
-                else:
-                    raise ValueError(f"Unknown orthogonalization method: {method}")
+                g = gram_newton_schulz(g, steps=group["ns_steps"])
                 
                 if group["weight_decay"] > 0:
                     torch._foreach_mul_(p, 1 - group["lr"] * group["weight_decay"])
@@ -278,15 +180,20 @@ def get_params_for_muon(model) -> List[Parameter]:
     Returns:
         A list of parameters that should be optimized with muon.
     """
+    excluded_module_classes = (nn.Embedding)
     muon_params = []
-    for module in model.modules():
-        for name, param in module.named_parameters(recurse=False):
+    # BFS through all submodules and exclude parameters from certain module types
+    queue = collections.deque([model])
+    while queue:
+        module = queue.popleft()
+        if isinstance(module, excluded_module_classes):
+            continue
+        for param in module.parameters(recurse=False):
             if not param.requires_grad:
                 continue
-            if name == 'weight_g':
-                continue
-            if not isinstance(module, nn.Embedding) and param.ndim >= 2:
+            if param.ndim >= 2:
                 muon_params.append(param)
+        queue.extend(list(module.children()))
     return muon_params
 
 
