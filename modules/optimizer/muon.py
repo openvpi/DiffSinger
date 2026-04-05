@@ -48,8 +48,8 @@ _unmodified_polar_express_coefficients = [
 safety_factor = 1.05
 POLAR_EXPRESS_COEFFICIENTS = [
     (a / safety_factor , b / safety_factor**3 , c / safety_factor**5)
-    for (a, b, c) in _unmodified_polar_express_coefficients
-]
+    for (a, b, c) in _unmodified_polar_express_coefficients[: -1]
+] + [_unmodified_polar_express_coefficients[-1]]
 
 
 def zeropower_via_newtonschulz5(G: Tensor, steps: int, ns_coefficients: List[tuple]) -> Tensor:
