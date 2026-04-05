@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module, Parameter, Embedding
 from typing import List
+from itertools import repeat
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
 
 
@@ -48,7 +49,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     X = X.to(torch.float16)
     
     # Perform the NS iterations
-    ns_coefficients = POLAR_EXPRESS_COEFFICIENTS[:steps]
+    ns_coefficients = POLAR_EXPRESS_COEFFICIENTS[:steps] + list(repeat(POLAR_EXPRESS_COEFFICIENTS[-1], steps - len(POLAR_EXPRESS_COEFFICIENTS)))
     if X.size(-2) < X.size(-1):
         for i in range(steps):
             a, b, c = ns_coefficients[i]
@@ -82,7 +83,7 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]=[2]) -
         X = X.mT
     X = X.to(torch.float16)
 
-    ns_coefficients = POLAR_EXPRESS_COEFFICIENTS[:steps]
+    ns_coefficients = POLAR_EXPRESS_COEFFICIENTS[:steps] + list(repeat(POLAR_EXPRESS_COEFFICIENTS[-1], steps - len(POLAR_EXPRESS_COEFFICIENTS)))
     if X.size(-2) != X.size(-1):
         R = torch.bmm(X, X.mT)
         Q = None
