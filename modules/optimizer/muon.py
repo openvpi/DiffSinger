@@ -45,7 +45,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     X = G.to(torch.float32)
 
     # Ensure spectral norm is at most 1
-    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
+    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-12)
     X = X.to(torch.float16)
     
     # Perform the NS iterations
@@ -77,7 +77,7 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]=[2]) -
     dtype = G.dtype
 
     X = G.to(torch.float32)
-    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-7)
+    X = F.normalize(X, p=2.0, dim=(-2, -1), eps=1e-12)
     should_transpose = X.size(-2) > X.size(-1)
     if should_transpose:
         X = X.mT
