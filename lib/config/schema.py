@@ -711,6 +711,7 @@ class VocoderConfig(ConfigBaseModel):
 
 
 class ValidationConfig(ConfigBaseModel):
+    allow_amp: bool = Field(False)
     use_vocoder: bool = Field(True, json_schema_extra={
         "scope": ConfigurationScope.ACOUSTIC,
     })

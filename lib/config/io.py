@@ -3,11 +3,11 @@ import pathlib
 import omegaconf
 
 
-def load_raw_config(config_path: pathlib.Path, overrides: list[str] = None) -> dict:
+def load_raw_config(config_path: pathlib.Path, inherit=True, overrides: list[str] = None, subkey: str = None) -> dict:
     def _load(path: pathlib.Path) -> omegaconf.DictConfig:
         cfg = omegaconf.OmegaConf.load(path)
 
-        if "bases" in cfg:
+        if inherit and "bases" in cfg:
             if isinstance(cfg.bases, str):
                 cfg.bases = [cfg.bases]
             elif not isinstance(cfg.bases, omegaconf.ListConfig):
@@ -24,10 +24,16 @@ def load_raw_config(config_path: pathlib.Path, overrides: list[str] = None) -> d
     if overrides:
         override_config = omegaconf.OmegaConf.from_dotlist(overrides)
         config = omegaconf.OmegaConf.merge(config, override_config)
+    if subkey:
+        config = omegaconf.OmegaConf.select(config, subkey)
+        if config is None:
+            raise KeyError(subkey)
+
     config = omegaconf.OmegaConf.to_container(config, resolve=True)
 
     return config
 
 
 def save_raw_config(config: dict, save_path: str):
+    config = omegaconf.OmegaConf.create(config)
     omegaconf.OmegaConf.save(config=config, f=save_path, resolve=True)

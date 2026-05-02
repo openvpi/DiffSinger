@@ -15,6 +15,7 @@ infer_out/
 !/experiments/.gitkeep
 /venv/
 /artifacts/
+/assets/
 
 .vscode
 .ipynb_checkpoints/
