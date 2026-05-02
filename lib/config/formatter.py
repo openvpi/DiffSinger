@@ -1,3 +1,4 @@
+import re
 from typing import Any, List, Optional, Tuple
 
 from pydantic import BaseModel
@@ -5,6 +6,12 @@ from pydantic import BaseModel
 __all__ = [
     "ModelFormatter",
 ]
+
+_ANSI_RE = re.compile(r'\033\[[0-9;]*m')
+
+
+def _strip_ansi(s: str) -> str:
+    return _ANSI_RE.sub('', s)
 
 
 class ModelFormatter:
@@ -33,7 +40,7 @@ class ModelFormatter:
         return self.current_max_width() - self.current_width
 
     def get_width(self, key: Optional[str], value: Any) -> int:
-        cache_key = id(value)
+        cache_key = (key, id(value))
         if cache_key in self.width_cache:
             return self.width_cache[cache_key]
 
@@ -98,6 +105,7 @@ class ModelFormatter:
 
         def _process(_elements: List[Tuple[Optional[str], Any]], _prefix: str, _suffix: str):
             self.current_line.append(_prefix)
+            self.current_width += len(_strip_ansi(_prefix))
             if width > self.current_max_width():
                 self.new_line()
                 self.current_level += 1
@@ -106,6 +114,7 @@ class ModelFormatter:
                 self.new_line()
                 self.current_level -= 1
             self.current_line.append(_suffix)
+            self.current_width += len(_strip_ansi(_suffix))
 
         if isinstance(value, tuple):
             _process([(None, item) for item in value], prefix + "(", ")")

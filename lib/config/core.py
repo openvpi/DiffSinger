@@ -27,11 +27,16 @@ class ConfigBaseModel(BaseModel):
     __field_scopes__: ClassVar[dict] = {}  # {field_name: scope_bitmask}
 
     def __init__(self, **data):
-        token = _current_scope.set(0)
         try:
+            _current_scope.get()
+        except LookupError:
+            token = _current_scope.set(0)
+            try:
+                super().__init__(**data)
+            finally:
+                _current_scope.reset(token)
+        else:
             super().__init__(**data)
-        finally:
-            _current_scope.reset(token)
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs):
@@ -64,7 +69,8 @@ class ConfigBaseModel(BaseModel):
         current_scope = _current_scope.get()
         for name in type(self).model_fields:
             if name in self.__field_scopes__ and not (current_scope & self.__field_scopes__[name]):
-                delattr(self, name)
+                if name in self.__dict__:
+                    delattr(self, name)
         return self
 
     def _resolve_recursive(self, current: "ConfigBaseModel", context: ConfigOperationContext):
