@@ -388,7 +388,7 @@ class RepetitiveDiffusion(GaussianDiffusion):
                  repeat_bins: int, timesteps=1000, k_step=1000,
                  backbone_type=None, backbone_args=None,
                  betas=None):
-        assert (isinstance(vmin, (float, int)) and isinstance(vmin, (float, int))) or len(vmin) == len(vmax)
+        assert (isinstance(vmin, (float, int)) and isinstance(vmax, (float, int))) or len(vmin) == len(vmax)
         num_feats = 1 if isinstance(vmin, (float, int)) else len(vmin)
         spec_min = [vmin] if num_feats == 1 else [[v] for v in vmin]
         spec_max = [vmax] if num_feats == 1 else [[v] for v in vmax]
@@ -503,3 +503,4 @@ class MultiVarianceDiffusion(RepetitiveDiffusion):
             xs = xs.unbind(dim=1)
         assert len(xs) == self.num_feats
         return self.clamp_spec(xs)
+
