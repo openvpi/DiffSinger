@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from modules.commons.common_layers import AdamWCov1d
+from modules.commons.common_layers import AdamWCovn1d
 
 
 class ConvNeXtBlock(nn.Module):
@@ -73,7 +73,7 @@ class ConvNeXtDecoder(nn.Module):
                 layer_scale_init_value=1e-6, drop_out=dropout_rate
             ) for _ in range(num_layers)
         )
-        self.outconv = AdamWCov1d(
+        self.outconv = AdamWCovn1d(
             num_channels, out_dims, kernel_size,
             stride=1, padding=(kernel_size - 1) // 2
         )

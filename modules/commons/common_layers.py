@@ -175,7 +175,7 @@ class ATanGLU(nn.Module):
             return out * torch.atan(gate)
         
         
-class AdamWCov1d(torch.nn.Conv1d):
+class AdamWCovn1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         nn.init.kaiming_normal_(self.weight)
