@@ -49,7 +49,7 @@ class ParameterAdaptorModule(torch.nn.Module):
         if self.predict_voicing:
             ranges.append((
                 hparams['voicing_db_min'],
-                hparams['voicing_db_max']
+                0. if hparams.get('voicing_domain', 'db')=='mulaw' else hparams['voicing_db_max']
             ))
             clamps.append((hparams['voicing_db_min'], 0.))
 
