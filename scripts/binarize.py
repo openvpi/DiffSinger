@@ -10,7 +10,7 @@ import click
 import dask
 
 from lib import logging
-from lib.config.formatter import ModelFormatter
+from lib.config.formatter import format_model
 from lib.config.io import load_raw_config
 from lib.config.schema import RootConfig, DataConfig, BinarizerConfig, ConfigurationScope
 
@@ -26,9 +26,8 @@ def _load_and_log_config(config_path: pathlib.Path, scope: int, overrides: list[
     config = RootConfig.model_validate(config, scope=scope)
     config.resolve(scope_mask=scope)
     config.check(scope_mask=scope)
-    formatter = ModelFormatter()
-    print(formatter.format(config.data))
-    print(formatter.format(config.binarizer))
+    print(format_model(config.data))
+    print(format_model(config.binarizer))
     return config
 
 

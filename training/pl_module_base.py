@@ -113,7 +113,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             return
         param_dict = dict(self.named_parameters())
         size = len(param_dict)
-        _apply_include_exclude(
+        param_dict = _apply_include_exclude(
             param_dict,
             includes=self.training_config.finetuning.freezing_include_params,
             excludes=self.training_config.finetuning.freezing_exclude_params
@@ -128,7 +128,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
 
     def build_ema(self) -> ExponentialMovingAverage:
         parameters = dict(self.named_parameters())
-        _apply_include_exclude(
+        parameters = _apply_include_exclude(
             parameters,
             includes=self.training_config.weight_averaging.ema_include_params,
             excludes=self.training_config.weight_averaging.ema_exclude_params
@@ -145,7 +145,7 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             pretrained_model_path, map_location=self.device, weights_only=True
         )
         source_state_dict = ckpt["state_dict"]
-        _apply_include_exclude(
+        source_state_dict = _apply_include_exclude(
             source_state_dict,
             includes=self.training_config.finetuning.pretraining_include_params,
             excludes=self.training_config.finetuning.pretraining_exclude_params
@@ -393,12 +393,15 @@ class BaseLightningModule(lightning.pytorch.LightningModule, abc.ABC):
             self.ema.load_state_dict(checkpoint.pop("ema_state_dict"), strict=True)
 
 
-def _apply_include_exclude(dict_to_filter: dict[str, Any], includes: list[str] = None, excludes: list[str] = None):
-    for key in list(dict_to_filter.keys()):
+def _apply_include_exclude(dict_to_filter: dict[str, Any], includes: list[str] = None, excludes: list[str] = None) -> dict[str, Any]:
+    result = {}
+    for key, value in dict_to_filter.items():
         if includes and not any(fnmatch(key, pattern) for pattern in includes):
-            del dict_to_filter[key]
-        elif excludes and any(fnmatch(key, pattern) for pattern in excludes):
-            del dict_to_filter[key]
+            continue
+        if excludes and any(fnmatch(key, pattern) for pattern in excludes):
+            continue
+        result[key] = value
+    return result
 
 
 def _check_shape_consistency(

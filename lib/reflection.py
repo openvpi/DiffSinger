@@ -4,7 +4,7 @@ from typing import Any
 
 import torch.optim
 
-from .config.schema import LRSchedulerConfig, OptimizerConfig
+from .config.schema import LRSchedulerConfig, OptimizerConfig, _walk_lr_scheduler_configs
 
 
 def get_object_by_module_path(path: str):
@@ -72,25 +72,13 @@ def build_lr_scheduler_from_config(
     """
     Build a learning rate scheduler from a configuration object, recursively.
     """
-    kwargs = {}
-    for key, value in config.kwargs.items():
-        if isinstance(value, LRSchedulerConfig):
-            value = build_lr_scheduler_from_config(optimizer, value)
-        elif isinstance(value, list):
-            value = [
-                build_lr_scheduler_from_config(optimizer, item) if isinstance(item, LRSchedulerConfig) else item
-                for item in value
-            ]
-        elif isinstance(value, dict):
-            value = {
-                k: build_lr_scheduler_from_config(optimizer, v) if isinstance(v, LRSchedulerConfig) else v
-                for k, v in value.items()
-            }
-        kwargs[key] = value
-    scheduler = build_object_from_class_name(
+    kwargs = _walk_lr_scheduler_configs(
+        config.kwargs,
+        lambda cfg: build_lr_scheduler_from_config(optimizer, cfg),
+    )
+    return build_object_from_class_name(
         config.cls,
         torch.optim.lr_scheduler.LRScheduler,
         optimizer=optimizer,
         **kwargs
     )
-    return scheduler

@@ -1,4 +1,5 @@
 import abc
+import operator as _operator
 import re
 
 from pydantic import BaseModel
@@ -153,6 +154,51 @@ class GetContext(ConfigOperationBase):
         return getattr(context, self.attr, None)
 
 
+_BINARY_OPS = {
+    "+": _operator.add,
+    "-": _operator.sub,
+    "*": _operator.mul,
+    "/": _operator.truediv,
+    "%": _operator.mod,
+    "**": _operator.pow,
+    "//": _operator.floordiv,
+    "==": _operator.eq,
+    "!=": _operator.ne,
+    "<": _operator.lt,
+    "<=": _operator.le,
+    ">": _operator.gt,
+    ">=": _operator.ge,
+    "&": _operator.and_,
+    "|": _operator.or_,
+    "^": _operator.xor,
+    "and": lambda a, b: a and b,
+    "or": lambda a, b: a or b,
+    "in": lambda a, b: a in b,
+}
+
+_UNARY_OPS = {
+    "-": _operator.neg,
+    "~": _operator.invert,
+    "abs": abs,
+    "round": round,
+    "not": _operator.not_,
+    "exists": lambda x: x is not None,
+    "missing": lambda x: x is None,
+}
+
+_AGGREGATION_OPS = {
+    "min": lambda values: min(*values),
+    "max": lambda values: max(*values),
+    "len": lambda values: len(*values),
+    "sum": lambda values: sum(*values),
+    "avg": lambda values: sum(*values) / len(*values),
+    "all": lambda values: all(*values),
+    "any": lambda values: any(*values),
+    "list": lambda values: list(*values),
+    "set": lambda values: set(*values),
+}
+
+
 class BinaryOperation(ConfigOperationBase):
     def __init__(self, left, right, op):
         self.left = left
@@ -160,54 +206,11 @@ class BinaryOperation(ConfigOperationBase):
         self.op = op
 
     def resolve(self, context: ConfigOperationContext):
-        if isinstance(self.left, ConfigOperationBase):
-            left_value = self.left.resolve(context)
-        else:
-            left_value = self.left
-        if isinstance(self.right, ConfigOperationBase):
-            right_value = self.right.resolve(context)
-        else:
-            right_value = self.right
-        if self.op == "+":
-            return left_value + right_value
-        elif self.op == "-":
-            return left_value - right_value
-        elif self.op == "*":
-            return left_value * right_value
-        elif self.op == "/":
-            return left_value / right_value
-        elif self.op == "%":
-            return left_value % right_value
-        elif self.op == "**":
-            return left_value ** right_value
-        elif self.op == "//":
-            return left_value // right_value
-        elif self.op == "==":
-            return left_value == right_value
-        elif self.op == "!=":
-            return left_value != right_value
-        elif self.op == "<":
-            return left_value < right_value
-        elif self.op == "<=":
-            return left_value <= right_value
-        elif self.op == ">":
-            return left_value > right_value
-        elif self.op == ">=":
-            return left_value >= right_value
-        elif self.op == '&':
-            return left_value & right_value
-        elif self.op == '|':
-            return left_value | right_value
-        elif self.op == '^':
-            return left_value ^ right_value
-        elif self.op == 'and':
-            return left_value and right_value
-        elif self.op == 'or':
-            return left_value or right_value
-        elif self.op == 'in':
-            return left_value in right_value
-        else:
+        left_value = self.left.resolve(context) if isinstance(self.left, ConfigOperationBase) else self.left
+        right_value = self.right.resolve(context) if isinstance(self.right, ConfigOperationBase) else self.right
+        if self.op not in _BINARY_OPS:
             raise ValueError(f"Unsupported operator: {self.op}")
+        return _BINARY_OPS[self.op](left_value, right_value)
 
 
 class UnaryOperation(ConfigOperationBase):
@@ -216,26 +219,12 @@ class UnaryOperation(ConfigOperationBase):
         self.op = op
 
     def resolve(self, context: ConfigOperationContext):
-        if isinstance(self.operand, ConfigOperationBase):
-            operand_value = self.operand.resolve(context)
-        else:
-            operand_value = self.operand
-        if self.op == "-":
-            return -operand_value
-        elif self.op == "~":
-            return ~operand_value
-        elif self.op == "abs":
-            return abs(operand_value)
-        elif self.op == "round":
-            return round(operand_value)
-        elif self.op == 'not':
-            return not operand_value
-        elif self.op == 'exists':
-            return operand_value is not None
-        elif self.op == 'missing':
-            return operand_value is None
-        else:
+        operand_value = (
+            self.operand.resolve(context) if isinstance(self.operand, ConfigOperationBase) else self.operand
+        )
+        if self.op not in _UNARY_OPS:
             raise ValueError(f"Unsupported operator: {self.op}")
+        return _UNARY_OPS[self.op](operand_value)
 
 
 class Aggregation(ConfigOperationBase):
@@ -245,11 +234,11 @@ class Aggregation(ConfigOperationBase):
         self.key = key
 
     def resolve(self, context: ConfigOperationContext):
-        values = []
         if isinstance(self.args, ConfigOperationBase):
             args = self.args.resolve(context)
         else:
             args = self.args
+        values = []
         for arg in args:
             if isinstance(arg, ConfigOperationBase):
                 value = arg.resolve(context)
@@ -258,26 +247,9 @@ class Aggregation(ConfigOperationBase):
             if self.key:
                 value = self.key(value)
             values.append(value)
-        if self.op == "min":
-            return min(*values)
-        elif self.op == "max":
-            return max(*values)
-        elif self.op == "len":
-            return len(*values)
-        elif self.op == "sum":
-            return sum(*values)
-        elif self.op == "avg":
-            return sum(*values) / len(*values)
-        elif self.op == "all":
-            return all(*values)
-        elif self.op == "any":
-            return any(*values)
-        elif self.op == "list":
-            return list(*values)
-        elif self.op == "set":
-            return set(*values)
-        else:
+        if self.op not in _AGGREGATION_OPS:
             raise ValueError(f"Unsupported aggregation operation: {self.op}")
+        return _AGGREGATION_OPS[self.op](values)
 
 
 class Coalesce(ConfigOperationBase):

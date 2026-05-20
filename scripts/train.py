@@ -14,7 +14,7 @@ import click
 import yaml
 
 from lib import logging
-from lib.config.formatter import ModelFormatter
+from lib.config.formatter import format_model
 from lib.config.io import load_raw_config
 from lib.config.schema import (
     ConfigurationScope, RootConfig,
@@ -172,14 +172,8 @@ def train_model(
         accelerator=training_config.trainer.accelerator,
         # TODO: strategy
         strategy=get_strategy(
-            devices=training_config.trainer.devices,
-            num_nodes=training_config.trainer.num_nodes,
-            accelerator=training_config.trainer.accelerator,
-            strategy={
-                "name": training_config.trainer.strategy.name,
-                **training_config.trainer.strategy.kwargs,
-            },
-            precision=training_config.trainer.precision,
+            name=training_config.trainer.strategy.name,
+            **training_config.trainer.strategy.kwargs,
         ),
         devices=training_config.trainer.devices,
         num_nodes=training_config.trainer.num_nodes,
@@ -262,9 +256,8 @@ def _exec_training(
 
     @rank_zero_only
     def log_config(cfg: RootConfig):
-        formatter = ModelFormatter()
-        print(formatter.format(cfg.model))
-        print(formatter.format(cfg.training))
+        print(format_model(cfg.model))
+        print(format_model(cfg.training))
 
     pl_module_cls = _get_lightning_module_cls(recipe_key)
     log_config(config)

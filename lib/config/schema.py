@@ -592,6 +592,20 @@ class OptimizerConfig(ConfigBaseModel):
     kwargs: dict[str, Any] = Field(...)
 
 
+def _walk_lr_scheduler_configs(obj, fn):
+    """Recursively apply *fn* to every LRSchedulerConfig-shaped entry in *obj*."""
+    if isinstance(obj, LRSchedulerConfig):
+        return fn(obj)
+    if isinstance(obj, dict):
+        if "cls" in obj:
+            obj.setdefault("kwargs", {})
+            return fn(LRSchedulerConfig.model_validate(obj))
+        return {k: _walk_lr_scheduler_configs(v, fn) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_walk_lr_scheduler_configs(item, fn) for item in obj]
+    return obj
+
+
 class LRSchedulerConfig(ConfigBaseModel):
     cls: str = Field(...)
     kwargs: dict[str, Any] = Field(...)
@@ -601,21 +615,7 @@ class LRSchedulerConfig(ConfigBaseModel):
     # noinspection PyMethodParameters
     @field_validator("kwargs")
     def check_kwargs(cls, v):
-        res = {}
-        for key, value in v.items():
-            if isinstance(value, dict):
-                if "cls" in value:
-                    value.setdefault("kwargs", {})
-                    value = LRSchedulerConfig.model_validate(value)
-                else:
-                    value = LRSchedulerConfig.check_kwargs(value)
-            elif isinstance(value, list):
-                value = [
-                    LRSchedulerConfig.model_validate(item) if isinstance(item, dict) and "cls" in item else item
-                    for item in value
-                ]
-            res[key] = value
-        return res
+        return _walk_lr_scheduler_configs(v, lambda x: x)
 
 
 class PeriodicCheckpointConfig(ConfigBaseModel):

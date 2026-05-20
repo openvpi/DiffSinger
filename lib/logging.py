@@ -1,5 +1,5 @@
+import contextvars
 import inspect
-import io
 import sys
 
 from loguru import logger
@@ -12,13 +12,30 @@ _PRIVATE_LOGGER_FORMAT = (
     "{time:YYYY-MM-DD HH:mm:ss.SSS} | <level>{level:<8}</level> | "
     "<cyan>{extra[name]}</cyan>:<cyan>{extra[function]}</cyan>:<cyan>{extra[line]}</cyan> - <level>{message}</level>"
 )
+_log_callback: contextvars.ContextVar = contextvars.ContextVar("_log_callback", default=None)
+
 logger.level("DEBUG", color="")
 logger.level("INFO", color="<green>")
 logger.remove()
-logger.add(sys.stdout, colorize=True, format=LOGGER_FORMAT)
+
+
+def _private_sink(msg):
+    """Permanent sink that routes formatted output based on context variable."""
+    cb = _log_callback.get()
+    if cb is not None:
+        cb(msg.rstrip())
+    else:
+        print(msg.rstrip())
+
+
+logger.add(sys.stdout, colorize=True, format=LOGGER_FORMAT,
+           filter=lambda record: not record["extra"].get("_routed", False))
+logger.add(_private_sink, colorize=True, format=_PRIVATE_LOGGER_FORMAT,
+           filter=lambda record: record["extra"].get("_routed", False))
 
 
 def _get_bind(last=1):
+    """Walk the stack to get the real caller's module, function, and line."""
     frame = inspect.currentframe()
     try:
         # Get the caller's frame
@@ -32,43 +49,37 @@ def _get_bind(last=1):
         del frame
 
 
-def _log(logger_callback, sink_callback, message: str):
-    with io.StringIO() as string:
-        logger.remove()
-        logger.add(string, colorize=True, format=_PRIVATE_LOGGER_FORMAT)
-        logger_callback(message)
-        logger.remove()
-        logger.add(sys.stdout, colorize=True, format=LOGGER_FORMAT)
-        formatted_massage = string.getvalue().rstrip()
-    if sink_callback is None:
-        print(formatted_massage)
-    else:
-        sink_callback(formatted_massage)
+def _log(level: str, sink_callback, bind: dict, message: str):
+    token = _log_callback.set(sink_callback)
+    try:
+        logger.bind(_routed=True, **bind).log(level, message)
+    finally:
+        _log_callback.reset(token)
 
 
 def trace(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).trace, callback, message)
+    _log("TRACE", callback, _get_bind(), message)
 
 
 def debug(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).debug, callback, message)
+    _log("DEBUG", callback, _get_bind(), message)
 
 
 def info(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).info, callback, message)
+    _log("INFO", callback, _get_bind(), message)
 
 
 def success(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).success, callback, message)
+    _log("SUCCESS", callback, _get_bind(), message)
 
 
 def warning(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).warning, callback, message)
+    _log("WARNING", callback, _get_bind(), message)
 
 
 def error(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).error, callback, message)
+    _log("ERROR", callback, _get_bind(), message)
 
 
 def critical(message: str, callback=None):
-    _log(logger.bind(**_get_bind()).critical, callback, message)
+    _log("CRITICAL", callback, _get_bind(), message)

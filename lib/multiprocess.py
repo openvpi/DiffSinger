@@ -4,17 +4,24 @@ import traceback
 from torch.multiprocessing import Manager, Process, get_context
 
 
+class FailedItem:
+    """Sentinel placed on the queue when a worker fails to process an item."""
+    __slots__ = ("exception", "traceback_str")
+
+    def __init__(self, exception: Exception, tb: str):
+        self.exception = repr(exception)
+        self.traceback_str = tb
+
+
 def chunked_worker_run(map_func, args, results_queue=None):
     for a in args:
-        # noinspection PyBroadException
         try:
             res = map_func(*a)
             results_queue.put(res)
         except KeyboardInterrupt:
             break
-        except Exception:
-            traceback.print_exc()
-            results_queue.put(None)
+        except Exception as exc:
+            results_queue.put(FailedItem(exc, traceback.format_exc()))
 
 
 def chunked_multiprocess_run(map_func, args, num_workers, q_max_size=1000):
