@@ -212,7 +212,8 @@ class DurationPredictor(torch.nn.Module):
                     reverse=True, 
                     noise_scale=1.0
                 )
-                sdp_pred = torch.ceil(self.out2dur(logw_sdp.transpose(1, -1) * non_pad_mask_2d))
+                sdp_pred_continuous = self.out2dur(logw_sdp.transpose(1, -1) * non_pad_mask_2d)
+                sdp_pred = sdp_pred_continuous + (torch.ceil(sdp_pred_continuous) - sdp_pred_continuous).detach()
 
             else:
                 logw_sdp = self.sdp(
