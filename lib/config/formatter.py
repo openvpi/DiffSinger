@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -40,7 +40,7 @@ class _Fmt:
             self.cur_width = 0
 
 
-def _get_width(fmt: _Fmt, key: Optional[str], value: Any) -> int:
+def _get_width(fmt: _Fmt, key: str | None, value: Any) -> int:
     cache_key = (key, id(value))
     if cache_key in fmt.width_cache:
         return fmt.width_cache[cache_key]
@@ -48,8 +48,8 @@ def _get_width(fmt: _Fmt, key: Optional[str], value: Any) -> int:
     key_width = 0 if key is None else len(key) + len(fmt.connector)
     if isinstance(value, BaseModel):
         if any(
-            not field.exclude and hasattr(value, name) and getattr(value, name) is not None
-            for name, field in type(value).model_fields.items()
+                not field.exclude and hasattr(value, name) and getattr(value, name) is not None
+                for name, field in type(value).model_fields.items()
         ):
             width = float('inf')  # force new line
         else:
@@ -76,21 +76,27 @@ def _get_width(fmt: _Fmt, key: Optional[str], value: Any) -> int:
 def _entries_width(fmt: _Fmt, entries: list) -> int:
     items_width = sum(_get_width(fmt, k, v) for k, v in entries)
     separators_width = (len(entries) - 1) * len(fmt.separator)
-    return items_width + separators_width + 2  # brackets
+    return items_width + separators_width
 
 
 def _process(fmt: _Fmt, elements: list, prefix: str, suffix: str):
+    prefix_visible = len(_strip_ansi(prefix))
+    suffix_visible = len(_strip_ansi(suffix))
+    needs_wrap = (
+            fmt.cur_width + prefix_visible + _entries_width(fmt, elements) + suffix_visible
+            > fmt.max_width()
+    )
     fmt.cur_line.append(prefix)
-    fmt.cur_width += len(_strip_ansi(prefix))
-    if _entries_width(fmt, elements) > fmt.max_width():
+    fmt.cur_width += prefix_visible
+    if needs_wrap:
         fmt.flush_line()
         fmt.level += 1
     _add_entries(fmt, elements)
-    if _entries_width(fmt, elements) > fmt.max_width():
+    if needs_wrap:
         fmt.flush_line()
         fmt.level -= 1
     fmt.cur_line.append(suffix)
-    fmt.cur_width += len(_strip_ansi(suffix))
+    fmt.cur_width += suffix_visible
 
 
 def _add_entries(fmt: _Fmt, entries: list):
@@ -111,7 +117,7 @@ def _add_entries(fmt: _Fmt, entries: list):
                 fmt.cur_width += len(fmt.separator)
 
 
-def _add_entry(fmt: _Fmt, key: Optional[str], value: Any):
+def _add_entry(fmt: _Fmt, key: str | None, value: Any):
     width = _get_width(fmt, key, value)
     if width > fmt.remaining_width():
         fmt.flush_line()
@@ -140,8 +146,8 @@ def _add_entry(fmt: _Fmt, key: Optional[str], value: Any):
 
 
 def format_model(
-    model: BaseModel, line_width: int = 80, indent: int = 4,
-    connector: str = ": ", separator: str = ", ",
+        model: BaseModel, line_width: int = 80, indent: int = 4,
+        connector: str = ": ", separator: str = ", ",
 ) -> str:
     """Format a Pydantic model as a readable string."""
     fmt = _Fmt(line_width=line_width, indent=indent, connector=connector, separator=separator)
