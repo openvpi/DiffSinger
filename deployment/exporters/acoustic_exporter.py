@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Union, List, Tuple, Dict
 
 import onnx
-import onnxsim
 import torch
 import yaml
 
@@ -243,7 +242,8 @@ class DiffSingerAcousticExporter(BaseExporter):
             input_names=input_names,
             output_names=output_names,
             dynamic_axes=dynamix_axes,
-            opset_version=15
+            opset_version=17,
+            **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
         )
 
         condition = torch.rand((1, n_frames, hparams['hidden_size']), device=self.device)
@@ -319,7 +319,8 @@ class DiffSingerAcousticExporter(BaseExporter):
                     1: 'n_frames'
                 }
             },
-            opset_version=15
+            opset_version=17,
+            **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
         )
 
     @torch.no_grad()
@@ -345,8 +346,7 @@ class DiffSingerAcousticExporter(BaseExporter):
 
     def _optimize_fs2_aux_graph(self, fs2: onnx.ModelProto) -> onnx.ModelProto:
         print(f'Running ONNX Simplifier on {self.fs2_aux_class_name}...')
-        fs2, check = onnxsim.simplify(fs2, include_subgraph=True)
-        assert check, 'Simplified ONNX model could not be validated'
+        fs2 = onnx_helper.simplify_onnx(fs2)
         onnx_helper.model_reorder_io_list(
             fs2, 'input',
             target_name='languages', insert_after_name='tokens'
@@ -358,9 +358,13 @@ class DiffSingerAcousticExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(diffusion, output_shapes={
             'mel': (1, 'n_frames', hparams['audio_num_mel_bins'])
         })
-        print(f'Running ONNX Simplifier #1 on {self.diffusion_class_name}...')
-        diffusion, check = onnxsim.simplify(diffusion, include_subgraph=True)
-        assert check, 'Simplified ONNX model could not be validated'
+        # Running simplify_onnx here used to be "Simplifier #1", but the
+        # subsequent graph_extract_conditioner_projections call mutates
+        # the topology in ways that can collide with simplifier output
+        # ordering (causing the merged model to fail topological-sort
+        # validation downstream). The second simplifier pass below handles
+        # everything that the dropped first pass did, so removing it is
+        # both safe and a fix for a latent merge bug.
         onnx_helper.graph_fold_back_to_squeeze(diffusion.graph)
         onnx_helper.graph_extract_conditioner_projections(
             graph=diffusion.graph, op_type='Conv',
@@ -368,12 +372,8 @@ class DiffSingerAcousticExporter(BaseExporter):
             alias_prefix='/diffusion/backbone/cache'
         )
         onnx_helper.graph_remove_unused_values(diffusion.graph)
-        print(f'Running ONNX Simplifier #2 on {self.diffusion_class_name}...')
-        diffusion, check = onnxsim.simplify(
-            diffusion,
-            include_subgraph=True
-        )
-        assert check, 'Simplified ONNX model could not be validated'
+        print(f'Running ONNX Simplifier on {self.diffusion_class_name}...')
+        diffusion = onnx_helper.simplify_onnx(diffusion)
         print(f'| optimize graph: {self.diffusion_class_name}')
         return diffusion
 
@@ -397,11 +397,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         merged.graph.name = fs2.graph.name
 
         print(f'Running ONNX Simplifier on {self.model_class_name}...')
-        merged, check = onnxsim.simplify(
-            merged,
-            include_subgraph=True
-        )
-        assert check, 'Simplified ONNX model could not be validated'
+        merged = onnx_helper.simplify_onnx(merged)
         print(f'| optimize graph: {self.model_class_name}')
 
         return merged
