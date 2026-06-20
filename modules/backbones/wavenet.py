@@ -75,7 +75,10 @@ class WaveNet(nn.Module):
         :return:
         """
         if self.n_feats == 1:
-            x = spec.squeeze(1)  # [B, M, T]
+            # Use indexing instead of squeeze to avoid emitting an onnx::If
+            # whose branches have different rank, which breaks shape inference
+            # for the downstream Conv on PyTorch >= 2.0.
+            x = spec[:, 0]  # [B, M, T]
         else:
             x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
         x = self.input_projection(x)  # [B, C, T]

@@ -213,6 +213,18 @@ def load_ckpt(
             if excluded:
                 continue
             state_dict[k] = v
+
+    # Manual self-attention (MultiheadSelfAttentionWithRoPE) uses 'in_proj.weight',
+    # while older checkpoints saved from torch.nn.MultiheadAttention use 'in_proj_weight'.
+    # The two tensors have identical shape and semantics (Q/K/V stacked along dim 0),
+    # so a key rename is sufficient to load legacy ckpts.
+    renamed = OrderedDict()
+    for k, v in state_dict.items():
+        if k.endswith('.self_attn.in_proj_weight'):
+            k = k[:-len('in_proj_weight')] + 'in_proj.weight'
+        renamed[k] = v
+    state_dict = renamed
+
     if not strict:
         cur_model_state_dict = cur_model.state_dict()
         unmatched_keys = []

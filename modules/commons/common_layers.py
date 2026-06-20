@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.onnx.operators
 from torch import nn
-from torch.nn import LayerNorm, MultiheadAttention, ReLU, GELU, SiLU
+from torch.nn import LayerNorm, ReLU, GELU, SiLU
 
 import utils
 
@@ -309,16 +309,15 @@ class EncSALayer(nn.Module):
         super().__init__()
         self.dropout = dropout
         self.layer_norm1 = LayerNorm(c)
-        if rotary_embed is None:
-            self.self_attn = MultiheadAttention(
-                c, num_heads, dropout=attention_dropout, bias=False, batch_first=False
-            )
-            self.use_rope = False
-        else:
-            self.self_attn = MultiheadSelfAttentionWithRoPE(
-                c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
-            )
-            self.use_rope = True
+        # Always use the in-house manual attention. With rotary_embed=None this
+        # is a plain multi-head self-attention that is ONNX-export safe across
+        # dynamic sequence lengths. Using torch.nn.MultiheadAttention here was
+        # the source of the "Reshape baked tgt_len" bug on PyTorch >= 2.0
+        # because its SDPA-branched implementation specializes tgt_len to a
+        # Python int and re-injects it into the output Reshape.
+        self.self_attn = MultiheadSelfAttentionWithRoPE(
+            c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
+        )
         self.layer_norm2 = LayerNorm(c)
         self.ffn = TransformerFFNLayer(
             c, 4 * c, kernel_size=kernel_size, dropout=relu_dropout, act=act
@@ -331,17 +330,7 @@ class EncSALayer(nn.Module):
             self.layer_norm2.training = layer_norm_training
         residual = x
         x = self.layer_norm1(x)
-        if self.use_rope:
-            x = self.self_attn(x, key_padding_mask=encoder_padding_mask)
-        else:
-            x = x.transpose(0, 1)
-            x, _, = self.self_attn(
-                query=x,
-                key=x,
-                value=x,
-                key_padding_mask=encoder_padding_mask
-            )
-            x = x.transpose(0, 1)
+        x = self.self_attn(x, key_padding_mask=encoder_padding_mask)
         x = F.dropout(x, self.dropout, training=self.training)
         x = residual + x
         x = x * (1 - encoder_padding_mask.float())[..., None]
