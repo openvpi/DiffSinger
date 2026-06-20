@@ -4,9 +4,9 @@
 
 ### Environments and dependencies
 
-DiffSinger requires Python 3.8 or later. We strongly recommend you create a virtual environment via Conda or venv before installing dependencies.
+DiffSinger requires Python 3.8 or later. We strongly recommend you create a virtual environment via Conda, venv or uv before installing dependencies.
 
-1. Install The latest PyTorch following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware.
+1. Install The latest PyTorch following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware. We recommend using the latest stable release that is ≥ 2.4.0.
 
 2. Install other dependencies via the following command:
 
@@ -99,8 +99,6 @@ for more configurable options.
 ## Deployment
 
 DiffSinger uses [ONNX](https://onnx.ai/) as the deployment format.
-
-Training and ONNX export now share a single unified environment. No separate environment or dependency file is needed — install the dependencies as described in [Installation](#installation) with PyTorch >= 2.4, then proceed with the export commands below.
 
 Assume that you have a model named `my_experiment`.
 
