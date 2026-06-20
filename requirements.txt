@@ -1,5 +1,5 @@
 # It is recommended to install PyTorch manually.
-# PyTorch >= 2.0 is required (training and ONNX export share this single environment).
+# PyTorch >= 2.4 is required (training and ONNX export share this single environment).
 # See instructions at https://pytorch.org/get-started/locally/
 
 click
