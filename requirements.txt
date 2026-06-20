@@ -1,5 +1,5 @@
 # It is recommended to install PyTorch manually.
-# PyTorch >= 2.0 is recommended, but 1.12 and 1.13 is compatible.
+# PyTorch >= 2.4 is recommended.
 # See instructions at https://pytorch.org/get-started/locally/
 
 click
@@ -8,10 +8,10 @@ h5py
 librosa<0.10.0
 lightning~=2.3.0
 matplotlib
-MonkeyType==23.3.0
+MonkeyType>=23.3.0
 numpy<2.0.0
-onnx~=1.16.0
-onnxsim~=0.4.36
+onnx>=1.21.0
+onnxslim>=0.1.93
 praat-parselmouth==0.4.3
 pyworld==0.3.4
 PyYAML
