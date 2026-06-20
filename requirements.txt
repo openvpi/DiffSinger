@@ -8,7 +8,7 @@ h5py
 librosa<0.10.0
 lightning~=2.3.0
 matplotlib
-MonkeyType==23.3.0
+MonkeyType>=23.3.0
 numpy<2.0.0
 onnx>=1.21.0
 onnxslim>=0.1.93
