@@ -14,13 +14,6 @@ sys.path.insert(0, str(root_dir))
 from utils.hparams import set_hparams, hparams
 
 
-def check_pytorch_version():
-    # Require PyTorch version to be exactly 1.13.x
-    if torch.__version__.startswith('1.13.'):
-        return
-    raise RuntimeError('This script requires PyTorch 1.13.x. Please install the correct version.')
-
-
 def find_exp(exp):
     if not (root_dir / 'checkpoints' / exp).exists():
         for subdir in (root_dir / 'checkpoints').iterdir():
@@ -298,5 +291,4 @@ def nsf_hifigan(
 
 
 if __name__ == '__main__':
-    check_pytorch_version()
     main()

@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.onnx.operators
 from torch import nn
-from torch.nn import LayerNorm, MultiheadAttention, ReLU, GELU, SiLU
+from torch.nn import LayerNorm, ReLU, GELU, SiLU
 
 import utils
 
@@ -24,6 +24,21 @@ class NormalInitEmbedding(torch.nn.Embedding):
         nn.init.normal_(self.weight, mean=0, std=self.embedding_dim ** -0.5)
         if padding_idx is not None:
             nn.init.constant_(self.weight[padding_idx], 0)
+
+
+class AdamWLinear(torch.nn.Linear):
+    def __init__(
+            self,
+            in_features: int,
+            out_features: int,
+            *args,
+            bias: bool = True,
+            **kwargs
+    ):
+        super().__init__(in_features, out_features, *args, bias=bias, **kwargs)
+        nn.init.xavier_uniform_(self.weight)
+        if bias:
+            nn.init.constant_(self.bias, 0.)
 
 
 class XavierUniformInitLinear(torch.nn.Linear):
@@ -143,7 +158,7 @@ class ATanGLUFunction(torch.autograd.Function):
         grad_gate_part = grad_output * decay_out
         return grad_out_part, grad_gate_part   
 
-       
+
 class ATanGLU(nn.Module):
     # ArcTan-Applies the gated linear unit function.
     def __init__(self, dim=-1):
@@ -158,8 +173,14 @@ class ATanGLU(nn.Module):
             return ATanGLUFunction.apply(out, gate)
         else:
             return out * torch.atan(gate)
-        
-        
+
+
+class AdamWConv1d(torch.nn.Conv1d):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        nn.init.kaiming_normal_(self.weight)
+
+
 class KaimingNormalConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -346,17 +367,16 @@ class EncSALayer(nn.Module):
             self.layer_norm1 = Mixed_LayerNorm(c, c)
         else:
             self.layer_norm1 = LayerNorm(c)
-        if rotary_embed is None:
-            self.self_attn = MultiheadAttention(
-                c, num_heads, dropout=attention_dropout, bias=False, batch_first=False
-            )
-            self.use_rope = False
-        else:
-            self.self_attn = MultiheadSelfAttentionWithRoPE(
-                c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
-            )
-            self.use_rope = True
-        if self.use_mix_ln:
+        # Always use the in-house manual attention. With rotary_embed=None this
+        # is a plain multi-head self-attention that is ONNX-export safe across
+        # dynamic sequence lengths. Using torch.nn.MultiheadAttention here was
+        # the source of the "Reshape baked tgt_len" bug on PyTorch >= 2.0
+        # because its SDPA-branched implementation specializes tgt_len to a
+        # Python int and re-injects it into the output Reshape.
+        self.self_attn = MultiheadSelfAttentionWithRoPE(
+            c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
+        )
+       if self.use_mix_ln:
             self.layer_norm2 = Mixed_LayerNorm(c, c)
         else:
             self.layer_norm2 = LayerNorm(c)
@@ -374,17 +394,8 @@ class EncSALayer(nn.Module):
             x = self.layer_norm1(x, cond)
         else:
             x = self.layer_norm1(x)
-        if self.use_rope:
-            x = self.self_attn(x, key_padding_mask=encoder_padding_mask)
-        else:
-            x = x.transpose(0, 1)
-            x, _, = self.self_attn(
-                query=x,
-                key=x,
-                value=x,
-                key_padding_mask=encoder_padding_mask
-            )
-            x = x.transpose(0, 1)
+        x = self.layer_norm1(x)
+        x = self.self_attn(x, key_padding_mask=encoder_padding_mask)
         x = F.dropout(x, self.dropout, training=self.training)
         x = residual + x
         x = x * (1 - encoder_padding_mask.float())[..., None]

@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
+    AdamWLinear,
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
@@ -24,9 +25,9 @@ class FastSpeech2Variance(nn.Module):
 
         if self.predict_dur:
             self.onset_embed = Embedding(2, hparams['hidden_size'])
-            self.word_dur_embed = Linear(1, hparams['hidden_size'])
+            self.word_dur_embed = AdamWLinear(1, hparams['hidden_size'])
         else:
-            self.ph_dur_embed = Linear(1, hparams['hidden_size'])
+            self.ph_dur_embed = AdamWLinear(1, hparams['hidden_size'])
 
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -112,8 +113,8 @@ class MelodyEncoder(nn.Module):
         # MIDI inputs
         hidden_size = get_hparam('hidden_size')
         self.use_variance_scaling = hparams.get('use_variance_scaling', False)
-        self.note_midi_embed = Linear(1, hidden_size)
-        self.note_dur_embed = Linear(1, hidden_size)
+        self.note_midi_embed = AdamWLinear(1, hidden_size)
+        self.note_dur_embed = AdamWLinear(1, hidden_size)
 
         # ornament inputs
         self.use_glide_embed = hparams['use_glide_embed']

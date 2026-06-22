@@ -1,7 +1,9 @@
+import inspect
 import re
 from typing import Dict, Tuple, Union, Literal
 
 import onnx
+import torch
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from onnx import GraphProto, ModelProto, NodeProto, ValueInfoProto
 
@@ -9,6 +11,31 @@ __verbose__: bool = True
 """
 Whether log information of successful operations
 """
+
+
+# Whether the running torch.onnx.export() exposes the `dynamo` keyword.
+# Its presence is fragmented across PyTorch versions: introduced as a
+# separate `torch.onnx.dynamo_export` API in 2.1, added as a kwarg on
+# `torch.onnx.export` in 2.4, removed in some intermediate releases, and
+# reinstated (with a True default) in 2.9. We probe the signature once at
+# import time and only pass `dynamo=False` when the kwarg actually exists.
+# All ONNX graph surgery in this module is written against the TorchScript
+# exporter, so we want to stay on it whenever the choice is offered.
+TORCHSCRIPT_EXPORT_KWARGS: Dict[str, object] = (
+    {'dynamo': False}
+    if 'dynamo' in inspect.signature(torch.onnx.export).parameters
+    else {}
+)
+
+
+def simplify_onnx(model: ModelProto) -> ModelProto:
+    """Simplify an ONNX ModelProto and return the simplified model.
+
+    Unlike ``onnxsim.simplify``, this function returns a single ``ModelProto``
+    (not a tuple); validation failures raise instead of returning a flag.
+    """
+    import onnxslim
+    return onnxslim.slim(model)
 
 
 def _verbose(self, *args, sep=' ', end='\n', file=None):

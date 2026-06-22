@@ -91,11 +91,6 @@ backbone_args:
   dropout_rate: 0.0
   use_conditioner_cache: true
   glu_type: 'atanglu'
-#backbone_type: 'wavenet'
-#backbone_args:
-#  num_channels: 512
-#  num_layers: 20
-#  dilation_cycle_length: 4
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true
@@ -125,8 +120,8 @@ max_updates: 100000
 
 num_valid_plots: 10
 val_with_vocoder: true
-val_check_interval: 2000
-num_ckpt_keep: 5
+val_check_interval: 4000
+num_ckpt_keep: 8
 permanent_ckpt_start: 60000
 permanent_ckpt_interval: 10000
 pl_trainer_devices: 'auto'

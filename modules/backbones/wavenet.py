@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb
+from modules.commons.common_layers import SinusoidalPosEmb, AdamWConv1d
 from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from utils.hparams import hparams
 
@@ -64,7 +64,7 @@ class WaveNet(nn.Module):
             for i in range(num_layers)
         ])
         self.skip_projection = Conv1d(num_channels, num_channels, 1)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, 1)
+        self.output_projection = AdamWConv1d(num_channels, in_dims * n_feats, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):
@@ -75,7 +75,10 @@ class WaveNet(nn.Module):
         :return:
         """
         if self.n_feats == 1:
-            x = spec.squeeze(1)  # [B, M, T]
+            # Use indexing instead of squeeze to avoid emitting an onnx::If
+            # whose branches have different rank, which breaks shape inference
+            # for the downstream Conv on PyTorch >= 2.0.
+            x = spec[:, 0]  # [B, M, T]
         else:
             x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
         x = self.input_projection(x)  # [B, C, T]

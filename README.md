@@ -25,7 +25,7 @@ This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesi
 - **Dataset creation pipelines & tools**: See [MakeDiffSinger](https://github.com/openvpi/MakeDiffSinger)
 - **Best practices & tutorials**: See [Best Practices](docs/BestPractices.md)
 - **Editing configurations**: See [Configuration Schemas](docs/ConfigurationSchemas.md)
-- **Deployment & production**: [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau), [DiffScope (under development)](https://github.com/openvpi/diffscope)
+- **Deployment & production**: [OpenUTAU](https://github.com/stakira/OpenUtau), [DiffScope (under development)](https://github.com/diffscope/diffscope-project)
 - **Communication groups**: [QQ Group](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=fibG_dxuPW5maUJwe9_ya5-zFcIwaoOR&authKey=ZgLCG5EqQVUGCID1nfKei8tCnlQHAmD9koxebFXv5WfUchhLwWxb52o1pimNai5A&noverify=0&group_code=907879266) (907879266), [Discord server](https://discord.gg/wwbu2JUMjj)
 
 ## Progress & Roadmap

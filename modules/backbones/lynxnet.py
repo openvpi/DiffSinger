@@ -2,11 +2,10 @@
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/model_conformer_naive.py
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/naive_v2_diff.py
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose
+from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose, AdamWConv1d
 from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from utils.hparams import hparams
 
@@ -102,11 +101,11 @@ class LYNXNet(nn.Module):
                     activation=activation,
                     dropout=dropout_rate
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
         self.norm = nn.LayerNorm(num_channels)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, kernel_size=1)
+        self.output_projection = AdamWConv1d(num_channels, in_dims * n_feats, kernel_size=1)
         self.strong_cond = strong_cond
         nn.init.zeros_(self.output_projection.weight)
 
