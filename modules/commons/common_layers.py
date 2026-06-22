@@ -217,8 +217,8 @@ class Mixed_LayerNorm(nn.Module):
 
         self.affine = XavierUniformInitLinear(condition_channels, channels * 2, bias=bias)
         if self.affine.bias is not None:
-            self.affine.bias.data[:channels] = 1
-            self.affine.bias.data[channels:] = 0
+            self.affine.bias.data[:channels] = 0  # betas (shift)
+            self.affine.bias.data[channels:] = 1  # gammas (scale)
 
     def forward(
             self,
