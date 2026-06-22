@@ -61,6 +61,7 @@ TBD
 ### Dependencies & Submodules
 
 - [RoPE](https://github.com/lucidrains/rotary-embedding-torch) for transformer encoder
+- [Mix-LN](https://www.isca-archive.org/interspeech_2024/hwang24_interspeech.pdf) for cross-speaker/lingual learning
 - [HiFi-GAN](https://github.com/jik876/hifi-gan) and [NSF](https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/tree/master/project/01-nsf) for waveform reconstruction
 - [pc-ddsp](https://github.com/yxlllc/pc-ddsp) for waveform reconstruction
 - [RMVPE](https://github.com/Dream-High/RMVPE) and yxlllc's [fork](https://github.com/yxlllc/RMVPE) for pitch extraction

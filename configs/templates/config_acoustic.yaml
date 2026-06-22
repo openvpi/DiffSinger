@@ -43,6 +43,9 @@ num_lang: 1
 use_spk_id: false
 num_spk: 1
 
+use_mix_ln: false
+mix_ln_layer: [0, 2]
+
 # NOTICE: before enabling variance embeddings, please read the docs at
 # https://github.com/openvpi/DiffSinger/tree/main/docs/BestPractices.md#choosing-variance-parameters
 use_energy_embed: false

@@ -156,9 +156,9 @@ class ATanGLUFunction(torch.autograd.Function):
         decay_out, atan_gate = ctx.saved_tensors
         grad_out_part = grad_output * atan_gate
         grad_gate_part = grad_output * decay_out
-        return grad_out_part, grad_gate_part   
+        return grad_out_part, grad_gate_part
 
-       
+
 class ATanGLU(nn.Module):
     # ArcTan-Applies the gated linear unit function.
     def __init__(self, dim=-1):
@@ -173,14 +173,14 @@ class ATanGLU(nn.Module):
             return ATanGLUFunction.apply(out, gate)
         else:
             return out * torch.atan(gate)
-        
-        
+
+
 class AdamWConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         nn.init.kaiming_normal_(self.weight)
-        
-        
+
+
 class KaimingNormalConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -195,8 +195,57 @@ class Transpose(nn.Module):
 
     def forward(self, x):
         return x.transpose(*self.dims)
-        
-        
+
+
+class Mixed_LayerNorm(nn.Module):
+    def __init__(
+            self,
+            channels: int,
+            condition_channels: int,
+            beta_distribution_concentration: float = 0.2,
+            eps: float = 1e-5,
+            bias: bool = True
+    ):
+        super().__init__()
+        self.channels = channels
+        self.eps = eps
+
+        self.beta_distribution = torch.distributions.Beta(
+            beta_distribution_concentration,
+            beta_distribution_concentration
+        )
+
+        self.affine = XavierUniformInitLinear(condition_channels, channels * 2, bias=bias)
+        if self.affine.bias is not None:
+            self.affine.bias.data[:channels] = 0  # betas (shift)
+            self.affine.bias.data[channels:] = 1  # gammas (scale)
+
+    def forward(
+            self,
+            x: torch.FloatTensor,
+            condition: torch.FloatTensor  # -> shape [Batch, Cond_d]
+    ) -> torch.FloatTensor:
+        x = F.layer_norm(x, normalized_shape=(self.channels,), weight=None, bias=None, eps=self.eps)
+
+        affine_params = self.affine(condition)
+        if affine_params.ndim == 2:
+            affine_params = affine_params.unsqueeze(1)
+        betas, gammas = torch.split(affine_params, self.channels, dim=-1)
+
+        if not self.training or x.size(0) == 1:
+            return gammas * x + betas
+
+        shuffle_indices = torch.randperm(x.size(0), device=x.device)
+        shuffled_betas = betas[shuffle_indices]
+        shuffled_gammas = gammas[shuffle_indices]
+
+        beta_samples = self.beta_distribution.sample((x.size(0), 1, 1)).to(x.device)
+        mixed_betas = beta_samples * betas + (1 - beta_samples) * shuffled_betas
+        mixed_gammas = beta_samples * gammas + (1 - beta_samples) * shuffled_gammas
+
+        return mixed_gammas * x + mixed_betas
+
+
 class TransformerFFNLayer(nn.Module):
     def __init__(self, hidden_size, filter_size, kernel_size=1, dropout=0., act='gelu'):
         super().__init__()
@@ -236,48 +285,48 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0.1, bias=False, rotary_embed=None):
         super().__init__()
         assert embed_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
-        
+
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
-        
+
         # Linear layers for Q, K, V projections
         self.in_proj = nn.Linear(embed_dim, embed_dim * 3, bias=bias)
-        
+
         # Final linear layer after concatenation
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
-        
+
         # Dropout layer
         self.dropout = nn.Dropout(dropout)
-        
+
         # Rotary Embeddings
         self.rotary_embed = rotary_embed
-        
+
         # Initialization parameters
         nn.init.xavier_uniform_(self.in_proj.weight)
         nn.init.xavier_uniform_(self.out_proj.weight)
         if bias:
             nn.init.constant_(self.in_proj.bias, 0.0)
             nn.init.constant_(self.out_proj.bias, 0.0)
-        
+
     def forward(self, x, key_padding_mask=None):
         # x: (B, L, C)
         # key_padding_mask: (B, L)
         batch_size, seq_len, embed_dim = x.size()
-        
+
         # Project inputs to Q, K, V
         Q, K, V = torch.split(self.in_proj(x), self.embed_dim, dim=-1)
-        
+
         # Reshape Q, K, V for multi-head attention
         Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
         K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
         V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, L, D)
-        
+
         # Apply RoPE
         if self.rotary_embed is not None:
             Q = self.rotary_embed.rotate_queries_or_keys(Q)
             K = self.rotary_embed.rotate_queries_or_keys(K)
-            
+
         # Compute attention scores
         scores = torch.matmul(Q, K.transpose(-2, -1)) / np.sqrt(self.head_dim)  # (B, H, L, L)
 
@@ -290,25 +339,35 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
         # Compute attention weights
         attn_weights = F.softmax(scores, dim=-1)  # (B, H, L, L)
         attn_weights = self.dropout(attn_weights)
-        
+
         # Apply attention weights to V
         attn_output = torch.matmul(attn_weights, V)  # (B, H, L, D)
-        
+
         # Reshape and concatenate heads
         attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, seq_len, embed_dim)  # (B, L, C)
-        
+
         # Final linear projection
         output = self.out_proj(attn_output)  # (B, L, C)
-        
+
         return output
-        
+
 
 class EncSALayer(nn.Module):
     def __init__(self, c, num_heads, dropout, attention_dropout=0.1,
-                 relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None):
+                 relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None,
+                 layer_idx=None, mix_ln_layer=None
+                 ):
         super().__init__()
         self.dropout = dropout
-        self.layer_norm1 = LayerNorm(c)
+        self.use_mix_ln = (
+                layer_idx is not None
+                and mix_ln_layer is not None
+                and layer_idx in mix_ln_layer
+        )
+        if self.use_mix_ln:
+            self.layer_norm1 = Mixed_LayerNorm(c, c)
+        else:
+            self.layer_norm1 = LayerNorm(c)
         # Always use the in-house manual attention. With rotary_embed=None this
         # is a plain multi-head self-attention that is ONNX-export safe across
         # dynamic sequence lengths. Using torch.nn.MultiheadAttention here was
@@ -318,25 +377,34 @@ class EncSALayer(nn.Module):
         self.self_attn = MultiheadSelfAttentionWithRoPE(
             c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
         )
-        self.layer_norm2 = LayerNorm(c)
+        if self.use_mix_ln:
+            self.layer_norm2 = Mixed_LayerNorm(c, c)
+        else:
+            self.layer_norm2 = LayerNorm(c)
         self.ffn = TransformerFFNLayer(
             c, 4 * c, kernel_size=kernel_size, dropout=relu_dropout, act=act
         )
 
-    def forward(self, x, encoder_padding_mask=None, **kwargs):
+    def forward(self, x, encoder_padding_mask=None, cond=None, **kwargs):
         layer_norm_training = kwargs.get('layer_norm_training', None)
         if layer_norm_training is not None:
             self.layer_norm1.training = layer_norm_training
             self.layer_norm2.training = layer_norm_training
         residual = x
-        x = self.layer_norm1(x)
+        if self.use_mix_ln:
+            x = self.layer_norm1(x, cond)
+        else:
+            x = self.layer_norm1(x)
         x = self.self_attn(x, key_padding_mask=encoder_padding_mask)
         x = F.dropout(x, self.dropout, training=self.training)
         x = residual + x
         x = x * (1 - encoder_padding_mask.float())[..., None]
 
         residual = x
-        x = self.layer_norm2(x)
+        if self.use_mix_ln:
+            x = self.layer_norm2(x, cond)
+        else:
+            x = self.layer_norm2(x)
         x = self.ffn(x)
         x = F.dropout(x, self.dropout, training=self.training)
         x = residual + x
