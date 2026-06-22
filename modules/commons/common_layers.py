@@ -395,7 +395,6 @@ class EncSALayer(nn.Module):
             x = self.layer_norm1(x, cond)
         else:
             x = self.layer_norm1(x)
-        x = self.layer_norm1(x)
         x = self.self_attn(x, key_padding_mask=encoder_padding_mask)
         x = F.dropout(x, self.dropout, training=self.training)
         x = residual + x
