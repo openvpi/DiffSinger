@@ -122,10 +122,10 @@ max_batch_frames: 50000
 max_batch_size: 64
 dataset_size_key: 'lengths'
 val_with_vocoder: true
-val_check_interval: 2000
+val_check_interval: 4000
 num_valid_plots: 10
 max_updates: 100000
-num_ckpt_keep: 5
+num_ckpt_keep: 8
 permanent_ckpt_start: 60000
 permanent_ckpt_interval: 10000
 
