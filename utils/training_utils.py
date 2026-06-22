@@ -54,16 +54,18 @@ class WarmupCosineSchedule(LambdaLR):
         `eta_min` (default=0.0) corresponds to the minimum learning rate reached by the scheduler.
     """
 
-    def __init__(self, optimizer, warmup_steps, t_total, eta_min=0.0, cycles=.5, last_epoch=-1):
+    def __init__(self, optimizer, warmup_steps, t_total, warmup_min=0.0, eta_min=0.0, cycles=.5, last_epoch=-1):
         self.warmup_steps = warmup_steps
         self.t_total = t_total
         self.eta_min = eta_min
         self.cycles = cycles
+        self.warmup_min = warmup_min
         super(WarmupCosineSchedule, self).__init__(optimizer, self.lr_lambda, last_epoch=last_epoch)
 
     def lr_lambda(self, step):
         if step < self.warmup_steps:
-            return step / max(1.0, self.warmup_steps)
+            progress = step / max(1.0, self.warmup_steps)
+            return self.warmup_min + progress * (1.0 - self.warmup_min)
         # progress after warmup
         progress = (step - self.warmup_steps) / max(1, self.t_total - self.warmup_steps)
         return max(self.eta_min, 0.5 * (1. + math.cos(math.pi * self.cycles * 2.0 * progress)))

@@ -5,14 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb
+from modules.commons.common_layers import SinusoidalPosEmb, AdamWConv1d
+from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from utils.hparams import hparams
-
-
-class Conv1d(torch.nn.Conv1d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
 
 
 class ResidualBlock(nn.Module):
@@ -69,7 +64,7 @@ class WaveNet(nn.Module):
             for i in range(num_layers)
         ])
         self.skip_projection = Conv1d(num_channels, num_channels, 1)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, 1)
+        self.output_projection = AdamWConv1d(num_channels, in_dims * n_feats, 1)
         nn.init.zeros_(self.output_projection.weight)
 
     def forward(self, spec, diffusion_step, cond):

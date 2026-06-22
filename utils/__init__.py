@@ -213,6 +213,7 @@ def load_ckpt(
             if excluded:
                 continue
             state_dict[k] = v
+
     # Manual self-attention (MultiheadSelfAttentionWithRoPE) uses 'in_proj.weight',
     # while older checkpoints saved from torch.nn.MultiheadAttention use 'in_proj_weight'.
     # The two tensors have identical shape and semantics (Q/K/V stacked along dim 0),
@@ -223,6 +224,7 @@ def load_ckpt(
             k = k[:-len('in_proj_weight')] + 'in_proj.weight'
         renamed[k] = v
     state_dict = renamed
+
     if not strict:
         cur_model_state_dict = cur_model.state_dict()
         unmatched_keys = []
@@ -336,8 +338,9 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
 
 
 def simulate_lr_scheduler(optimizer_args, scheduler_args, step_count, num_param_groups=1):
+    optimizer_cls = optimizer_args['optimizer_cls']
     optimizer = build_object_from_class_name(
-        optimizer_args['optimizer_cls'],
+        'torch.optim.AdamW' if optimizer_cls == 'modules.optimizer.muon.Muon_AdamW' else optimizer_cls,
         torch.optim.Optimizer,
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args

@@ -214,13 +214,16 @@ class SinusoidalSmoothingConv1d(torch.nn.Conv1d):
         super().__init__(
             in_channels=1,
             out_channels=1,
-            kernel_size=kernel_size,
+            kernel_size=max(kernel_size, 1),
             bias=False,
             padding='same',
             padding_mode='replicate'
         )
-        smooth_kernel = torch.sin(torch.from_numpy(
-            np.linspace(0, 1, kernel_size).astype(np.float32) * np.pi
-        ))
-        smooth_kernel /= smooth_kernel.sum()
+        if kernel_size > 1:
+            smooth_kernel = torch.sin(torch.from_numpy(
+                np.linspace(0, 1, kernel_size).astype(np.float32) * np.pi
+            ))
+            smooth_kernel /= smooth_kernel.sum()
+        else:
+            smooth_kernel = torch.tensor([1.0], dtype=torch.float32)
         self.weight.data = smooth_kernel[None, None]

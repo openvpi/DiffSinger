@@ -2,28 +2,12 @@
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/model_conformer_naive.py
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/naive_v2_diff.py
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU
+from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose, AdamWConv1d
+from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from utils.hparams import hparams
-
-
-class Conv1d(torch.nn.Conv1d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
-
-
-class Transpose(nn.Module):
-    def __init__(self, dims):
-        super().__init__()
-        assert len(dims) == 2, 'dims must be a tuple of two dimensions'
-        self.dims = dims
-
-    def forward(self, x):
-        return x.transpose(*self.dims)
 
 
 class LYNXConvModule(nn.Module):
@@ -89,7 +73,7 @@ class LYNXNetResidualLayer(nn.Module):
 
 class LYNXNet(nn.Module):
     def __init__(self, in_dims, n_feats, *, num_layers=6, num_channels=512, expansion_factor=2, kernel_size=31,
-                 activation='PReLU', dropout=0.0, strong_cond=False):
+                 activation='PReLU', dropout_rate=0.0, strong_cond=False):
         """
         LYNXNet(Linear Gated Depthwise Separable Convolution Network)
         TIPS:You can control the style of the generated results by modifying the 'activation', 
@@ -115,13 +99,13 @@ class LYNXNet(nn.Module):
                     expansion_factor=expansion_factor,
                     kernel_size=kernel_size,
                     activation=activation,
-                    dropout=dropout
+                    dropout=dropout_rate
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
         self.norm = nn.LayerNorm(num_channels)
-        self.output_projection = Conv1d(num_channels, in_dims * n_feats, kernel_size=1)
+        self.output_projection = AdamWConv1d(num_channels, in_dims * n_feats, kernel_size=1)
         self.strong_cond = strong_cond
         nn.init.zeros_(self.output_projection.weight)
 
@@ -150,7 +134,7 @@ class LYNXNet(nn.Module):
         # post-norm
         x = self.norm(x.transpose(1, 2)).transpose(1, 2)
 
-        # MLP and GLU
+        # output_projection
         x = self.output_projection(x)  # [B, 128, T]
 
         if self.n_feats == 1:
