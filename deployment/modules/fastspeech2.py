@@ -19,7 +19,7 @@ f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
 
 def uniform_attention_pooling(spk_embed, durations):
-    B, T_mel, C = spk_embed.shape
+    _, T_mel, _ = spk_embed.shape
     ph_starts = torch.cumsum(torch.cat([torch.zeros_like(durations[:, :1]), durations[:, :-1]], dim=1), dim=1)
     ph_ends = ph_starts + durations
     mel_indices = torch.arange(T_mel, device=spk_embed.device).view(1, 1, T_mel)

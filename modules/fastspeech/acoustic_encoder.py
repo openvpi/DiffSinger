@@ -4,7 +4,6 @@ from torch.nn import functional as F
 
 from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
-    XavierUniformInitLinear as Linear,
     SinusoidalPosEmb,
     AdamWLinear,
 )
@@ -43,8 +42,8 @@ class FastSpeech2Acoustic(nn.Module):
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
             ffn_kernel_size=hparams['enc_ffn_kernel_size'], ffn_act=hparams['ffn_act'],
             dropout=hparams['dropout'], num_heads=hparams['num_heads'],
-            use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False), 
-            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True), 
+            use_pos_embed=hparams['use_pos_embed'], rel_pos=hparams.get('rel_pos', False),
+            use_rope=hparams.get('use_rope', False), rope_interleaved=hparams.get('rope_interleaved', True),
             mix_ln_layer=self.mix_ln_layer
         )
 
@@ -126,6 +125,7 @@ class FastSpeech2Acoustic(nn.Module):
             spk_embed_id=None, languages=None,
             **kwargs
     ):
+        spk_embed = None
         if self.use_spk_id:
             spk_mix_embed = kwargs.get('spk_mix_embed')
             if spk_mix_embed is not None:
@@ -155,17 +155,6 @@ class FastSpeech2Acoustic(nn.Module):
                 # construct a phoneme stretching index lookup table with a total of 1001 indexes (0~1000)
                 table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
                 stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(condition)
-            else:
-                stretch_embed = self.stretch_embed(stretch)
-            condition += stretch_embed
-            self.stretch_embed_rnn.flatten_parameters()
-            stretch_embed_rnn_out, _ = self.stretch_embed_rnn(condition)
-            condition = condition + stretch_embed_rnn_out
-
-        if self.use_spk_id:
-            spk_mix_embed = kwargs.get('spk_mix_embed')
-            if spk_mix_embed is not None:
-                spk_embed = spk_mix_embed
             else:
                 stretch_embed = self.stretch_embed(stretch)
             condition += stretch_embed

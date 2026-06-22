@@ -12,7 +12,8 @@ DEFAULT_MAX_TARGET_POSITIONS = 2000
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None, layer_idx=None, mix_ln_layer=None):
+    def __init__(self, hidden_size, dropout, kernel_size=None, act='gelu', num_heads=2, rotary_embed=None,
+                 layer_idx=None, mix_ln_layer=None):
         super().__init__()
         self.op = EncSALayer(
             hidden_size, num_heads, dropout=dropout,
@@ -368,10 +369,12 @@ def mel2ph_to_dur(mel2ph, T_txt, max_dur=None):
 
 
 class FastSpeech2Encoder(nn.Module):
-    def __init__(self, hidden_size, num_layers,
-                 ffn_kernel_size=9, ffn_act='gelu',
-                 dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True,
-                 use_rope=False, rope_interleaved=True, mix_ln_layer=[]):
+    def __init__(
+            self, hidden_size, num_layers,
+            ffn_kernel_size=9, ffn_act='gelu',
+            dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True,
+            use_rope=False, rope_interleaved=True, mix_ln_layer=None
+    ):
         super().__init__()
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
