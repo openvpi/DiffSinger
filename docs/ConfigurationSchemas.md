@@ -211,13 +211,37 @@ Keyword arguments for the backbone of main decoder module.
 <tr><td align="center"><b>type</b></td><td>dict</td>
 </tbody></table>
 
-Some available arguments are listed below.
+Available arguments for each backbone type are listed below.
 
-|     argument name     | for backbone type |                                                 description                                                 |
-|:---------------------:|:-----------------:|:-----------------------------------------------------------------------------------------------------------:|
-|      num_layers       |  wavenet/lynxnet  |                               Number of layer blocks, or depth of the network                               |
-|     num_channels      |  wavenet/lynxnet  |                                 Number of channels, or width of the network                                 |
-| dilation_cycle_length |      wavenet      | Length k of the cycle $2^0, 2^1 ...., 2^k$ of convolution dilation factors through WaveNet residual blocks. |
+**WaveNet** (`backbone_type: wavenet`)
+
+| argument name         | type | default | description                                                                                                   |
+|:----------------------|:----:|:-------:|:--------------------------------------------------------------------------------------------------------------|
+| num_layers            | int  |   20    | Number of residual block layers, or depth of the network                                                      |
+| num_channels          | int  |   512   | Number of channels, or width of the network                                                                   |
+| dilation_cycle_length | int  |    4    | Length k of the cycle $2^0, 2^1, \ldots, 2^k$ of convolution dilation factors through WaveNet residual blocks |
+
+**LYNXNet** (`backbone_type: lynxnet`)
+
+| argument name | type  | default | description                                                                     |
+|:--------------|:-----:|:-------:|:--------------------------------------------------------------------------------|
+| num_layers    |  int  |    6    | Number of LYNXNet blocks, or depth of the network                               |
+| num_channels  |  int  |  1024   | Number of channels, or width of the network                                     |
+| kernel_size   |  int  |   31    | Kernel size of the depthwise convolution layers                                 |
+| dropout_rate  | float |   0.0   | Dropout rate applied in each LYNXNet block                                      |
+| strong_cond   | bool  |  false  | Whether to use strong conditioning, which injects condition before the GLU gate |
+
+**LYNXNet2** (`backbone_type: lynxnet2`)
+
+| argument name         | type  | default | description                                                                                      |
+|:----------------------|:-----:|:-------:|:-------------------------------------------------------------------------------------------------|
+| num_layers            |  int  |    6    | Number of LYNXNet2 blocks, or depth of the network                                               |
+| num_channels          |  int  |  1024   | Number of channels, or width of the network                                                      |
+| kernel_size           |  int  |   31    | Kernel size of the depthwise convolution layers                                                  |
+| dropout_rate          | float |   0.0   | Dropout rate applied in each LYNXNet2 block                                                      |
+| use_conditioner_cache | bool  |  true   | Whether to use Conv1d-based conditioner projection (compatible with conditioner caching)         |
+| glu_type              |  str  | atanglu | Type of gated linear unit activation. Choose from `'swiglu'` for SwiGLU, `'atanglu'` for ATanGLU |
+| expansion_factor      |  int  |    1    | Channel expansion factor within each gated block (not commonly overridden)                       |
 
 ### backbone_type
 
@@ -228,8 +252,8 @@ Backbone type of the main decoder/predictor module.
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>lynxnet</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from 'wavenet', 'lynxnet'.</td>
+<tr><td align="center"><b>default</b></td><td>lynxnet2</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'wavenet', 'lynxnet', 'lynxnet2'.</td>
 </tbody></table>
 
 ### base_config
@@ -340,7 +364,7 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted brea
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>0.12</td>
+<tr><td align="center"><b>default</b></td><td>0.06</td>
 </tbody></table>
 
 ### clip_grad_norm
@@ -363,8 +387,8 @@ Number of batches loaded in advance by each `torch.utils.data.DataLoader` worker
 <tr><td align="center"><b>visibility</b></td><td>all</td>
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>true</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>2</td>
 </tbody></table>
 
 ### dataset_size_key
@@ -540,20 +564,20 @@ Arguments for phoneme duration prediction.
 
 ### dur_prediction_args.arch
 
-Architecture of duration predictor.
+Architecture of duration predictor. `'fs2'` uses the original FastSpeech2 duration predictor with standard convolution layers. `'resnet'` uses a residual-style variant with additional layer normalization and residual connections, which may improve training stability.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>reserved</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>fs2</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2'.</td>
+<tr><td align="center"><b>default</b></td><td>resnet</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2', 'resnet'.</td>
 </tbody></table>
 
 ### dur_prediction_args.dropout
 
-Dropout rate in duration predictor of FastSpeech2.
+Dropout rate in duration predictor.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -565,19 +589,19 @@ Dropout rate in duration predictor of FastSpeech2.
 
 ### dur_prediction_args.hidden_size
 
-Dimensions of hidden layers in duration predictor of FastSpeech2.
+Dimensions of hidden layers in duration predictor.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>512</td>
+<tr><td align="center"><b>default</b></td><td>256</td>
 </tbody></table>
 
 ### dur_prediction_args.kernel_size
 
-Kernel size of convolution layers of duration predictor of FastSpeech2.
+Kernel size of convolution layers of duration predictor.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -721,7 +745,7 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted ener
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>0.12</td>
+<tr><td align="center"><b>default</b></td><td>0.06</td>
 </tbody></table>
 
 ### extra_phonemes
@@ -917,7 +941,7 @@ Dimension of hidden layers of FastSpeech2, token and parameter embeddings, and d
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>256</td>
+<tr><td align="center"><b>default</b></td><td>384</td>
 </tbody></table>
 
 ### hnsep
@@ -1130,7 +1154,7 @@ Stop training after this number of steps. Equivalent to `max_steps` in `lightnin
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>320000</td>
+<tr><td align="center"><b>default</b></td><td>100000</td>
 </tbody></table>
 
 ### max_val_batch_frames
@@ -1180,7 +1204,7 @@ Maximum mel spectrogram heatmap value for TensorBoard plotting.
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>1.5</td>
+<tr><td align="center"><b>default</b></td><td>4.</td>
 </tbody></table>
 
 ### mel_vmin
@@ -1192,7 +1216,7 @@ Minimum mel spectrogram heatmap value for TensorBoard plotting.
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>-6.0</td>
+<tr><td align="center"><b>default</b></td><td>-14.</td>
 </tbody></table>
 
 ### melody_encoder_args
@@ -1225,6 +1249,18 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on the step funct
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
 <tr><td align="center"><b>default</b></td><td>0.06</td>
+</tbody></table>
+
+### mix_ln_layer
+
+List of 0-based encoder layer indices where Mixed LayerNorm is applied. Only takes effect when [use_mix_ln](#use_mix_ln) is enabled. For each selected layer, both self-attention layer norm and FFN layer norm are replaced with `Mixed_LayerNorm` which conditions the normalization on speaker embedding.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>List[int]</td>
+<tr><td align="center"><b>default</b></td><td>[0, 2]</td>
 </tbody></table>
 
 ### nccl_p2p
@@ -1320,14 +1356,17 @@ Arguments of optimizer. Keys will be used as keyword arguments  of the `__init__
 
 ### optimizer_args.optimizer_cls
 
-Optimizer class name
+Optimizer class name. The following optimizers are currently recommended:
+
+- `torch.optim.AdamW` — Standard AdamW optimizer. Use with `adamw_args` for the weight decay setting.
+- `modules.optimizer.muon.Muon_AdamW` — Chained optimizer that applies Muon (MomentUm Orthogonalized by Newton-schulz) to internal weight matrices (e.g. linear layers) and AdamW to other parameters (e.g. biases, embeddings). Configure via `muon_args` and `adamw_args` sub-keys under [optimizer_args](#optimizer_args).
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>all</td>
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>reserved</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>torch.optim.AdamW</td>
+<tr><td align="center"><b>default</b></td><td>modules.optimizer.muon.Muon_AdamW</td>
 </tbody></table>
 
 ### pe
@@ -1362,7 +1401,7 @@ The interval (in number of training steps) of permanent checkpoints. Permanent c
 <tr><td align="center"><b>visibility</b></td><td>all</td>
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>40000</td>
+<tr><td align="center"><b>default</b></td><td>10000</td>
 </tbody></table>
 
 ### permanent_ckpt_start
@@ -1373,7 +1412,7 @@ Checkpoints will be marked as permanent every [permanent_ckpt_interval](#permane
 <tr><td align="center"><b>visibility</b></td><td>all</td>
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>120000</td>
+<tr><td align="center"><b>default</b></td><td>60000</td>
 </tbody></table>
 
 ### pitch_prediction_args
@@ -1398,7 +1437,7 @@ Equivalent to [backbone_type](#backbone_type) but only for the pitch predictor m
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
-<tr><td align="center"><b>default</b></td><td>wavenet</td>
+<tr><td align="center"><b>default</b></td><td>lynxnet2</td>
 </tbody></table>
 
 ### pitch_prediction_args.pitd_clip_max
@@ -1613,6 +1652,18 @@ Whether to use relative positional encoding in FastSpeech2 module.
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>boolean</td>
 <tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
+### rope_interleaved
+
+Whether to use the interleaved (alternating) layout for RoPE (Rotary Positional Encoding) in the encoder self-attention. When set to `false`, the non-interleaved (contiguous half-real-half-imaginary) layout is used instead.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
 ### sampler_frame_count_grid
@@ -1868,7 +1919,7 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted tens
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>0.12</td>
+<tr><td align="center"><b>default</b></td><td>0.06</td>
 </tbody></table>
 
 ### time_scale_factor
@@ -1969,6 +2020,18 @@ Whether to enable melody encoder for the pitch predictor.
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### use_mix_ln
+
+Whether to use Mixed LayerNorm with speaker-conditioned mixup in the acoustic encoder. When enabled, encoder layers specified in [mix_ln_layer](#mix_ln_layer) use `Mixed_LayerNorm`, which mixes the standard layer normalization with a speaker-conditioned scale factor, allowing speaker identity to influence the normalization behavior.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
 ### use_pos_embed
 
 Whether to use SinusoidalPositionalEmbedding in FastSpeech2 encoder.
@@ -2029,6 +2092,18 @@ Whether to embed the speaker ID from a multi-speaker dataset.
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### use_stretch_embed
+
+Whether to accept and embed phoneme-level time stretching ratios into the acoustic encoder. The stretch ratio is computed by the `StretchRegulator` module, which measures how much each mel frame is stretched or compressed relative to its corresponding phoneme's average duration. When random time stretching augmentation is enabled, this embedding helps the model condition on the actual stretch applied during data augmentation.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, preprocessing, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true for acoustic, false for variance</td>
+</tbody></table>
+
 ### use_tension_embed
 
 Whether to accept and embed tension values into the model.
@@ -2039,6 +2114,18 @@ Whether to accept and embed tension values into the model.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>boolean</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
+### use_variance_scaling
+
+Whether to apply log-domain scaling to duration and MIDI embeddings to compress their dynamic range. When enabled, phoneme duration values are embedded in log space via `log(1 + dur)`, and MIDI note numbers are normalized by 1/128. This scaling helps the model handle the wide range of duration and MIDI values more stably during training and inference.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
 ### use_voicing_embed
@@ -2062,7 +2149,7 @@ Interval (in number of training steps) between validation checks.
 <tr><td align="center"><b>scope</b></td><td>training</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>2000</td>
+<tr><td align="center"><b>default</b></td><td>4000</td>
 </tbody></table>
 
 ### val_with_vocoder
@@ -2099,7 +2186,7 @@ Equivalent to [backbone_type](#backbone_type) but only for the multi-variance pr
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
-<tr><td align="center"><b>default</b></td><td>wavenet</td>
+<tr><td align="center"><b>default</b></td><td>lynxnet2</td>
 </tbody></table>
 
 ### variances_prediction_args.total_repeat_bins
@@ -2111,7 +2198,7 @@ Total number of repeating bins in the multi-variance predictor. Repeating bins a
 <tr><td align="center"><b>scope</b></td><td>nn, inference</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>48</td>
+<tr><td align="center"><b>default</b></td><td>72</td>
 </tbody></table>
 
 ### vocoder
@@ -2171,7 +2258,7 @@ Length of sinusoidal smoothing convolution kernel (in seconds) on extracted voic
 <tr><td align="center"><b>scope</b></td><td>preprocessing</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
-<tr><td align="center"><b>default</b></td><td>0.12</td>
+<tr><td align="center"><b>default</b></td><td>0.06</td>
 </tbody></table>
 
 ### win_size
