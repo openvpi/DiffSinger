@@ -497,7 +497,7 @@ DDPM sampling acceleration method. The following methods are currently available
 <tr><td align="center"><b>scope</b></td><td>inference</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>dpm-solver</td>
+<tr><td align="center"><b>default</b></td><td>ddim</td>
 <tr><td align="center"><b>constraints</b></td><td>Choose from 'ddim', 'pndm', 'dpm-solver', 'unipc'.</td>
 </tbody></table>
 
@@ -1627,7 +1627,7 @@ Whether to enable tension prediction.
 <tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>true</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
 ### predict_voicing
@@ -1639,7 +1639,7 @@ Whether to enable voicing prediction.
 <tr><td align="center"><b>scope</b></td><td>nn, preprocessing, training, inference</td>
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>true</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
 ### rel_pos
@@ -1827,7 +1827,7 @@ Minimum mel spectrogram value used for normalization to [-1, 1]. Different mel b
 <tr><td align="center"><b>scope</b></td><td>inference</td>
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>List[float]</td>
-<tr><td align="center"><b>default</b></td><td>[-5.0]</td>
+<tr><td align="center"><b>default</b></td><td>[-12]</td>
 </tbody></table>
 
 ### spec_max

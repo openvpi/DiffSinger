@@ -3,7 +3,7 @@ from torch import Tensor
 from torch.optim import Optimizer
 from torch.optim.optimizer import ParamsT
 from dataclasses import dataclass
-from typing import Any, Dict, List, Type, Callable, Optional, Iterable
+from typing import Any, Dict, List, Type, Callable, Optional
 
 
 @dataclass
@@ -39,20 +39,24 @@ class ChainedOptimizer(Optimizer):
         defaults = dict(lr=lr, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
-        # Split the params for each optimzier
+        # Split the params for each optimizer
         params_for_optimizers = [[] for _ in optimizer_specs]
         for param_group in self.param_groups:
             params = param_group["params"]
             indices = param_group["optimizer_and_param_group_indices"] = set()
             for param in params:
                 assert isinstance(param, Tensor), f"Expected a Tensor, got {type(param)}"
+                found_optimizer = False
                 for index, spec in enumerate(optimizer_specs):
                     if spec.param_filter is None or spec.param_filter(param):
                         if self.optimizer_selection_callback is not None:
                             self.optimizer_selection_callback(param, index)
                         params_for_optimizers[index].append(param)
                         indices.add((index, 0))
+                        found_optimizer = True
                         break
+                if not found_optimizer:
+                    raise ValueError("No valid optimizer found for the given parameter")
 
         # Initialize the optimizers
         for spec, selected_params in zip(optimizer_specs, params_for_optimizers):
@@ -104,7 +108,7 @@ class ChainedOptimizer(Optimizer):
         if not self.optimizers:
             return
 
-        # Split the params for each optimzier
+        # Split the params for each optimizer
         params_for_optimizers = [[] for _ in self.optimizer_specs]
         params = param_group["params"]
         indices = param_group["optimizer_and_param_group_indices"] = set()

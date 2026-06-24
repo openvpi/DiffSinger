@@ -49,7 +49,7 @@ class LYNXNet2(nn.Module):
         self.input_projection = nn.Linear(in_dims * n_feats, num_channels)
         self.use_conditioner_cache = use_conditioner_cache
         if self.use_conditioner_cache:
-            # It may need to be modified at some point to be compatible with the condition cache
+            # Conv1d is used for condition cache compatibility
             self.conditioner_projection = nn.Conv1d(hparams['hidden_size'], num_channels, 1)
         else:
             self.conditioner_projection = nn.Linear(hparams['hidden_size'], num_channels)
@@ -68,7 +68,7 @@ class LYNXNet2(nn.Module):
                     dropout=dropout_rate,
                     glu_type=glu_type
                 )
-                for i in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
         self.norm = nn.LayerNorm(num_channels)
@@ -92,7 +92,6 @@ class LYNXNet2(nn.Module):
 
         x = self.input_projection(x.transpose(1, 2)) # [B, T, F x M]
         if self.use_conditioner_cache:
-            # It may need to be modified at some point to be compatible with the condition cache
             x = x + self.conditioner_projection(cond).transpose(1, 2)
         else:
             x = x + self.conditioner_projection(cond.transpose(1, 2))
@@ -110,8 +109,7 @@ class LYNXNet2(nn.Module):
         if self.n_feats == 1:
             x = x[:, None, :, :]
         else:
-            # This is the temporary solution since PyTorch 1.13
-            # does not support exporting aten::unflatten to ONNX
+            # Using reshape instead of unflatten for ONNX export compatibility
             # x = x.unflatten(dim=1, sizes=(self.n_feats, self.in_dims))
             x = x.reshape(-1, self.n_feats, self.in_dims, x.shape[2])
         return x

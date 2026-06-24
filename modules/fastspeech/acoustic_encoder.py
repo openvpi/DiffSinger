@@ -30,6 +30,7 @@ class FastSpeech2Acoustic(nn.Module):
                 nn.Linear(hparams['hidden_size'] * 4, hparams['hidden_size']),
             )
             self.stretch_embed_rnn = nn.GRU(hparams['hidden_size'], hparams['hidden_size'], 1, batch_first=True)
+            self._stretch_embed_rnn_flattened = False
 
         self.dur_embed = AdamWLinear(1, hparams['hidden_size'])
         self.use_mix_ln = hparams.get('use_mix_ln', False)
@@ -71,11 +72,11 @@ class FastSpeech2Acoustic(nn.Module):
         self.use_variance_scaling = hparams.get('use_variance_scaling', False)
         if self.use_variance_scaling:
             self.variance_scaling_factor = {
-                'energy': 1. / 96,
+                'energy': 1. / 96,  # 96 dB — max dynamic range of 16-bit audio
                 'breathiness': 1. / 96,
                 'voicing': 1. / 96,
-                'tension': 0.1,
-                'key_shift': 1. / 12,
+                'tension': 0.1,  # 1 / 10; tension logits are roughly [-10, 10]
+                'key_shift': 1. / 12,  # one octave — max key shift in most editors
                 'speed': 1.
             }
         else:
@@ -157,7 +158,16 @@ class FastSpeech2Acoustic(nn.Module):
             else:
                 stretch_embed = self.stretch_embed(stretch)
             condition += stretch_embed
-            self.stretch_embed_rnn.flatten_parameters()
+            # flatten_parameters fuses the GRU weights into a contiguous buffer for cuDNN.
+            # It only needs to happen once after weight init, device change, or load_state_dict.
+            # We guard with a flag to avoid the redundant call on every forward.
+            # Limitation: the flag lives on this module and is invisible to PyTorch. After
+            # load_state_dict() or model.to(device) replaces the GRU weights, the flag stays
+            # True and flatten_parameters is skipped — cuDNN will fall back to the slower path.
+            # To restore the fast path, reset the flag manually: model._stretch_embed_rnn_flattened = False
+            if not self._stretch_embed_rnn_flattened:
+                self.stretch_embed_rnn.flatten_parameters()
+                self._stretch_embed_rnn_flattened = True
             stretch_embed_rnn_out, _ = self.stretch_embed_rnn(condition)
             condition = condition + stretch_embed_rnn_out
 

@@ -141,7 +141,7 @@ def unpack_dict_to_list(samples):
         for k, v in samples.items():
             try:
                 res[k] = v[i]
-            except:
+            except (IndexError, TypeError):
                 pass
         samples_.append(res)
     return samples_
@@ -200,8 +200,9 @@ def load_ckpt(
     else:
         state_dict = ckpt_loaded[key_in_ckpt]
     if prefix_in_ckpt is not None:
+        old_state_dict = state_dict
         state_dict = OrderedDict()
-        for k, v in ckpt_loaded[key_in_ckpt].items():
+        for k, v in old_state_dict.items():
             if not k.startswith(f'{prefix_in_ckpt}.'):
                 continue
             k = k[len(prefix_in_ckpt) + 1:]
@@ -316,7 +317,7 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
                     resolved["cls"] == "torch.optim.lr_scheduler.ChainedScheduler"
                     and scheduler_args["scheduler_cls"] == "torch.optim.lr_scheduler.SequentialLR"
                 ):
-                    raise ValueError(f"ChainedScheduler cannot be part of a SequentialLR.")
+                    raise ValueError("ChainedScheduler cannot be part of a SequentialLR.")
                 resolved['optimizer'] = optimizer
                 obj = build_object_from_class_name(
                     resolved['cls'],

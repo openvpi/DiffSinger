@@ -539,7 +539,7 @@ class DiffSingerVarianceExporter(BaseExporter):
             shape = (1, len(self.model.variance_prediction_list), repeat_bins, 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
-            step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
+            step = (torch.rand((1,), device=self.device) * hparams.get('time_scale_factor', hparams['K_step']))
 
             print(f'Tracing {self.variance_backbone_class_name} backbone...')
             multi_var_predictor = self.model.view_as_variance_predictor()
@@ -641,8 +641,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         spk_mix_id_N = torch.LongTensor(spk_mix_ids).to(self.device)[None]  # => [1, N]
         spk_mix_value_N = torch.FloatTensor(spk_mix_values).to(self.device)[None]  # => [1, N]
         spk_mix_value_sum = spk_mix_value_N.sum()
-        assert spk_mix_value_sum > 0., f'Speaker mix checks failed.\n' \
-                                       f'Proportions of speaker mix sum to zero.'
+        assert spk_mix_value_sum > 0., 'Speaker mix checks failed.\n' \
+                                       'Proportions of speaker mix sum to zero.'
         spk_mix_value_N /= spk_mix_value_sum  # normalize
         spk_mix_embed = torch.sum(
             self.model.spk_embed(spk_mix_id_N) * spk_mix_value_N.unsqueeze(2),  # => [1, N, H]

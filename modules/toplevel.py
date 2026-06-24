@@ -9,7 +9,6 @@ import modules.compat as compat
 from basics.base_module import CategorizedModule
 from modules.aux_decoder import AuxDecoderAdaptor
 from modules.commons.common_layers import (
-    XavierUniformInitLinear as Linear,
     NormalInitEmbedding as Embedding,
     SinusoidalPosEmb, AdamWLinear,
 )

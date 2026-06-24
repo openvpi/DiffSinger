@@ -177,7 +177,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         kwargs: Dict[str, torch.Tensor] = {}
         arguments = (tokens, durations, f0, variances, kwargs)
         input_names = ['tokens', 'durations', 'f0'] + self.model.fs2.variance_embed_list
-        dynamix_axes = {
+        dynamic_axes = {
             'tokens': {
                 1: 'n_tokens'
             },
@@ -198,14 +198,14 @@ class DiffSingerAcousticExporter(BaseExporter):
             if self.expose_gender:
                 kwargs['gender'] = torch.rand((1, n_frames), dtype=torch.float32, device=self.device)
                 input_names.append('gender')
-                dynamix_axes['gender'] = {
+                dynamic_axes['gender'] = {
                     1: 'n_frames'
                 }
         if hparams['use_speed_embed']:
             if self.expose_velocity:
                 kwargs['velocity'] = torch.rand((1, n_frames), dtype=torch.float32, device=self.device)
                 input_names.append('velocity')
-                dynamix_axes['velocity'] = {
+                dynamic_axes['velocity'] = {
                     1: 'n_frames'
                 }
         if hparams['use_spk_id'] and not self.freeze_spk:
@@ -214,16 +214,16 @@ class DiffSingerAcousticExporter(BaseExporter):
                 dtype=torch.float32, device=self.device
             )
             input_names.append('spk_embed')
-            dynamix_axes['spk_embed'] = {
+            dynamic_axes['spk_embed'] = {
                 1: 'n_frames'
             }
         if self.use_lang_id:
             kwargs['languages'] = torch.zeros_like(tokens)
             input_names.append('languages')
-            dynamix_axes['languages'] = {
+            dynamic_axes['languages'] = {
                 1: 'n_tokens'
             }
-        dynamix_axes['condition'] = {
+        dynamic_axes['condition'] = {
             1: 'n_frames'
         }
 
@@ -231,7 +231,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         output_names = ['condition']
         if self.model.use_shallow_diffusion:
             output_names.append('aux_mel')
-            dynamix_axes['aux_mel'] = {
+            dynamic_axes['aux_mel'] = {
                 1: 'n_frames'
             }
         print(f'Exporting {self.fs2_aux_class_name}...')
@@ -241,7 +241,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             self.fs2_aux_cache_path,
             input_names=input_names,
             output_names=output_names,
-            dynamic_axes=dynamix_axes,
+            dynamic_axes=dynamic_axes,
             opset_version=17,
             **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
         )
@@ -335,8 +335,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         spk_mix_id_N = torch.LongTensor(spk_mix_ids).to(self.device)[None]  # => [1, N]
         spk_mix_value_N = torch.FloatTensor(spk_mix_values).to(self.device)[None]  # => [1, N]
         spk_mix_value_sum = spk_mix_value_N.sum()
-        assert spk_mix_value_sum > 0., f'Speaker mix checks failed.\n' \
-                                       f'Proportions of speaker mix sum to zero.'
+        assert spk_mix_value_sum > 0., 'Speaker mix checks failed.\n' \
+                                       'Proportions of speaker mix sum to zero.'
         spk_mix_value_N /= spk_mix_value_sum  # normalize
         spk_mix_embed = torch.sum(
             self.model.fs2.spk_embed(spk_mix_id_N) * spk_mix_value_N.unsqueeze(2),  # => [1, N, H]

@@ -45,7 +45,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     return X
 
 
-def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]=[2]) -> Tensor:
+def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int] = None) -> Tensor:
     """
     Refer to: 
     Gram Newton-Schulz: A Fast, Hardware-Aware Newton-Schulz Algorithm for Muon
@@ -57,6 +57,8 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int]=[2]) -
     on the smaller NxN Gram matrix to save up to 50% FLOPs.
     """
     assert G.ndim == 3
+    if reset_iterations is None:
+        reset_iterations = [2]
     original_shape = G.shape
     dtype = G.dtype
 
@@ -105,7 +107,7 @@ class Muon(torch.optim.Optimizer):
     Muon internally runs standard SGD-momentum, and then performs an orthogonalization post-
     processing step, in which each 2D parameter's update is replaced with the nearest orthogonal
     matrix. To efficiently orthogonalize each update, we use a Newton-Schulz iteration, which has
-    the advantage that it can be stably run in bfloat16 on the GPU.
+    the advantage that it can be stably run in float16 on the GPU.
 
     Some warnings:
     - This optimizer should not be used for the embedding layer, the final fully connected layer,
@@ -184,7 +186,9 @@ def get_params_for_muon(model) -> List[Parameter]:
 
 
 class Muon_AdamW(ChainedOptimizer):
-    def __init__(self, model, lr=0.0005, weight_decay=0.0, muon_args={}, adamw_args={}, verbose=False):
+    def __init__(self, model, lr=0.0005, weight_decay=0.0, muon_args=None, adamw_args=None, verbose=False):
+        muon_args = {} if muon_args is None else muon_args
+        adamw_args = {} if adamw_args is None else adamw_args
         muon_params_id_set = set(id(p) for p in get_params_for_muon(model))
         spec_muon = OptimizerSpec(Muon, muon_args, lambda param: id(param) in muon_params_id_set)
         spec_adamw = OptimizerSpec(torch.optim.AdamW, adamw_args, None)
