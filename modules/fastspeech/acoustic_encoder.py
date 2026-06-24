@@ -20,8 +20,7 @@ class FastSpeech2Acoustic(nn.Module):
         if self.use_lang_id:
             self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
-        self.use_stretch_embed = hparams.get('use_stretch_embed', None)
-        assert self.use_stretch_embed is not None, "You may be loading an old version of the model checkpoint, which is incompatible with the new version due to some bug fixes. It is recommended to roll back to the old version (commit id: 6df0ee977c3728f14cb79c2db8b19df30b23a0bf)"
+        self.use_stretch_embed = hparams.get('use_stretch_embed', False)
         if self.use_stretch_embed:
             self.sr = StretchRegulator()
             self.stretch_embed = nn.Sequential(
