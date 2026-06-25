@@ -45,7 +45,7 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
     return X
 
 
-def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int] = None) -> Tensor:
+def gram_newton_schulz(G: Tensor, steps: int) -> Tensor:
     """
     Refer to: 
     Gram Newton-Schulz: A Fast, Hardware-Aware Newton-Schulz Algorithm for Muon
@@ -57,8 +57,7 @@ def gram_newton_schulz(G: Tensor, steps: int, reset_iterations: List[int] = None
     on the smaller NxN Gram matrix to save up to 50% FLOPs.
     """
     assert G.ndim == 3
-    if reset_iterations is None:
-        reset_iterations = [2]
+    reset_iterations = [2]
     original_shape = G.shape
     dtype = G.dtype
 
