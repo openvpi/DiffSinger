@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Union, List, Tuple, Dict
 
@@ -706,7 +707,10 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         onnx_helper.model_add_prefixes(pitch_pre, node_prefix='/pre', ignored_pattern=r'.*embed.*')
         onnx_helper.model_add_prefixes(pitch_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_notes)|(n_frames)')
-        onnx_helper.model_add_prefixes(pitch_post, node_prefix='/post', ignored_pattern=None)
+        onnx_helper.model_add_prefixes(
+            pitch_post, node_prefix='/post', value_info_prefix='/post', initializer_prefix='/post',
+            ignored_pattern=r'.*(pitch_pred).*'
+        )
         onnx_helper.model_add_prefixes(pitch_post, dim_prefix='post.', ignored_pattern='n_frames')
         pitch_pre_diffusion = onnx.compose.merge_models(
             pitch_pre, pitch_predictor, io_map=[('pitch_cond', 'pitch_cond')],
@@ -758,15 +762,20 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         var_post = onnx_helper.simplify_onnx(var_post)
 
-        ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
+        ignored_variance_names = '|'.join(
+            f'({re.escape(v_name)})' for v_name in self.model.variance_prediction_list
+        ) if self.model.variance_prediction_list else '(?!)'
+        ignored_variance_pred_names = '|'.join(
+            f'({re.escape(v_name)}_pred)' for v_name in self.model.variance_prediction_list
+        ) if self.model.variance_prediction_list else '(?!)'
         onnx_helper.model_add_prefixes(
             var_pre, node_prefix='/pre', value_info_prefix='/pre', initializer_prefix='/pre',
-            ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
+            ignored_pattern=fr'.*((embed)|(variance_cond)|{ignored_variance_names}).*'
         )
         onnx_helper.model_add_prefixes(var_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_frames)')
         onnx_helper.model_add_prefixes(
             var_post, node_prefix='/post', value_info_prefix='/post', initializer_prefix='/post',
-            ignored_pattern=None
+            ignored_pattern=fr'.*({ignored_variance_pred_names}).*'
         )
         onnx_helper.model_add_prefixes(var_post, dim_prefix='post.', ignored_pattern='n_frames')
 
