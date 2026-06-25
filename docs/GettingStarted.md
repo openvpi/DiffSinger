@@ -4,7 +4,7 @@
 
 ### Environments and dependencies
 
-DiffSinger requires Python 3.8 or later. We strongly recommend you create a virtual environment via Conda, venv or uv before installing dependencies.
+DiffSinger requires Python 3.10 or later. We strongly recommend you create a virtual environment via Conda, venv or uv before installing dependencies.
 
 1. Install The latest PyTorch following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware. We recommend using the latest stable release that is ≥ 2.4.0.
 

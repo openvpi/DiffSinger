@@ -706,7 +706,10 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         onnx_helper.model_add_prefixes(pitch_pre, node_prefix='/pre', ignored_pattern=r'.*embed.*')
         onnx_helper.model_add_prefixes(pitch_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_notes)|(n_frames)')
-        onnx_helper.model_add_prefixes(pitch_post, node_prefix='/post', ignored_pattern=None)
+        onnx_helper.model_add_prefixes(
+            pitch_post, node_prefix='/post', value_info_prefix='/post', initializer_prefix='/post',
+            ignored_pattern=r'.*(pitch_pred).*'
+        )
         onnx_helper.model_add_prefixes(pitch_post, dim_prefix='post.', ignored_pattern='n_frames')
         pitch_pre_diffusion = onnx.compose.merge_models(
             pitch_pre, pitch_predictor, io_map=[('pitch_cond', 'pitch_cond')],
