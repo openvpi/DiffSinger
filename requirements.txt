@@ -1,5 +1,5 @@
 # It is recommended to install PyTorch manually.
-# PyTorch >= 2.4 is recommended.
+# PyTorch >= 2.4, <= 2.8 is recommended.
 # See instructions at https://pytorch.org/get-started/locally/
 
 click
