@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Union, List, Tuple, Dict
 
@@ -761,8 +762,12 @@ class DiffSingerVarianceExporter(BaseExporter):
 
         var_post = onnx_helper.simplify_onnx(var_post)
 
-        ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
-        ignored_variance_pred_names = '|'.join([f'({v_name}_pred)' for v_name in self.model.variance_prediction_list])
+        ignored_variance_names = '|'.join(
+            f'({re.escape(v_name)})' for v_name in self.model.variance_prediction_list
+        ) if self.model.variance_prediction_list else '(?!)'
+        ignored_variance_pred_names = '|'.join(
+            f'({re.escape(v_name)}_pred)' for v_name in self.model.variance_prediction_list
+        ) if self.model.variance_prediction_list else '(?!)'
         onnx_helper.model_add_prefixes(
             var_pre, node_prefix='/pre', value_info_prefix='/pre', initializer_prefix='/pre',
             ignored_pattern=fr'.*((embed)|(variance_cond)|{ignored_variance_names}).*'
