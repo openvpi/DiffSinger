@@ -82,7 +82,8 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             f0, variances: dict,
             gender=None, velocity=None,
             spk_embed=None,
-            languages=None
+            languages=None,
+            retake=None, gt_mel=None
     ):
         txt_embed = self.txt_embed(tokens)
         durations = durations * (tokens > 0)
@@ -160,6 +161,10 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 condition += self.frozen_spk_embed
             else:
                 condition += spk_embed
+
+        condition = self.forward_retake_embedding(
+            condition, _mel2ph, retake=retake, gt_mel=gt_mel
+        )
         return condition
 
 

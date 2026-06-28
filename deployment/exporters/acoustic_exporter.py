@@ -224,6 +224,22 @@ class DiffSingerAcousticExporter(BaseExporter):
             dynamic_axes['languages'] = {
                 1: 'n_tokens'
             }
+        if self.model.fs2.use_acoustic_retake:
+            # retake: bool mask [1, n_frames], True = regenerate this frame.
+            # gt_mel: the previously generated mel [1, n_frames, mel_bins], fed back as a
+            # condition in keep regions (retake == False).
+            kwargs['retake'] = torch.ones((1, n_frames), dtype=torch.bool, device=self.device)
+            kwargs['gt_mel'] = torch.rand(
+                (1, n_frames, hparams['audio_num_mel_bins']), dtype=torch.float32, device=self.device
+            )
+            input_names.append('retake')
+            input_names.append('gt_mel')
+            dynamic_axes['retake'] = {
+                1: 'n_frames'
+            }
+            dynamic_axes['gt_mel'] = {
+                1: 'n_frames'
+            }
         dynamic_axes['condition'] = {
             1: 'n_frames'
         }

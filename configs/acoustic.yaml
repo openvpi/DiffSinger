@@ -59,6 +59,7 @@ use_voicing_embed: false
 use_tension_embed: false
 use_key_shift_embed: false
 use_speed_embed: false
+use_acoustic_retake: false  # note-level acoustic retake (condition-level/soft inpainting)
 
 diffusion_type: reflow
 time_scale_factor: 1000

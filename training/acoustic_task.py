@@ -6,6 +6,7 @@ import torch.utils.data
 
 import utils
 import utils.infer_utils
+from utils import random_retake_masks
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
 from basics.base_vocoder import BaseVocoder
@@ -136,11 +137,19 @@ class AcousticTask(BaseTask):
             languages = sample['languages']
         else:
             languages = None
+
+        # Note-level retake: sample a fresh continuous mask each step (not baked into the
+        # binary data), mirroring the pitch/variance retake training recipe. In keep regions
+        # the GT mel is fed back as a condition, so the model learns to reproduce it there.
+        acoustic_retake = None
+        if hparams.get('use_acoustic_retake', False) and not infer:
+            acoustic_retake = random_retake_masks(sample['size'], mel2ph.shape[1], mel2ph.device)
+
         output: ShallowDiffusionOutput = self.model(
             txt_tokens, mel2ph=mel2ph, f0=f0, **variances,
             key_shift=key_shift, speed=speed,
             spk_embed_id=spk_embed_id, languages=languages,
-            gt_mel=target, infer=infer
+            gt_mel=target, acoustic_retake=acoustic_retake, infer=infer
         )
 
         if infer:

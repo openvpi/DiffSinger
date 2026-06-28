@@ -101,6 +101,45 @@ class FastSpeech2Acoustic(nn.Module):
         if self.use_spk_id:
             self.spk_embed = Embedding(hparams['num_spk'], hparams['hidden_size'])
 
+        # Note-level acoustic retake: condition-level ("soft") inpainting, mirroring the
+        # pitch/variance retake mechanism. retake_embed marks regenerate(True)/keep(False)
+        # frames; in keep regions the previously generated mel is fed back as a condition
+        # (projected into hidden space) so the model reproduces it.
+        self.use_acoustic_retake = hparams.get('use_acoustic_retake', False)
+        if self.use_acoustic_retake:
+            self.retake_embed = Embedding(2, hparams['hidden_size'])
+            self.mel_cond_proj = AdamWLinear(hparams['audio_num_mel_bins'], hparams['hidden_size'])
+            # spec_min/spec_max normalize the known mel to roughly [-1, 1] before projection
+            # (broadcast over mel bins when given as length-1 lists, same as the diffusion).
+            self.register_buffer(
+                'retake_spec_min', torch.FloatTensor(hparams['spec_min'])[None, None, :]
+            )
+            self.register_buffer(
+                'retake_spec_max', torch.FloatTensor(hparams['spec_max'])[None, None, :]
+            )
+
+    def norm_retake_mel(self, mel):
+        k = (self.retake_spec_max - self.retake_spec_min) / 2.
+        b = (self.retake_spec_max + self.retake_spec_min) / 2.
+        return (mel - b) / k
+
+    def forward_retake_embedding(self, condition, mel2ph, retake=None, gt_mel=None):
+        if not self.use_acoustic_retake:
+            return condition
+        if retake is None:
+            # generate from scratch: every frame is regenerated, no known mel fed back
+            retake = torch.ones_like(mel2ph, dtype=torch.bool)
+        condition = condition + self.retake_embed(retake.long())
+        if gt_mel is None:
+            masked_mel = condition.new_zeros((*mel2ph.shape, self.mel_cond_proj.in_features))
+        else:
+            # keep = ~retake，但用浮点算术 (1 - retake) 表达，避免导出 ONNX 的逻辑 Not 算子
+            # （DirectML EP 在合并图里对 bool Not 运行时报错；1-cast 为 Cast+Sub，DML 友好，数值等价）。
+            keep = (1.0 - retake.float())[:, :, None]
+            masked_mel = self.norm_retake_mel(gt_mel) * keep
+        condition = condition + self.mel_cond_proj(masked_mel)
+        return condition
+
     def forward_variance_embedding(self, condition, key_shift=None, speed=None, **variances):
         if self.use_variance_embeds:
             variance_embeds = torch.stack([
@@ -123,6 +162,7 @@ class FastSpeech2Acoustic(nn.Module):
             self, txt_tokens, mel2ph, f0,
             key_shift=None, speed=None,
             spk_embed_id=None, languages=None,
+            acoustic_retake=None, gt_mel=None,
             **kwargs
     ):
         spk_embed = None
@@ -180,6 +220,10 @@ class FastSpeech2Acoustic(nn.Module):
 
         condition = self.forward_variance_embedding(
             condition, key_shift=key_shift, speed=speed, **kwargs
+        )
+
+        condition = self.forward_retake_embedding(
+            condition, mel2ph, retake=acoustic_retake, gt_mel=gt_mel
         )
 
         return condition
