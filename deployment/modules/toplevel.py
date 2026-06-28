@@ -82,24 +82,24 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
 
     def forward_shallow_diffusion(
             self, condition: Tensor, x_start: Tensor,
-            depth, steps: int
+            depth, steps: int, noise=None
     ) -> Tensor:
-        mel_pred = self.diffusion(condition, x_start=x_start, depth=depth, steps=steps)
+        mel_pred = self.diffusion(condition, x_start=x_start, depth=depth, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
-    def forward_diffusion(self, condition: Tensor, steps: int):
-        mel_pred = self.diffusion(condition, steps=steps)
+    def forward_diffusion(self, condition: Tensor, steps: int, noise=None):
+        mel_pred = self.diffusion(condition, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
     def forward_shallow_reflow(
             self, condition: Tensor, x_end: Tensor,
-            depth, steps: int
+            depth, steps: int, noise=None
     ):
-        mel_pred = self.diffusion(condition, x_end=x_end, depth=depth, steps=steps)
+        mel_pred = self.diffusion(condition, x_end=x_end, depth=depth, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
-    def forward_reflow(self, condition: Tensor, steps: int):
-        mel_pred = self.diffusion(condition, steps=steps)
+    def forward_reflow(self, condition: Tensor, steps: int, noise=None):
+        mel_pred = self.diffusion(condition, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
     def view_as_fs2_aux(self) -> nn.Module:
@@ -275,9 +275,9 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         return pitch_cond, base_pitch
 
     def forward_pitch_reflow(
-            self, pitch_cond, steps: int = 10
+            self, pitch_cond, steps: int = 10, noise=None
     ):
-        x_pred = self.pitch_predictor(pitch_cond, steps=steps)
+        x_pred = self.pitch_predictor(pitch_cond, steps=steps, noise=noise)
         return x_pred
 
     def forward_pitch_postprocess(self, x_pred, base_pitch):
@@ -306,8 +306,8 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             variance_cond += spk_embed
         return variance_cond
 
-    def forward_variance_reflow(self, variance_cond, steps: int = 10):
-        xs_pred = self.variance_predictor(variance_cond, steps=steps)
+    def forward_variance_reflow(self, variance_cond, steps: int = 10, noise=None):
+        xs_pred = self.variance_predictor(variance_cond, steps=steps, noise=noise)
         return xs_pred
 
     def forward_variance_postprocess(self, xs_pred):

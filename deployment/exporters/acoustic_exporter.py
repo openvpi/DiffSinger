@@ -285,11 +285,13 @@ class DiffSingerAcousticExporter(BaseExporter):
             example_inputs=[
                 (
                     *diffusion_inputs,
-                    1  # p_sample branch
+                    1,  # p_sample branch
+                    noise  # externalized initial noise (last positional arg of forward)
                 ),
                 (
                     *diffusion_inputs,
-                    dummy_steps  # p_sample_plms branch
+                    dummy_steps,  # p_sample_plms branch
+                    noise
                 )
             ]
         )
@@ -300,13 +302,15 @@ class DiffSingerAcousticExporter(BaseExporter):
             major_mel_decoder,
             (
                 *diffusion_inputs,
-                dummy_steps
+                dummy_steps,
+                noise
             ),
             self.diffusion_cache_path,
             input_names=[
                 'condition',
                 *(['x_aux', 'depth'] if self.model.use_shallow_diffusion else []),
-                'steps'
+                'steps',
+                'noise'
             ],
             output_names=[
                 'mel'
@@ -316,6 +320,10 @@ class DiffSingerAcousticExporter(BaseExporter):
                     1: 'n_frames'
                 },
                 **({'x_aux': {1: 'n_frames'}} if self.model.use_shallow_diffusion else {}),
+                # noise = [1, num_feats, mel_bins, n_frames]; only the frame axis is dynamic.
+                'noise': {
+                    3: 'n_frames'
+                },
                 'mel': {
                     1: 'n_frames'
                 }
