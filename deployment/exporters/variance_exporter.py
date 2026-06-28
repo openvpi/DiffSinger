@@ -1,9 +1,9 @@
 import json
-import re
 from pathlib import Path
 from typing import Union, List, Tuple, Dict
 
 import onnx
+import onnxsim
 import torch
 import yaml
 
@@ -659,7 +659,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             }
         )
         print(f'Running ONNX Simplifier on {self.fs2_class_name}...')
-        linguistic = onnx_helper.simplify_onnx(linguistic)
+        linguistic, check = onnxsim.simplify(linguistic, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.model_reorder_io_list(
             linguistic, 'input',
             target_name='languages', insert_after_name='tokens'
@@ -675,7 +676,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             }
         )
         print(f'Running ONNX Simplifier on {self.dur_predictor_class_name}...')
-        dur_predictor = onnx_helper.simplify_onnx(dur_predictor)
+        dur_predictor, check = onnxsim.simplify(dur_predictor, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
         print(f'| optimize graph: {self.dur_predictor_class_name}')
         return dur_predictor
 
@@ -685,16 +687,15 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(
             pitch_pre, output_shapes={'pitch_cond': (1, 'n_frames', hparams['hidden_size'])}
         )
-        pitch_pre = onnx_helper.simplify_onnx(pitch_pre)
+        pitch_pre, check = onnxsim.simplify(pitch_pre, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
 
         onnx_helper.model_override_io_shapes(
             pitch_predictor, output_shapes={'pitch_pred': (1, 'n_frames')}
         )
-        # See acoustic_exporter._optimize_diffusion_graph: the pre-surgery
-        # simplifier pass was dropped because the conditioner-projection
-        # extraction below can produce a topology that collides with the
-        # simplifier's output, causing merge_models to fail topological-sort
-        # validation. The post-surgery simplifier handles the same work.
+        print(f'Running ONNX Simplifier #1 on {self.pitch_predictor_class_name}...')
+        pitch_predictor, check = onnxsim.simplify(pitch_predictor, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(pitch_predictor.graph)
         onnx_helper.graph_extract_conditioner_projections(
             graph=pitch_predictor.graph, op_type='Conv',
@@ -702,15 +703,13 @@ class DiffSingerVarianceExporter(BaseExporter):
             alias_prefix='/pitch_predictor/backbone/cache'
         )
         onnx_helper.graph_remove_unused_values(pitch_predictor.graph)
-        print(f'Running ONNX Simplifier on {self.pitch_predictor_class_name}...')
-        pitch_predictor = onnx_helper.simplify_onnx(pitch_predictor)
+        print(f'Running ONNX Simplifier #2 on {self.pitch_predictor_class_name}...')
+        pitch_predictor, check = onnxsim.simplify(pitch_predictor, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
 
         onnx_helper.model_add_prefixes(pitch_pre, node_prefix='/pre', ignored_pattern=r'.*embed.*')
         onnx_helper.model_add_prefixes(pitch_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_notes)|(n_frames)')
-        onnx_helper.model_add_prefixes(
-            pitch_post, node_prefix='/post', value_info_prefix='/post', initializer_prefix='/post',
-            ignored_pattern=r'.*(pitch_pred).*'
-        )
+        onnx_helper.model_add_prefixes(pitch_post, node_prefix='/post', ignored_pattern=None)
         onnx_helper.model_add_prefixes(pitch_post, dim_prefix='post.', ignored_pattern='n_frames')
         pitch_pre_diffusion = onnx.compose.merge_models(
             pitch_pre, pitch_predictor, io_map=[('pitch_cond', 'pitch_cond')],
@@ -737,7 +736,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         onnx_helper.model_override_io_shapes(
             var_pre, output_shapes={'variance_cond': (1, 'n_frames', hparams['hidden_size'])}
         )
-        var_pre = onnx_helper.simplify_onnx(var_pre)
+        var_pre, check = onnxsim.simplify(var_pre, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
 
         onnx_helper.model_override_io_shapes(
             var_diffusion, output_shapes={
@@ -746,10 +746,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                 else (1, len(self.model.variance_prediction_list), 'n_frames')
             }
         )
-        # See acoustic_exporter._optimize_diffusion_graph: pre-surgery
-        # simplifier dropped to avoid a latent topology collision with the
-        # conditioner-projection extraction; the post-surgery pass covers
-        # the same simplifications.
+        print(f'Running ONNX Simplifier #1 on {self.multi_var_predictor_class_name}...')
+        var_diffusion, check = onnxsim.simplify(var_diffusion, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(var_diffusion.graph)
         onnx_helper.graph_extract_conditioner_projections(
             graph=var_diffusion.graph, op_type='Conv',
@@ -757,25 +756,22 @@ class DiffSingerVarianceExporter(BaseExporter):
             alias_prefix='/variance_predictor/backbone/cache'
         )
         onnx_helper.graph_remove_unused_values(var_diffusion.graph)
-        print(f'Running ONNX Simplifier on {self.multi_var_predictor_class_name}...')
-        var_diffusion = onnx_helper.simplify_onnx(var_diffusion)
+        print(f'Running ONNX Simplifier #2 on {self.multi_var_predictor_class_name}...')
+        var_diffusion, check = onnxsim.simplify(var_diffusion, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
 
-        var_post = onnx_helper.simplify_onnx(var_post)
+        var_post, check = onnxsim.simplify(var_post, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
 
-        ignored_variance_names = '|'.join(
-            f'({re.escape(v_name)})' for v_name in self.model.variance_prediction_list
-        ) if self.model.variance_prediction_list else '(?!)'
-        ignored_variance_pred_names = '|'.join(
-            f'({re.escape(v_name)}_pred)' for v_name in self.model.variance_prediction_list
-        ) if self.model.variance_prediction_list else '(?!)'
+        ignored_variance_names = '|'.join([f'({v_name})' for v_name in self.model.variance_prediction_list])
         onnx_helper.model_add_prefixes(
             var_pre, node_prefix='/pre', value_info_prefix='/pre', initializer_prefix='/pre',
-            ignored_pattern=fr'.*((embed)|(variance_cond)|{ignored_variance_names}).*'
+            ignored_pattern=fr'.*((embed)|{ignored_variance_names}).*'
         )
         onnx_helper.model_add_prefixes(var_pre, dim_prefix='pre.', ignored_pattern='(n_tokens)|(n_frames)')
         onnx_helper.model_add_prefixes(
             var_post, node_prefix='/post', value_info_prefix='/post', initializer_prefix='/post',
-            ignored_pattern=fr'.*({ignored_variance_pred_names}).*'
+            ignored_pattern=None
         )
         onnx_helper.model_add_prefixes(var_post, dim_prefix='post.', ignored_pattern='n_frames')
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Union
 
 import onnx
+import onnxsim
 import torch
 import yaml
 from torch import nn
@@ -121,5 +122,6 @@ class NSFHiFiGANExporter(BaseExporter):
 
     def _optimize_model_graph(self, model: onnx.ModelProto) -> onnx.ModelProto:
         print(f'Running ONNX simplifier for {self.model_class_name}...')
-        model = onnx_helper.simplify_onnx(model)
+        model, check = onnxsim.simplify(model, include_subgraph=True)
+        assert check, 'Simplified ONNX model could not be validated'
         return model

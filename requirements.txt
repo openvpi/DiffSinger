@@ -1,5 +1,5 @@
 # It is recommended to install PyTorch manually.
-# PyTorch >= 2.4, preferably <= 2.8 is recommended.
+# PyTorch >= 2.4 is recommended.
 # See instructions at https://pytorch.org/get-started/locally/
 
 click
@@ -11,7 +11,7 @@ matplotlib
 MonkeyType>=23.3.0
 numpy<2.0.0
 onnx>=1.21.0
-onnxslim>=0.1.93
+onnxsim>=0.6.5
 praat-parselmouth==0.4.3
 pyworld==0.3.4
 PyYAML
