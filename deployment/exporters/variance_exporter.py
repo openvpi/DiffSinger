@@ -746,8 +746,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 else (1, len(self.model.variance_prediction_list), 'n_frames')
             }
         )
-        print(f'Running ONNX Simplifier #1 on'
-              f' {self.multi_var_predictor_class_name}...')
+        print(f'Running ONNX Simplifier #1 on {self.multi_var_predictor_class_name}...')
         var_diffusion, check = onnxsim.simplify(var_diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
         onnx_helper.graph_fold_back_to_squeeze(var_diffusion.graph)
