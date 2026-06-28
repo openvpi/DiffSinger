@@ -214,11 +214,12 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
     def forward_mel2x_gather(self, x_src, x_dur, x_dim=None, check_stretch_embed=False):
         mel2x = self.lr(x_dur)
         _mel2x = mel2x
+        # NOTE: front-pad via concat (a leading F.pad can be exported with begin/end reversed).
         if x_dim is not None:
-            x_src = F.pad(x_src, [0, 0, 1, 0])
+            x_src = torch.cat([torch.zeros_like(x_src[:, :1]), x_src], dim=1)
             mel2x = mel2x[..., None].repeat([1, 1, x_dim])
         else:
-            x_src = F.pad(x_src, [1, 0])
+            x_src = torch.cat([torch.zeros_like(x_src[:, :1]), x_src], dim=1)
         x_cond = torch.gather(x_src, 1, mel2x)
         if self.use_stretch_embed and check_stretch_embed:
             stretch = torch.round(1000 * self.sr(_mel2x, x_dur))

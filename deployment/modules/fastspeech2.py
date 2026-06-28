@@ -47,7 +47,9 @@ class LengthRegulator(nn.Module):
     def forward(self, dur):
         token_idx = torch.arange(1, dur.shape[1] + 1, device=dur.device)[None, :, None]
         dur_cumsum = torch.cumsum(dur, dim=1)
-        dur_cumsum_prev = F.pad(dur_cumsum, (1, -1), mode='constant', value=0)
+        # NOTE: a leading F.pad here can be exported to ONNX with its begin/end pad amounts
+        # reversed; use an explicit concat (export-stable, cf. uniform_attention_pooling).
+        dur_cumsum_prev = torch.cat([torch.zeros_like(dur_cumsum[:, :1]), dur_cumsum[:, :-1]], dim=1)
         pos_idx = torch.arange(dur.sum(dim=1).max(), device=dur.device)[None, None]
         token_mask = (pos_idx >= dur_cumsum_prev[:, :, None]) & (pos_idx < dur_cumsum[:, :, None])
         mel2ph = (token_idx * token_mask).sum(dim=1)
@@ -111,7 +113,8 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
         else:
             ph_spk_embed = None
         encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
-        encoded = F.pad(encoded, (0, 0, 1, 0))
+        # NOTE: front-pad via concat (a leading F.pad can be exported with begin/end reversed).
+        encoded = torch.cat([torch.zeros_like(encoded[:, :1]), encoded], dim=1)
         condition = torch.gather(encoded, 1, mel2ph)
 
         if self.use_stretch_embed:
@@ -178,9 +181,10 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
     def forward_encoder_word(self, tokens, word_div, word_dur, languages=None):
         txt_embed = self.txt_embed(tokens)
         ph2word = self.lr(word_div)
-        onset = ph2word > F.pad(ph2word, [1, -1])
+        # NOTE: front-pad via concat (a leading F.pad can be exported with begin/end reversed).
+        onset = ph2word > torch.cat([torch.zeros_like(ph2word[:, :1]), ph2word[:, :-1]], dim=1)
         onset_embed = self.onset_embed(onset.long())
-        ph_word_dur = torch.gather(F.pad(word_dur, [1, 0]), 1, ph2word)
+        ph_word_dur = torch.gather(torch.cat([torch.zeros_like(word_dur[:, :1]), word_dur], dim=1), 1, ph2word)
         word_dur_embed = self.word_dur_embed(ph_word_dur.float()[:, :, None])
         extra_embed = onset_embed + word_dur_embed
         if self.use_lang_id:
