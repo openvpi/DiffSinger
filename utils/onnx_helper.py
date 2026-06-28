@@ -28,16 +28,6 @@ TORCHSCRIPT_EXPORT_KWARGS: Dict[str, object] = (
 )
 
 
-def simplify_onnx(model: ModelProto) -> ModelProto:
-    """Simplify an ONNX ModelProto and return the simplified model.
-
-    Unlike ``onnxslim.slim``, this function returns a single ``ModelProto``
-    (not a tuple); validation failures raise instead of returning a flag.
-    """
-    import onnxslim
-    return onnxslim.slim(model)
-
-
 def _verbose(self, *args, sep=' ', end='\n', file=None):
     if __verbose__:
         print(self, *args, sep=sep, end=end, file=file)
