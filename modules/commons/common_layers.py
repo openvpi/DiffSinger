@@ -175,6 +175,21 @@ class ATanGLU(nn.Module):
             return out * torch.atan(gate)
 
 
+class SoftSignGLU(nn.Module):
+    """Gated Linear Unit with SoftSign gate: out * softsign(gate).
+
+    More numerically stable than ATanGLU (no approximation needed in
+    Triton kernels) while providing similar gating behavior.
+    """
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
+        return out * torch.nn.functional.softsign(gate)
+
+
 class AdamWConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

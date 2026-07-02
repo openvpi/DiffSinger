@@ -18,6 +18,11 @@ from utils.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
+# Enable TF32 for cuBLAS and cuDNN on Ampere+ GPUs (RTX 4090, 5090, etc.)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.set_float32_matmul_precision("medium")
+
 
 class VarianceDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
@@ -114,6 +119,19 @@ class VarianceTask(BaseTask):
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
         super()._finish_init()
+
+        # ── Fuse LYNXNet2 backbone kernels (in-place) ──
+        if hparams.get('use_fused_kernels', False):
+            from modules.kernels.integration import patch_variance_model
+            from lightning.pytorch.utilities.rank_zero import rank_zero_info
+            # Read glu_type from nested predictor configs
+            pitch_glu = hparams.get('pitch_prediction_args', {}).get('backbone_args', {}).get('glu_type', 'softsign_glu')
+            var_glu = hparams.get('variances_prediction_args', {}).get('backbone_args', {}).get('glu_type', 'softsign_glu')
+            assert pitch_glu == var_glu == 'softsign_glu', \
+                f"Fused kernels only support softsign_glu, got pitch={pitch_glu} var={var_glu}"
+            n = patch_variance_model(self.model, glu_type='softsign_glu')
+            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks in variance model (softsign_glu)', n)
+
 
     def _build_model(self):
         return DiffSingerVariance(

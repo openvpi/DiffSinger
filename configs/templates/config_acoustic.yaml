@@ -90,7 +90,7 @@ backbone_args:
   kernel_size: 31
   dropout_rate: 0.0
   use_conditioner_cache: true
-  glu_type: 'atanglu'
+  glu_type: 'softsign_glu'
 shallow_diffusion_args:
   train_aux_decoder: true
   train_diffusion: true

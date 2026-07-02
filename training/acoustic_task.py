@@ -18,6 +18,11 @@ from utils.plot import spec_to_figure
 
 matplotlib.use('Agg')
 
+# Enable TF32 for cuBLAS and cuDNN on Ampere+ GPUs (RTX 4090, 5090, etc.)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.set_float32_matmul_precision("medium")
+
 
 class AcousticDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
@@ -93,6 +98,16 @@ class AcousticTask(BaseTask):
         if hparams['use_tension_embed']:
             self.required_variances.append('tension')
         super()._finish_init()
+
+        # ── Fuse LYNXNet2 backbone kernels (in-place) ──
+        if hparams.get('use_fused_kernels', False):
+            from modules.kernels.integration import patch_diffusion_module
+            from lightning.pytorch.utilities.rank_zero import rank_zero_info
+            n = patch_diffusion_module(
+                self.model.diffusion,
+                glu_type=hparams['backbone_args'].get('glu_type', 'softsign_glu'),
+            )
+            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks', n)
 
     def _build_model(self):
         return DiffSingerAcoustic(
