@@ -337,7 +337,7 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
         _softsign_glu_bwd_elem_kernel[elem_grid](
             left, gate, grad_y,
             grad_left_pre, grad_gate,
-            M, N, N,
+            M, N,
             left.stride(0), left.stride(1),
             gate.stride(0), gate.stride(1),
             grad_y.stride(0), grad_y.stride(1),

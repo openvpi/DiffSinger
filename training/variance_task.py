@@ -124,11 +124,13 @@ class VarianceTask(BaseTask):
         if hparams.get('use_fused_kernels', False):
             from modules.kernels.integration import patch_variance_model
             from lightning.pytorch.utilities.rank_zero import rank_zero_info
-            n = patch_variance_model(
-                self.model,
-                glu_type=hparams.get('backbone_args', {}).get('glu_type', 'softsign_glu'),
-            )
-            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks in variance model', n)
+            # Read glu_type from nested predictor configs
+            pitch_glu = hparams.get('pitch_prediction_args', {}).get('backbone_args', {}).get('glu_type', 'softsign_glu')
+            var_glu = hparams.get('variances_prediction_args', {}).get('backbone_args', {}).get('glu_type', 'softsign_glu')
+            assert pitch_glu == var_glu == 'softsign_glu', \
+                f"Fused kernels only support softsign_glu, got pitch={pitch_glu} var={var_glu}"
+            n = patch_variance_model(self.model, glu_type='softsign_glu')
+            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks in variance model (softsign_glu)', n)
 
 
     def _build_model(self):
