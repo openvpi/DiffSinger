@@ -124,7 +124,7 @@ class VarianceTask(BaseTask):
         # NOTE: Variance model backbones use num_channels=384/512, which are too
         # small for Triton fusion to benefit. The compilation overhead outweighs
         # the HBM savings. Fused kernels for acoustic model only (K=1024).
-        if hparams.get('use_fused_kernels', False):
+        if hparams.get('use_fused_kernels_variance', False):
             from modules.kernels.integration import patch_variance_model
             from lightning.pytorch.utilities.rank_zero import rank_zero_info
             n = patch_variance_model(
