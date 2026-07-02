@@ -39,7 +39,7 @@ import triton.language as tl
 def _fused_linear_softsign_glu_fwd_kernel(
     x_ptr, w_left_ptr, w_right_ptr, b_left_ptr, b_right_ptr,
     y_ptr, left_ptr, gate_ptr,
-    M, K,
+    M, N, K,
     stride_x_b, stride_x_k,
     stride_wl_n, stride_wl_k,
     stride_wr_n, stride_wr_k,
@@ -50,13 +50,15 @@ def _fused_linear_softsign_glu_fwd_kernel(
 ):
     """
     y = (x @ W_left^T + b_left) * softsign(x @ W_right^T + b_right)
-    where softsign(x) = x / (1 + |x|).
 
-    2D grid over (M // BLOCK_M, K // BLOCK_N).
+    N = output dim per GLU half (= inner_dim = dim × expansion_factor)
+    K = input feature dim (= dim for first Linear, inner_dim for second)
+
+    2D grid over (M // BLOCK_M, N // BLOCK_N).
     """
     pid = tl.program_id(0)
     num_pid_m = tl.cdiv(M, BLOCK_M)
-    num_pid_n = tl.cdiv(K, BLOCK_N)
+    num_pid_n = tl.cdiv(N, BLOCK_N)
     pid_m = pid // num_pid_n
     pid_n = pid % num_pid_n
 
@@ -65,9 +67,9 @@ def _fused_linear_softsign_glu_fwd_kernel(
     offs_k = tl.arange(0, BLOCK_K)
 
     m_mask_2d = offs_m[:, None] < M
-    n_mask_nk = offs_n[:, None] < K       # [BLOCK_N, 1] for N×K weight access
-    n_mask_mn = offs_n[None, :] < K       # [1, BLOCK_N] for M×N output access
-    n_mask_1d = offs_n < K
+    n_mask_nk = offs_n[:, None] < N       # [BLOCK_N, 1] for N×K weight access
+    n_mask_mn = offs_n[None, :] < N       # [1, BLOCK_N] for M×N output access
+    n_mask_1d = offs_n < N
 
     acc_left = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
     acc_gate = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
@@ -137,7 +139,7 @@ def _fused_linear_softsign_glu_bwd_kernel(
     left_ptr, gate_ptr, grad_y_ptr,
     grad_x_ptr,
     w_left_ptr, w_right_ptr,
-    M, K,
+    M, K, N,
     stride_l_b, stride_l_n,
     stride_g_b, stride_g_n,
     stride_gy_b, stride_gy_n,
@@ -166,10 +168,10 @@ def _fused_linear_softsign_glu_bwd_kernel(
     k_mask_nk = offs_k[None, :] < K
     acc = tl.zeros([BLOCK_M, BLOCK_K], dtype=tl.float32)
 
-    for n_start in range(0, K, BLOCK_N):
+    for n_start in range(0, N, BLOCK_N):
         n_offs = n_start + offs_n
-        n_mask_mn = n_offs[None, :] < K
-        n_mask_nk = n_offs[:, None] < K
+        n_mask_mn = n_offs[None, :] < N
+        n_mask_nk = n_offs[:, None] < N
 
         left = tl.load(
             left_ptr + offs_m[:, None] * stride_l_b + n_offs[None, :] * stride_l_n,
@@ -278,24 +280,25 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, weight, bias):
         orig_shape = x.shape
-        K = weight.shape[1]
+        K = weight.shape[1]               # input feature dim (contraction dim)
+        N = weight.shape[0] // 2           # output dim per GLU half
         x_2d = x.reshape(-1, K)
         M = x_2d.shape[0]
 
-        w_left, w_right = weight.split(K, dim=0)
-        b_left, b_right = bias.split(K, dim=0)
+        w_left, w_right = weight.split(N, dim=0)
+        b_left, b_right = bias.split(N, dim=0)
 
-        out = torch.empty(M, K, device=x.device, dtype=x.dtype)
-        left = torch.empty(M, K, device=x.device, dtype=x.dtype)
-        gate = torch.empty(M, K, device=x.device, dtype=x.dtype)
+        out = torch.empty(M, N, device=x.device, dtype=x.dtype)
+        left = torch.empty(M, N, device=x.device, dtype=x.dtype)
+        gate = torch.empty(M, N, device=x.device, dtype=x.dtype)
 
         def grid(meta):
-            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(K, meta['BLOCK_N']),)
+            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(N, meta['BLOCK_N']),)
 
         _fused_linear_softsign_glu_fwd_kernel[grid](
             x_2d, w_left, w_right, b_left, b_right,
             out, left, gate,
-            M, K,
+            M, N, K,
             x_2d.stride(0), x_2d.stride(1),
             w_left.stride(0), w_left.stride(1),
             w_right.stride(0), w_right.stride(1),
@@ -305,34 +308,36 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
         )
 
         if x.dim() > 2:
-            out = out.view(*orig_shape[:-1], K)
-            left = left.view(M, K)
-            gate = gate.view(M, K)
+            out = out.view(*orig_shape[:-1], N)
+            left = left.view(M, N)
+            gate = gate.view(M, N)
 
         ctx.save_for_backward(x_2d, weight, left, gate)
         ctx.orig_x_shape = orig_shape
+        ctx.N = N
         return out
 
     @staticmethod
     def backward(ctx, grad_y):
         x, weight, left, gate = ctx.saved_tensors
         M, K = x.shape
-        w_left, w_right = weight.split(K, dim=0)
+        N = ctx.N
+        w_left, w_right = weight.split(N, dim=0)
 
         if grad_y.dim() > 2:
-            grad_y = grad_y.reshape(-1, K)
+            grad_y = grad_y.reshape(-1, N)
 
         # Step 1: Fused element-wise SoftSignGLU backward
-        grad_left_pre = torch.empty(M, K, device=x.device, dtype=x.dtype)
-        grad_gate = torch.empty(M, K, device=x.device, dtype=x.dtype)
+        grad_left_pre = torch.empty(M, N, device=x.device, dtype=x.dtype)
+        grad_gate = torch.empty(M, N, device=x.device, dtype=x.dtype)
 
         def elem_grid(meta):
-            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(K, meta['BLOCK_K']),)
+            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(N, meta['BLOCK_K']),)
 
         _softsign_glu_bwd_elem_kernel[elem_grid](
             left, gate, grad_y,
             grad_left_pre, grad_gate,
-            M, K,
+            M, N, N,
             left.stride(0), left.stride(1),
             gate.stride(0), gate.stride(1),
             grad_y.stride(0), grad_y.stride(1),
@@ -356,7 +361,7 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
             left, gate, grad_y,
             grad_x,
             w_left, w_right,
-            M, K,
+            M, K, N,
             left.stride(0), left.stride(1),
             gate.stride(0), gate.stride(1),
             grad_y.stride(0), grad_y.stride(1),
@@ -376,20 +381,22 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
 # ---------------------------------------------------------------------------
 
 def fused_linear_softsign_glu(x, weight, bias):
-    """Fused Linear(2K, K) + SoftSignGLU.
+    """Fused Linear(C, 2*C) + SoftSignGLU, where C = dim (expansion_factor×dim).
 
     y = left * gate / (1 + |gate|)
 
+    Supports expansion_factor != 1 by splitting weight at midpoint.
+
     Args:
-        x: Input [..., K]
-        weight: [2*K, K]
-        bias: [2*K]
+        x: Input [..., K] where K = weight.shape[1] (input dim)
+        weight: [2*N, K] where N = output dim per GLU half (= K × expansion_factor)
+        bias: [2*N]
 
     Returns:
-        [..., K]
+        [..., N]
     """
-    assert weight.shape[0] == 2 * weight.shape[1], \
-        f"Expected [2*K, K], got {weight.shape}"
+    N = weight.shape[0] // 2
+    K = weight.shape[1]
     # Match weight/bias dtype to input (handles 16-mixed precision where
     # weights are fp32 but activations are autocast to fp16)
     if weight.dtype != x.dtype:

@@ -85,7 +85,7 @@ nccl_p2p: true
 ###########
 # fusing
 ###########
-use_fused_kernels: true
+use_fused_kernels: false
 
 ###########
 # finetune
