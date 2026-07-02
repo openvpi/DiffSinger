@@ -18,6 +18,11 @@ from utils.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
+# Enable TF32 for cuBLAS and cuDNN on Ampere+ GPUs (RTX 4090, 5090, etc.)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.set_float32_matmul_precision("medium")
+
 
 class VarianceDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
@@ -114,6 +119,25 @@ class VarianceTask(BaseTask):
         self.predict_variances = len(self.variance_prediction_list) > 0
         self.lambda_var_loss = hparams['lambda_var_loss']
         super()._finish_init()
+
+        # ── Fuse LYNXNet2 backbone kernels (in-place) ──
+        if hparams.get('use_fused_kernels', False):
+            from modules.kernels.integration import patch_variance_model, warmup_fused_backbone
+            from lightning.pytorch.utilities.rank_zero import rank_zero_info
+            n = patch_variance_model(
+                self.model,
+                glu_type=hparams.get('backbone_args', {}).get('glu_type', 'softsign_glu'),
+            )
+            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks in variance model, warming up...', n)
+            if n > 0:
+                for predictor_attr in ['pitch_predictor', 'variance_predictor']:
+                    predictor = getattr(self.model, predictor_attr, None)
+                    if predictor is None:
+                        continue
+                    backbone = getattr(predictor, 'denoise_fn', None) or getattr(predictor, 'velocity_fn', None)
+                    if backbone is not None:
+                        warmup_fused_backbone(backbone)
+                rank_zero_info('Fused kernels: autotune complete')
 
     def _build_model(self):
         return DiffSingerVariance(

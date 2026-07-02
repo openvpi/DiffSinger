@@ -83,6 +83,11 @@ pl_trainer_strategy:
 nccl_p2p: true
 
 ###########
+# fusing
+###########
+use_fused_kernels: true
+
+###########
 # finetune
 ###########
 finetune_enabled: false
