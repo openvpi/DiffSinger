@@ -121,10 +121,7 @@ class VarianceTask(BaseTask):
         super()._finish_init()
 
         # ── Fuse LYNXNet2 backbone kernels (in-place) ──
-        # NOTE: Variance model backbones use num_channels=384/512, which are too
-        # small for Triton fusion to benefit. The compilation overhead outweighs
-        # the HBM savings. Fused kernels for acoustic model only (K=1024).
-        if hparams.get('use_fused_kernels_variance', False):
+        if hparams.get('use_fused_kernels', False):
             from modules.kernels.integration import patch_variance_model
             from lightning.pytorch.utilities.rank_zero import rank_zero_info
             n = patch_variance_model(
