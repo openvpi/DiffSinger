@@ -125,9 +125,14 @@ class VarianceTask(BaseTask):
         # small for Triton fusion to benefit. The compilation overhead outweighs
         # the HBM savings. Fused kernels for acoustic model only (K=1024).
         if hparams.get('use_fused_kernels', False):
-            from modules.kernels.integration import warmup_fused_backbone
+            from modules.kernels.integration import patch_variance_model
             from lightning.pytorch.utilities.rank_zero import rank_zero_info
-            rank_zero_info('Fused kernels: skipping variance model (small backbones, no benefit)')
+            n = patch_variance_model(
+                self.model,
+                glu_type=hparams.get('backbone_args', {}).get('glu_type', 'softsign_glu'),
+            )
+            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks in variance model', n)
+
 
     def _build_model(self):
         return DiffSingerVariance(
