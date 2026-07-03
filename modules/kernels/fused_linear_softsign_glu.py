@@ -147,6 +147,7 @@ def _fused_linear_softsign_glu_bwd_kernel(
     stride_wl_n, stride_wl_k,
     stride_wr_n, stride_wr_k,
     BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
+    COMPUTE_DTYPE: tl.constexpr = tl.float16,
 ):
     """
     Compute grad_x from:
@@ -204,8 +205,8 @@ def _fused_linear_softsign_glu_bwd_kernel(
             mask=n_mask_nk & k_mask_nk, other=0.0,
         )
 
-        acc += tl.dot(grad_left_pre.to(tl.float16), wl)
-        acc += tl.dot(grad_gate.to(tl.float16), wr)
+        acc += tl.dot(grad_left_pre.to(COMPUTE_DTYPE), wl)
+        acc += tl.dot(grad_gate.to(COMPUTE_DTYPE), wr)
 
     m_mask_gx = offs_m[:, None] < M
     k_mask_gx = offs_k[None, :] < K
@@ -357,6 +358,9 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
         def bwd_grid(meta):
             return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(K, meta['BLOCK_K']),)
 
+        # Determine compute dtype for backward matmul (match activation dtype)
+        bwd_dtype = tl.float16 if x.dtype == torch.float16 else tl.bfloat16 if x.dtype == torch.bfloat16 else tl.float32
+
         _fused_linear_softsign_glu_bwd_kernel[bwd_grid](
             left, gate, grad_y,
             grad_x,
@@ -368,6 +372,7 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
             grad_x.stride(0), grad_x.stride(1),
             w_left.stride(0), w_left.stride(1),
             w_right.stride(0), w_right.stride(1),
+            COMPUTE_DTYPE=bwd_dtype,
         )
 
         if len(ctx.orig_x_shape) > 2:
