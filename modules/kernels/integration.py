@@ -98,6 +98,11 @@ def patch_lynxnet2_model(model, glu_type='softsign_glu'):
     """
     from modules.backbones.lynxnet2 import LYNXNet2Block
     if glu_type != 'softsign_glu':
+        import warnings
+        warnings.warn(
+            f"Fused kernels require glu_type='softsign_glu'; "
+            f"got {glu_type!r}. Skipping patch."
+        )
         return 0
     patched = 0
     for i, layer in enumerate(model.residual_layers):
