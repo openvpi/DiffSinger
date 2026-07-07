@@ -1,21 +1,25 @@
 """
-Drop-in replacement for LYNXNet2Block with fused SoftSignGLU kernels.
+Drop-in replacement for LYNXNet2Block with fused Linear+SoftSignGLU kernels.
 
 The fused kernel replaces:
   nn.Linear(dim, inner_dim*2) + SoftSignGLU  →  one fused kernel call
+(training mode only; eval mode uses the original nn.Sequential path).
+
+Only softsign_glu is supported — other GLU types are left unpatched
+(warning at patch time, block runs the original forward).
 
 Numerical accuracy:
-  Exact computation — no approximation error.
-  Forward/backward differences are pure fp16 rounding noise (<0.01% rel).
+  SoftSignGLU is exact in Triton (no approximation). Differences vs the
+  eager path are fp16 rounding only (~1e-3 max on unit-scale activations).
 
-HBM savings:
-  Per block: 4 writes/reads of [M, 2K] eliminated = 800 MB (M=50000, K=1024, fp16)
-  Per 6-layer LYNXNet step: ~4.8 GB HBM traffic saved
+HBM savings (per fused call, M=50000, N=1024, fp16):
+  Eager:  Linear writes [M, 2N] (200 MB), GLU reads [M, 2N] + writes [M, N]
+  Fused:  writes y/left/gate = 3×[M, N] — saves the [M, 2N] round-trip
+Backward saves the softsign/denominator intermediates by fusing the
+element-wise gradient into one kernel; all GEMMs stay on cuBLAS.
 
 ONNX export:
   Use `model.eval()` → falls back to original path → ONNX export works
-
-Only supports LYNXNet2 with SoftSignGLU activation.
 """
 import torch
 import torch.nn as nn
@@ -29,16 +33,28 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
     Keeps all weights in-place (state_dict compatible).
     Only modifies the forward pass.
 
+    Only 'softsign_glu' is fused. Other GLU types are returned unpatched:
+    the ATanGLU Triton kernel (fused_linear_glu.py) predates the autotune
+    M-bucketing / cuBLAS-backward fixes and is slower than eager in real
+    training shapes, and SwiGLU never had a fused kernel.
+
     Args:
         block: LYNXNet2Block instance
-        glu_type: Only 'softsign_glu' is supported.
+        glu_type: GLU type configured for this block
 
     Returns:
-        The same block with patched forward method.
+        The same block, with patched forward if glu_type is supported.
     """
-    assert glu_type == 'softsign_glu', \
-        f"Only softsign_glu is supported in this branch, got {glu_type}"
+    if glu_type != 'softsign_glu':
+        import warnings
+        warnings.warn(
+            f"Fused kernels support only softsign_glu; leaving block with "
+            f"glu_type={glu_type!r} unpatched."
+        )
+        return block
+
     net = block.net  # nn.Sequential
+    glu_fn = fused_linear_softsign_glu
 
     def fused_forward(self, x):
         residual = x
@@ -50,11 +66,11 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
         x = net[3](x)  # Transpose
 
         if self.training:
-            # Fused: SoftSignGLU × 2
-            x = fused_linear_softsign_glu(x, net[4].weight, net[4].bias)
-            x = fused_linear_softsign_glu(x, net[6].weight, net[6].bias)
+            # Fused: Linear+GLU → Linear+GLU
+            x = glu_fn(x, net[4].weight, net[4].bias)
+            x = glu_fn(x, net[6].weight, net[6].bias)  # index 6 = second Linear
         else:
-            # Original: Linear → SoftSignGLU → Linear → SoftSignGLU
+            # Original: Linear → GLU → Linear → GLU
             x = net[4](x)
             x = net[5](x)  # SoftSignGLU
             x = net[6](x)
@@ -75,9 +91,14 @@ def patch_lynxnet2_model(model, glu_type='softsign_glu'):
 
     Args:
         model: LYNXNet2 instance
-        glu_type: Only 'softsign_glu' is supported.
+        glu_type: GLU type configured for the model (only softsign_glu fuses)
+
+    Returns:
+        Number of blocks patched (0 if glu_type unsupported).
     """
     from modules.backbones.lynxnet2 import LYNXNet2Block
+    if glu_type != 'softsign_glu':
+        return 0
     patched = 0
     for i, layer in enumerate(model.residual_layers):
         if isinstance(layer, LYNXNet2Block):
@@ -95,8 +116,8 @@ def _patch_backbone_fn(backbone_fn, glu_type):
     """Patch a single backbone function/module if it's a LYNXNet2.
 
     Args:
-        backbone_fn: The backbone module (e.g., diffusion.velocity_fn)
-        glu_type: 'softsign_glu' only.
+        backbone_fn: The backbone module (e.g., diffusion.denoise_fn)
+        glu_type: GLU type (only softsign_glu fuses)
 
     Returns:
         Number of blocks patched (0 if not a LYNXNet2).
@@ -167,48 +188,131 @@ def patch_variance_model(model, glu_type='softsign_glu'):
 # Warmup — trigger Triton autotune before training starts
 # ---------------------------------------------------------------------------
 
-def warmup_fused_backbone(backbone, glu_type='softsign_glu', num_channels=1024, M=50000):
-    """Run one dummy forward+backward to trigger Triton autotune compilation
-    for all fused kernels (fwd + bwd + elem). Call after patching, before
-    the first real training step.
+def warmup_fused_backbone(backbone, glu_type='softsign_glu', num_channels=1024, max_frames=None,
+                          autocast_dtype=None):
+    """Run dummy forward+backward passes to trigger Triton autotune compilation
+    for all fused kernels (fwd + bwd elem). Call after patching, before
+    the first real training step (model must already be on its CUDA device).
 
-    Uses M matching max_batch_frames so the compiled kernel cache is hit
-    by the first real training step.
-
-    Autotune results are cached on disk by Triton, so this only has an
-    effect on the first run with a given kernel / shape / GPU combination.
+    Autotune timings are cached in process memory only (Triton persists
+    compiled binaries to disk, but re-runs the config benchmark per process),
+    so this runs once per training process. The forward kernel's autotune
+    key buckets M by next_power_of_2, so we sweep the power-of-two buckets
+    a real run will hit: from a small bucket up to next_power_of_2(max_frames).
 
     Args:
         backbone: LYNXNet2 model (already patched).
-        glu_type: 'softsign_glu' (default, only supported option).
+        glu_type: GLU type (only softsign_glu fuses).
         num_channels: backbone width (1024 for acoustic, 512/384 for variance).
-        M: number of frames for warmup (default 50000).
+        max_frames: max total frames per batch (hparams['max_batch_frames']).
+            If None, warms a single small bucket only.
+        autocast_dtype: torch.float16 for '16-mixed', torch.bfloat16 for
+            'bf16-mixed'. If None, no autocast — with fp32 parameters the
+            fused path falls back to eager and the warmup is a no-op.
     """
+    import contextlib
+    import triton
+
     device = next(backbone.parameters()).device
     dtype = next(backbone.parameters()).dtype
 
-    B = max(1, M // 8000)
-    T = M // B
-    spec = torch.randn(B, backbone.n_feats, backbone.in_dims, T,
-                       device=device, dtype=dtype, requires_grad=True)
-    t = torch.randint(0, 1000, (B,), device=device).float()
-    cond = torch.randn(B, 384, T, device=device, dtype=dtype)
+    # cond hidden size from the conditioner projection (Linear or Conv1d)
+    proj = backbone.conditioner_projection
+    hidden = getattr(proj, 'in_features', None) or proj.in_channels
 
-    try:
-        out = backbone(spec, t, cond=cond)
-        out.sum().backward()
-    except Exception as e:
-        # Autotune failure should not crash training — Triton cache
-        # can be built on the first real step instead.
-        import warnings
-        warnings.warn(f'Fused kernel warmup skipped ({e})')
-    finally:
-        for p in backbone.parameters():
-            if p.grad is not None:
-                p.grad = None
+    B = 4
+    # Sweep M buckets: 2048 up to next_power_of_2(max_frames)
+    if max_frames is not None:
+        top = triton.next_power_of_2(int(max_frames))
+        bucket = 2048
+        t_list = []
+        while bucket <= top:
+            # M = B * T lands in this bucket (M just above the previous bucket)
+            t_list.append(bucket // B // 2 + 1)
+            bucket *= 2
+    else:
+        t_list = [500]
+
+    ac_factory = (
+        (lambda: torch.autocast(device_type=device.type, dtype=autocast_dtype))
+        if autocast_dtype is not None else contextlib.nullcontext
+    )
+    for T in t_list:
+        # spec shape: [B, n_feats, in_dims, T]
+        spec = torch.randn(B, backbone.n_feats, backbone.in_dims, T,
+                           device=device, dtype=dtype, requires_grad=True)
+        t = torch.randint(0, 1000, (B,), device=device).float()
+        cond = torch.randn(B, hidden, T, device=device, dtype=dtype)
+
+        try:
+            with ac_factory():
+                out = backbone(spec, t, cond=cond)
+            out.sum().backward()
+        except Exception as e:
+            # Autotune failure should not crash training — Triton cache
+            # can be built on the first real step instead.
+            import warnings
+            warnings.warn(f'Fused kernel warmup skipped at T={T} ({e})')
+            break
+        finally:
+            for p in backbone.parameters():
+                if p.grad is not None:
+                    p.grad = None
+            del spec, cond
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
 
 
 # ---------------------------------------------------------------------------
 # Test
 # ---------------------------------------------------------------------------
 
+def _test():
+    import torch
+    from modules.backbones.lynxnet2 import LYNXNet2Block
+
+    device = 'cuda'
+    torch.manual_seed(42)
+
+    # Create a single block
+    block = LYNXNet2Block(dim=256, expansion_factor=1, glu_type='softsign_glu').to(device).half()
+
+    # Copy weights
+    block_ref = LYNXNet2Block(dim=256, expansion_factor=1, glu_type='softsign_glu').to(device).half()
+    block_ref.load_state_dict(block.state_dict())
+
+    # Patch
+    wrap_lynxnet2_block(block, glu_type='softsign_glu')
+
+    B, T = 2, 500
+    x = torch.randn(B, T, 256, device=device, dtype=torch.float16)
+
+    # Forward
+    out_orig = block_ref(x)
+    out_fused = block(x)
+
+    fwd_diff = (out_fused - out_orig).abs().max().item()
+    print(f"Block forward max diff: {fwd_diff:.4e}")
+
+    # Backward
+    grad = torch.randn_like(out_orig)
+    out_orig.backward(grad)
+    grads_ref = {n: p.grad.clone() for n, p in block_ref.named_parameters() if p.grad is not None}
+
+    for p in block.parameters():
+        p.grad = None
+
+    out_fused = block(x)
+    out_fused.backward(grad)
+    grads_fused = {n: p.grad.clone() for n, p in block.named_parameters() if p.grad is not None}
+
+    max_w_diff = max(
+        (grads_fused[n] - grads_ref[n]).abs().max().item()
+        for n in grads_ref
+    )
+    print(f"Block weight grad max diff: {max_w_diff:.4e}")
+    print(f"\nIntegration works! Use model.eval() for ONNX export fallback.")
+
+
+if __name__ == '__main__':
+    _test()

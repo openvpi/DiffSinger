@@ -100,14 +100,38 @@ class AcousticTask(BaseTask):
         super()._finish_init()
 
         # ── Fuse LYNXNet2 backbone kernels (in-place) ──
+        # Only softsign_glu backbones are patched; other GLU types keep the
+        # eager path (patch_diffusion_module returns 0 and warns).
+        self._fused_kernels_patched = 0
         if hparams.get('use_fused_kernels', False):
             from modules.kernels.integration import patch_diffusion_module
             from lightning.pytorch.utilities.rank_zero import rank_zero_info
-            n = patch_diffusion_module(
+            # NOTE: LYNXNet2 defaults to swiglu when glu_type is unset
+            self._fused_kernels_patched = patch_diffusion_module(
                 self.model.diffusion,
-                glu_type=hparams['backbone_args'].get('glu_type', 'softsign_glu'),
+                glu_type=hparams['backbone_args'].get('glu_type', 'swiglu'),
             )
-            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks', n)
+            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks', self._fused_kernels_patched)
+
+    def on_fit_start(self):
+        # Warm Triton autotune caches after the model is on its CUDA device,
+        # so the first training steps don't pay the per-bucket benchmark cost.
+        if self._fused_kernels_patched > 0 and self.device.type == 'cuda':
+            from modules.kernels.integration import warmup_fused_backbone
+            precision = str(hparams.get('pl_trainer_precision', '32'))
+            autocast_dtype = (
+                torch.float16 if '16' in precision and 'bf16' not in precision
+                else torch.bfloat16 if 'bf16' in precision
+                else None
+            )
+            for attr in ('denoise_fn', 'velocity_fn'):
+                backbone = getattr(self.model.diffusion, attr, None)
+                if backbone is not None:
+                    warmup_fused_backbone(
+                        backbone, glu_type='softsign_glu',
+                        max_frames=hparams['max_batch_frames'],
+                        autocast_dtype=autocast_dtype,
+                    )
 
     def _build_model(self):
         return DiffSingerAcoustic(

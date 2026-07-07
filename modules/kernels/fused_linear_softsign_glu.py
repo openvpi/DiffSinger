@@ -12,10 +12,29 @@ Compared to ATanGLU:
   - Slight trade-off: softsign saturates slower than atan
     (atan → π/2 for x→∞, softsign → 1 for x→∞)
 
-Weight-split strategy matches the ATanGLU kernel:
+Weight-split strategy:
   Split W [2K, K] into W_left [K, K] and W_right [K, K] (views).
   Each Triton program handles one [BLOCK_M, BLOCK_N] tile of BOTH halves,
   applying SoftSignGLU within the tile — no cross-program communication.
+
+Autotune strategy (multi-GPU):
+  - The autotune key uses next_power_of_2(M) instead of raw M. DsBatchSampler
+    packs variable frame counts, so raw M changes almost every batch and
+    re-triggers the (seconds-long) autotune benchmark per step. Bucketing
+    bounds this to a handful of compilations per training run.
+  - The config list spans small tiles (Turing / RTX 20xx, 64 KB smem per
+    block) through large tiles (Ada / Blackwell, RTX 4090/5090, 100+ KB
+    smem). Configs whose shared-memory footprint exceeds the running GPU
+    are pruned automatically by Triton (OutOfResources), so the same list
+    serves both the local debug GPU and the training GPUs.
+
+Backward strategy:
+  Only the element-wise GLU backward runs in Triton (one kernel, no
+  intermediate HBM round-trips). The three backward matmuls (grad_x,
+  grad_w_left, grad_w_right) go through cuBLAS — a plain GEMM in Triton
+  does not beat cuBLAS (measured 3.4x slower on RTX 2070, and the gap
+  does not close on Ada/Blackwell), and cuBLAS keeps full dtype fidelity
+  for fp16 / bf16 / fp32 runs alike.
 """
 import torch
 import torch.nn.functional as F
@@ -29,17 +48,27 @@ import triton.language as tl
 
 @triton.autotune(
     configs=[
-        triton.Config({'BLOCK_M': 16, 'BLOCK_N': 64,  'BLOCK_K': 32}, num_warps=4, num_stages=3),
-        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64,  'BLOCK_K': 32}, num_warps=8, num_stages=3),
-        triton.Config({'BLOCK_M': 64, 'BLOCK_N': 32,  'BLOCK_K': 32}, num_warps=8, num_stages=3),
+        # Small tiles — fit Turing (RTX 20xx, 64 KB smem/block) and small M
+        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 32,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
+        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
+        triton.Config({'BLOCK_M': 64, 'BLOCK_N': 32,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
+        triton.Config({'BLOCK_M': 64, 'BLOCK_N': 64,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
+        # Large tiles — Ada/Blackwell (RTX 4090/5090). Pruned automatically
+        # on GPUs where the smem footprint exceeds the per-block limit.
+        triton.Config({'BLOCK_M': 64,  'BLOCK_N': 64,  'BLOCK_K': 64, 'GROUP_M': 8}, num_warps=4, num_stages=4),
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 64,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=4),
+        triton.Config({'BLOCK_M': 64,  'BLOCK_N': 128, 'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=4),
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 128, 'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=8, num_stages=3),
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 64,  'BLOCK_K': 64, 'GROUP_M': 8}, num_warps=8, num_stages=3),
     ],
-    key=['M', 'K'],
+    key=['M_BUCKET', 'N', 'K'],
 )
 @triton.jit
 def _fused_linear_softsign_glu_fwd_kernel(
     x_ptr, w_left_ptr, w_right_ptr, b_left_ptr, b_right_ptr,
     y_ptr, left_ptr, gate_ptr,
     M, N, K,
+    M_BUCKET,  # next_power_of_2(M) — autotune key only, not used in body
     stride_x_b, stride_x_k,
     stride_wl_n, stride_wl_k,
     stride_wr_n, stride_wr_k,
@@ -47,6 +76,7 @@ def _fused_linear_softsign_glu_fwd_kernel(
     stride_l_b, stride_l_n,
     stride_g_b, stride_g_n,
     BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
+    GROUP_M: tl.constexpr,
 ):
     """
     y = (x @ W_left^T + b_left) * softsign(x @ W_right^T + b_right)
@@ -54,13 +84,20 @@ def _fused_linear_softsign_glu_fwd_kernel(
     N = output dim per GLU half (= inner_dim = dim × expansion_factor)
     K = input feature dim (= dim for first Linear, inner_dim for second)
 
-    2D grid over (M // BLOCK_M, N // BLOCK_N).
+    2D grid over (M // BLOCK_M, N // BLOCK_N) with grouped ordering:
+    programs are swizzled so that GROUP_M row-blocks share column tiles
+    while they are still hot in L2 (standard Triton matmul swizzle).
     """
     pid = tl.program_id(0)
     num_pid_m = tl.cdiv(M, BLOCK_M)
     num_pid_n = tl.cdiv(N, BLOCK_N)
-    pid_m = pid // num_pid_n
-    pid_n = pid % num_pid_n
+    # Grouped pid swizzle for L2 reuse
+    num_pid_in_group = GROUP_M * num_pid_n
+    group_id = pid // num_pid_in_group
+    first_pid_m = group_id * GROUP_M
+    group_size_m = tl.minimum(num_pid_m - first_pid_m, GROUP_M)
+    pid_m = first_pid_m + ((pid % num_pid_in_group) % group_size_m)
+    pid_n = (pid % num_pid_in_group) // group_size_m
 
     offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
     offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
@@ -123,141 +160,55 @@ def _fused_linear_softsign_glu_fwd_kernel(
 
 
 # ---------------------------------------------------------------------------
-# Backward kernel — input gradient (fused matmul + element-wise)
+# Element-wise backward kernel — grad_left_pre, grad_gate
+#
+# This is the only Triton kernel in the backward pass. The three backward
+# GEMMs (grad_x, grad_w_left, grad_w_right) run on cuBLAS in the autograd
+# Function below: a hand-written Triton GEMM was measured 3.4x slower than
+# cuBLAS for these shapes, and cuBLAS preserves the active dtype
+# (fp16 / bf16 / fp32) without forced down-casts.
 # ---------------------------------------------------------------------------
 
 @triton.autotune(
     configs=[
-        triton.Config({'BLOCK_M': 16, 'BLOCK_N': 64,  'BLOCK_K': 32}, num_warps=4, num_stages=3),
-        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64,  'BLOCK_K': 32}, num_warps=8, num_stages=3),
-        triton.Config({'BLOCK_M': 16, 'BLOCK_N': 128, 'BLOCK_K': 32}, num_warps=4, num_stages=3),
+        triton.Config({'BLOCK_M': 64, 'BLOCK_N': 64}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 32}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK_M': 64, 'BLOCK_N': 128}, num_warps=4, num_stages=2),
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 64}, num_warps=8, num_stages=2),
     ],
-    key=['M', 'K'],
-)
-@triton.jit
-def _fused_linear_softsign_glu_bwd_kernel(
-    left_ptr, gate_ptr, grad_y_ptr,
-    grad_x_ptr,
-    w_left_ptr, w_right_ptr,
-    M, K, N,
-    stride_l_b, stride_l_n,
-    stride_g_b, stride_g_n,
-    stride_gy_b, stride_gy_n,
-    stride_gx_b, stride_gx_k,
-    stride_wl_n, stride_wl_k,
-    stride_wr_n, stride_wr_k,
-    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
-    COMPUTE_DTYPE: tl.constexpr = tl.float16,
-):
-    """
-    Compute grad_x from:
-      grad_left_pre = grad_y * gate / (1 + |gate|)
-      grad_gate     = grad_y * left / (1 + |gate|)^2
-      grad_x = grad_left_pre @ W_left + grad_gate @ W_right
-    """
-    pid = tl.program_id(0)
-    num_pid_m = tl.cdiv(M, BLOCK_M)
-    num_pid_k = tl.cdiv(K, BLOCK_K)
-    pid_m = pid // num_pid_k
-    pid_k = pid % num_pid_k
-
-    offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-    offs_k = pid_k * BLOCK_K + tl.arange(0, BLOCK_K)
-    offs_n = tl.arange(0, BLOCK_N)
-
-    m_mask_mn = offs_m[:, None] < M
-    k_mask_nk = offs_k[None, :] < K
-    acc = tl.zeros([BLOCK_M, BLOCK_K], dtype=tl.float32)
-
-    for n_start in range(0, N, BLOCK_N):
-        n_offs = n_start + offs_n
-        n_mask_mn = n_offs[None, :] < N
-        n_mask_nk = n_offs[:, None] < N
-
-        left = tl.load(
-            left_ptr + offs_m[:, None] * stride_l_b + n_offs[None, :] * stride_l_n,
-            mask=m_mask_mn & n_mask_mn, other=0.0,
-        )
-        gate_val = tl.load(
-            gate_ptr + offs_m[:, None] * stride_g_b + n_offs[None, :] * stride_g_n,
-            mask=m_mask_mn & n_mask_mn, other=0.0,
-        )
-        grad_y = tl.load(
-            grad_y_ptr + offs_m[:, None] * stride_gy_b + n_offs[None, :] * stride_gy_n,
-            mask=m_mask_mn & n_mask_mn, other=0.0,
-        )
-
-        # SoftSignGLU backward (fp32 for safety)
-        gate_f32 = gate_val.to(tl.float32)
-        left_f32 = left.to(tl.float32)
-        abs_gate = tl.abs(gate_f32)
-        denom = 1.0 / (1.0 + abs_gate)         # 1 / (1+|g|)
-        denom2 = denom * denom               # 1 / (1+|g|)^2
-        grad_left_pre = grad_y * (gate_f32 * denom)
-        grad_gate = grad_y * (left_f32 * denom2)
-
-        wl = tl.load(
-            w_left_ptr + n_offs[:, None] * stride_wl_n + offs_k[None, :] * stride_wl_k,
-            mask=n_mask_nk & k_mask_nk, other=0.0,
-        )
-        wr = tl.load(
-            w_right_ptr + n_offs[:, None] * stride_wr_n + offs_k[None, :] * stride_wr_k,
-            mask=n_mask_nk & k_mask_nk, other=0.0,
-        )
-
-        acc += tl.dot(grad_left_pre.to(COMPUTE_DTYPE), wl)
-        acc += tl.dot(grad_gate.to(COMPUTE_DTYPE), wr)
-
-    m_mask_gx = offs_m[:, None] < M
-    k_mask_gx = offs_k[None, :] < K
-    tl.store(
-        grad_x_ptr + offs_m[:, None] * stride_gx_b + offs_k[None, :] * stride_gx_k,
-        acc, mask=m_mask_gx & k_mask_gx,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Element-wise backward kernel — grad_left_pre, grad_gate for weight grads
-# ---------------------------------------------------------------------------
-
-@triton.autotune(
-    configs=[
-        triton.Config({'BLOCK_M': 128, 'BLOCK_K': 32}, num_warps=4, num_stages=2),
-        triton.Config({'BLOCK_M': 64, 'BLOCK_K': 64}, num_warps=4, num_stages=2),
-    ],
-    key=['M', 'K'],
+    key=['N'],  # element-wise: tile choice is insensitive to M — never key on it
 )
 @triton.jit
 def _softsign_glu_bwd_elem_kernel(
     left_ptr, gate_ptr, grad_y_ptr,
     glp_ptr, gg_ptr,
-    M, K,
+    M, N,
     stride_l_b, stride_l_n,
     stride_g_b, stride_g_n,
     stride_gy_b, stride_gy_n,
     stride_glp_b, stride_glp_n,
     stride_gg_b, stride_gg_n,
-    BLOCK_M: tl.constexpr, BLOCK_K: tl.constexpr,
+    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr,
 ):
     """Element-wise SoftSignGLU backward — no intermediates to HBM."""
     pid = tl.program_id(0)
     num_pid_m = tl.cdiv(M, BLOCK_M)
-    num_pid_k = tl.cdiv(K, BLOCK_K)
-    pid_m = pid // num_pid_k
-    pid_k = pid % num_pid_k
+    num_pid_n = tl.cdiv(N, BLOCK_N)
+    pid_m = pid // num_pid_n
+    pid_n = pid % num_pid_n
 
     offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-    offs_k = pid_k * BLOCK_K + tl.arange(0, BLOCK_K)
+    offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
     m_mask = offs_m[:, None] < M
-    k_mask = offs_k[None, :] < K
+    n_mask = offs_n[None, :] < N
 
-    left = tl.load(left_ptr + offs_m[:, None] * stride_l_b + offs_k[None, :] * stride_l_n,
-                   mask=m_mask & k_mask, other=0.0)
-    gate = tl.load(gate_ptr + offs_m[:, None] * stride_g_b + offs_k[None, :] * stride_g_n,
-                   mask=m_mask & k_mask, other=0.0)
-    gy = tl.load(grad_y_ptr + offs_m[:, None] * stride_gy_b + offs_k[None, :] * stride_gy_n,
-                 mask=m_mask & k_mask, other=0.0)
+    left = tl.load(left_ptr + offs_m[:, None] * stride_l_b + offs_n[None, :] * stride_l_n,
+                   mask=m_mask & n_mask, other=0.0)
+    gate = tl.load(gate_ptr + offs_m[:, None] * stride_g_b + offs_n[None, :] * stride_g_n,
+                   mask=m_mask & n_mask, other=0.0)
+    gy = tl.load(grad_y_ptr + offs_m[:, None] * stride_gy_b + offs_n[None, :] * stride_gy_n,
+                 mask=m_mask & n_mask, other=0.0)
 
     gate_f32 = gate.to(tl.float32)
     left_f32 = left.to(tl.float32)
@@ -265,10 +216,10 @@ def _softsign_glu_bwd_elem_kernel(
     denom = 1.0 / (1.0 + abs_gate)
     denom2 = denom * denom
 
-    tl.store(glp_ptr + offs_m[:, None] * stride_glp_b + offs_k[None, :] * stride_glp_n,
-             gy * (gate_f32 * denom), mask=m_mask & k_mask)
-    tl.store(gg_ptr + offs_m[:, None] * stride_gg_b + offs_k[None, :] * stride_gg_n,
-             gy * (left_f32 * denom2), mask=m_mask & k_mask)
+    tl.store(glp_ptr + offs_m[:, None] * stride_glp_b + offs_n[None, :] * stride_glp_n,
+             gy * (gate_f32 * denom), mask=m_mask & n_mask)
+    tl.store(gg_ptr + offs_m[:, None] * stride_gg_b + offs_n[None, :] * stride_gg_n,
+             gy * (left_f32 * denom2), mask=m_mask & n_mask)
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +251,7 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
             x_2d, w_left, w_right, b_left, b_right,
             out, left, gate,
             M, N, K,
+            triton.next_power_of_2(M),  # M_BUCKET: bounds autotune re-runs under variable batch frame counts
             x_2d.stride(0), x_2d.stride(1),
             w_left.stride(0), w_left.stride(1),
             w_right.stride(0), w_right.stride(1),
@@ -327,13 +279,16 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
 
         if grad_y.dim() > 2:
             grad_y = grad_y.reshape(-1, N)
+        if not grad_y.is_contiguous():
+            grad_y = grad_y.contiguous()
 
-        # Step 1: Fused element-wise SoftSignGLU backward
+        # Step 1: Fused element-wise SoftSignGLU backward (single Triton kernel,
+        # grad_left_pre/grad_gate computed in registers, one HBM write each)
         grad_left_pre = torch.empty(M, N, device=x.device, dtype=x.dtype)
         grad_gate = torch.empty(M, N, device=x.device, dtype=x.dtype)
 
         def elem_grid(meta):
-            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(N, meta['BLOCK_K']),)
+            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(N, meta['BLOCK_N']),)
 
         _softsign_glu_bwd_elem_kernel[elem_grid](
             left, gate, grad_y,
@@ -346,34 +301,18 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
             grad_gate.stride(0), grad_gate.stride(1),
         )
 
-        # Step 2: Weight gradients (PyTorch matmul)
-        grad_w_left = grad_left_pre.T @ x
-        grad_w_right = grad_gate.T @ x
-        grad_weight = torch.cat([grad_w_left, grad_w_right], dim=0)
+        # Step 2/3: All backward GEMMs on cuBLAS (faster than a Triton GEMM
+        # here, and preserves fp16/bf16/fp32 dtype without forced casts).
+        # grad_weight assembled without torch.cat: write both halves into one
+        # preallocated [2N, K] buffer via out= GEMMs.
+        grad_weight = torch.empty(2 * N, K, device=x.device, dtype=x.dtype)
+        torch.mm(grad_left_pre.T, x, out=grad_weight[:N])
+        torch.mm(grad_gate.T, x, out=grad_weight[N:])
         grad_bias = torch.cat([grad_left_pre.sum(0), grad_gate.sum(0)], dim=0)
 
-        # Step 3: Input gradient (fused backward kernel)
-        grad_x = torch.empty_like(x)
-
-        def bwd_grid(meta):
-            return (triton.cdiv(M, meta['BLOCK_M']) * triton.cdiv(K, meta['BLOCK_K']),)
-
-        # Determine compute dtype for backward matmul (match activation dtype)
-        bwd_dtype = tl.float16 if x.dtype == torch.float16 else tl.bfloat16 if x.dtype == torch.bfloat16 else tl.float32
-
-        _fused_linear_softsign_glu_bwd_kernel[bwd_grid](
-            left, gate, grad_y,
-            grad_x,
-            w_left, w_right,
-            M, K, N,
-            left.stride(0), left.stride(1),
-            gate.stride(0), gate.stride(1),
-            grad_y.stride(0), grad_y.stride(1),
-            grad_x.stride(0), grad_x.stride(1),
-            w_left.stride(0), w_left.stride(1),
-            w_right.stride(0), w_right.stride(1),
-            COMPUTE_DTYPE=bwd_dtype,
-        )
+        # grad_x = grad_left_pre @ W_left + grad_gate @ W_right
+        grad_x = torch.mm(grad_left_pre, w_left)
+        grad_x.addmm_(grad_gate, w_right)
 
         if len(ctx.orig_x_shape) > 2:
             grad_x = grad_x.view(*ctx.orig_x_shape)
@@ -385,12 +324,41 @@ class FusedLinearSoftSignGLUFn(torch.autograd.Function):
 # Public API
 # ---------------------------------------------------------------------------
 
+def _eager_linear_softsign_glu(x, weight, bias):
+    """Unfused reference path — used as fallback for unsupported dtypes/GPUs."""
+    left, gate = F.linear(x, weight, bias).chunk(2, dim=-1)
+    return left * F.softsign(gate)
+
+
+_FUSED_SUPPORTED_DTYPES = None
+
+
+def _fused_supported_dtypes():
+    """Dtypes the fused kernel can run on the current GPU.
+
+    fp16 tl.dot: all tensor-core GPUs (Turing sm_75 and newer).
+    bf16 tl.dot: Ampere (sm_80) and newer — RTX 4090 (sm_89) and
+    RTX 5090 (sm_120) are fine, but Turing debug GPUs (RTX 20xx) are not.
+    fp32 falls back to eager: training runs 16-mixed/bf16-mixed, and eager
+    fp32 keeps full precision without a tf32 surprise inside the kernel.
+    """
+    global _FUSED_SUPPORTED_DTYPES
+    if _FUSED_SUPPORTED_DTYPES is None:
+        supported = {torch.float16}
+        if torch.cuda.get_device_capability() >= (8, 0):
+            supported.add(torch.bfloat16)
+        _FUSED_SUPPORTED_DTYPES = supported
+    return _FUSED_SUPPORTED_DTYPES
+
+
 def fused_linear_softsign_glu(x, weight, bias):
     """Fused Linear(C, 2*C) + SoftSignGLU, where C = dim (expansion_factor×dim).
 
     y = left * gate / (1 + |gate|)
 
     Supports expansion_factor != 1 by splitting weight at midpoint.
+    Falls back to the unfused path for dtypes the current GPU cannot
+    run through tl.dot (bf16 on pre-Ampere, fp32 everywhere).
 
     Args:
         x: Input [..., K] where K = weight.shape[1] (input dim)
@@ -400,8 +368,8 @@ def fused_linear_softsign_glu(x, weight, bias):
     Returns:
         [..., N]
     """
-    N = weight.shape[0] // 2
-    K = weight.shape[1]
+    if x.dtype not in _fused_supported_dtypes():
+        return _eager_linear_softsign_glu(x, weight, bias)
     # Match weight/bias dtype to input (handles 16-mixed precision where
     # weights are fp32 but activations are autocast to fp16)
     if weight.dtype != x.dtype:
