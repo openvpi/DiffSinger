@@ -83,9 +83,17 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             gender=None, velocity=None,
             spk_embed=None,
             languages=None,
-            retake=None, gt_mel=None
+            retake=None, gt_mel=None,
+            tokens_b=None, blend=None
     ):
-        txt_embed = self.txt_embed(tokens)
+        # P1-a phoneme mix (experiment): per-token convex blend of two phoneme embeddings.
+        #   blend in [0, 1], shape [B, n_tokens]; 0 => pure `tokens` (bit-identical to no-mix export).
+        #   Falls back to the plain lookup when the mix inputs are absent (training / other exports).
+        if tokens_b is None or blend is None:
+            txt_embed = self.txt_embed(tokens)
+        else:
+            w = blend.unsqueeze(-1)  # [B, n_tokens, 1]
+            txt_embed = (1.0 - w) * self.txt_embed(tokens) + w * self.txt_embed(tokens_b)
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         _mel2ph = mel2ph
