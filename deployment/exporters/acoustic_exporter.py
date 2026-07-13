@@ -240,17 +240,21 @@ class DiffSingerAcousticExporter(BaseExporter):
             dynamic_axes['gt_mel'] = {
                 1: 'n_frames'
             }
-        # P1-a phoneme mix (experiment, unconditional on this branch): secondary phoneme tokens
-        # + per-token blend weight [0, 1]. blend all-zeros => bit-identical to the no-mix model.
-        kwargs['tokens_b'] = tokens.clone()
-        kwargs['blend'] = torch.zeros_like(tokens, dtype=torch.float32)
+        # Phoneme mix (P3 envelope, experiment, unconditional on this branch): dynamic-slot targets.
+        # tokens_b [S, n_tokens] + blend [S, n_frames] (per-target per-frame weight), slot axis 0
+        # dynamic. Trace with 2 slots. blend all-zeros => bit-identical to the no-mix model.
+        n_mix = 2
+        kwargs['tokens_b'] = tokens.expand(n_mix, -1).contiguous()
+        kwargs['blend'] = torch.zeros((n_mix, n_frames), dtype=torch.float32, device=self.device)
         input_names.append('tokens_b')
         input_names.append('blend')
         dynamic_axes['tokens_b'] = {
+            0: 'n_mix',
             1: 'n_tokens'
         }
         dynamic_axes['blend'] = {
-            1: 'n_tokens'
+            0: 'n_mix',
+            1: 'n_frames'
         }
         dynamic_axes['condition'] = {
             1: 'n_frames'

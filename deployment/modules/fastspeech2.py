@@ -86,14 +86,6 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             retake=None, gt_mel=None,
             tokens_b=None, blend=None
     ):
-        # P1-a phoneme mix (experiment): per-token convex blend of two phoneme embeddings.
-        #   blend in [0, 1], shape [B, n_tokens]; 0 => pure `tokens` (bit-identical to no-mix export).
-        #   Falls back to the plain lookup when the mix inputs are absent (training / other exports).
-        if tokens_b is None or blend is None:
-            txt_embed = self.txt_embed(tokens)
-        else:
-            w = blend.unsqueeze(-1)  # [B, n_tokens, 1]
-            txt_embed = (1.0 - w) * self.txt_embed(tokens) + w * self.txt_embed(tokens_b)
         durations = durations * (tokens > 0)
         mel2ph = self.lr(durations)
         _mel2ph = mel2ph
@@ -119,9 +111,27 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
                 ph_spk_embed = uniform_attention_pooling(spk_embed, durations)
         else:
             ph_spk_embed = None
-        encoded = self.encoder(txt_embed, extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
-        encoded = F.pad(encoded, (0, 0, 1, 0))
-        condition = torch.gather(encoded, 1, mel2ph)
+
+        # Phoneme mix (P3 envelope, experiment): base phoneme stream + S target streams, encoded in
+        #   ONE batched encoder pass, expanded to frames on the SHARED mel2ph, convex-combined PER FRAME.
+        #   tokens_b: [S, n_tokens] (targets); blend: [S, n_frames] (per-target per-frame weight);
+        #   base weight = 1 - sum_S(blend), clamped >=0. blend all-zeros => bit-identical to no-mix.
+        #   extra_embed / spk_embed / mel2ph are the base's and are broadcast (shared) across streams.
+        if tokens_b is None or blend is None:
+            encoded = self.encoder(self.txt_embed(tokens), extra_embed, tokens == PAD_INDEX, spk_embed=ph_spk_embed)
+            encoded = F.pad(encoded, (0, 0, 1, 0))
+            condition = torch.gather(encoded, 1, mel2ph)
+        else:
+            n_mix = tokens_b.shape[0]
+            tokens_all = torch.cat([tokens, tokens_b], dim=0)                      # [1 + S, n_tokens]
+            extra_all = extra_embed.expand(1 + n_mix, -1, -1)
+            spk_all = ph_spk_embed.expand(1 + n_mix, -1, -1) if ph_spk_embed is not None else None
+            encoded_all = self.encoder(self.txt_embed(tokens_all), extra_all, tokens_all == PAD_INDEX, spk_embed=spk_all)
+            encoded_all = F.pad(encoded_all, (0, 0, 1, 0))                         # [1 + S, n_tokens + 1, H]
+            cond_all = torch.gather(encoded_all, 1, mel2ph.expand(1 + n_mix, -1, -1))   # [1 + S, n_frames, H]
+            base_w = (1.0 - blend.sum(dim=0, keepdim=True)).clamp(min=0.0)         # [1, n_frames]
+            w_all = torch.cat([base_w, blend], dim=0)                             # [1 + S, n_frames]
+            condition = (w_all[:, :, None] * cond_all).sum(dim=0, keepdim=True)   # [1, n_frames, H]
 
         if self.use_stretch_embed:
             stretch = torch.round(1000 * self.sr(_mel2ph, durations))
