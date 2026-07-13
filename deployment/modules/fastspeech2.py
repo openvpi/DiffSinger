@@ -129,7 +129,9 @@ class FastSpeech2AcousticONNX(FastSpeech2Acoustic):
             encoded_all = self.encoder(self.txt_embed(tokens_all), extra_all, tokens_all == PAD_INDEX, spk_embed=spk_all)
             encoded_all = F.pad(encoded_all, (0, 0, 1, 0))                         # [1 + S, n_tokens + 1, H]
             cond_all = torch.gather(encoded_all, 1, mel2ph.expand(1 + n_mix, -1, -1))   # [1 + S, n_frames, H]
-            base_w = (1.0 - blend.sum(dim=0, keepdim=True)).clamp(min=0.0)         # [1, n_frames]
+            # base 权重 = 1 - Σblend。不 clamp（会引入 Clip 节点、与 diffusion 的 clamp_spec 撞边名）——
+            #   凸性由 C# 保证(单槽 blend∈[0,1] ⇒ Σ≤1;N 槽 C# 归一)，故 1-Σ≥0，无需 clamp。
+            base_w = 1.0 - blend.sum(dim=0, keepdim=True)                          # [1, n_frames]
             w_all = torch.cat([base_w, blend], dim=0)                             # [1 + S, n_frames]
             condition = (w_all[:, :, None] * cond_all).sum(dim=0, keepdim=True)   # [1, n_frames, H]
 

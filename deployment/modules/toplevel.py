@@ -247,7 +247,9 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         n_mix = encoder_out_b.shape[0]
         cond_b = self.forward_mel2x_gather(
             encoder_out_b, ph_dur.expand(n_mix, -1), x_dim=self.hidden_size, check_stretch_embed=True)  # [S, n_frames, H]
-        base_w = (1.0 - blend.sum(dim=0, keepdim=True)).clamp(min=0.0)  # [1, n_frames]
+        # base 权重 = 1 - Σblend。不 clamp（会引入 Clip 节点、与 post 的 clamp_spec 撞边名）——
+        #   凸性由 C# 保证(单槽 blend∈[0,1] ⇒ Σ≤1;N 槽 C# 归一)，故 1-Σ≥0，无需 clamp。
+        base_w = 1.0 - blend.sum(dim=0, keepdim=True)  # [1, n_frames]
         return base_w[:, :, None] * condition + (blend[:, :, None] * cond_b).sum(dim=0, keepdim=True)
 
     def forward_pitch_preprocess(
