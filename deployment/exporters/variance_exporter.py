@@ -209,6 +209,14 @@ class DiffSingerVarianceExporter(BaseExporter):
         input_lang_id = self.use_lang_id
         input_spk_embed = hparams['use_spk_id'] and not self.freeze_spk
 
+        # P1-a phoneme mix (experiment, unconditional on this branch): secondary phoneme tokens
+        # + per-token blend weight [0, 1]; passed as trailing kwargs so the optional `languages`
+        # positional does not shift. blend all-zeros => bit-identical to the no-mix encoder.
+        tokens_b = tokens.clone()
+        blend = torch.zeros_like(tokens, dtype=torch.float32)
+        mix_kwargs = {'tokens_b': tokens_b, 'blend': blend}
+        mix_axes = {'tokens_b': {1: 'n_tokens'}, 'blend': {1: 'n_tokens'}}
+
         print(f'Exporting {self.fs2_class_name}...')
         if self.model.predict_dur:
             torch.onnx.export(
@@ -217,14 +225,17 @@ class DiffSingerVarianceExporter(BaseExporter):
                     tokens,
                     word_div,
                     word_dur,
-                    *([languages] if input_lang_id else [])
+                    *([languages] if input_lang_id else []),
+                    mix_kwargs
                 ),
                 self.linguistic_encoder_cache_path,
                 input_names=[
                     'tokens',
                     'word_div',
                     'word_dur',
-                    *(['languages'] if input_lang_id else [])
+                    *(['languages'] if input_lang_id else []),
+                    'tokens_b',
+                    'blend'
                 ],
                 output_names=encoder_output_names,
                 dynamic_axes={
@@ -238,7 +249,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                         1: 'n_words'
                     },
                     **encoder_common_axes,
-                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {})
+                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {}),
+                    **mix_axes
                 },
                 opset_version=17,
                 **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
@@ -285,13 +297,16 @@ class DiffSingerVarianceExporter(BaseExporter):
                 (
                     tokens,
                     ph_dur,
-                    *([languages] if input_lang_id else [])
+                    *([languages] if input_lang_id else []),
+                    mix_kwargs
                 ),
                 self.linguistic_encoder_cache_path,
                 input_names=[
                     'tokens',
                     'ph_dur',
-                    *(['languages'] if input_lang_id else [])
+                    *(['languages'] if input_lang_id else []),
+                    'tokens_b',
+                    'blend'
                 ],
                 output_names=encoder_output_names,
                 dynamic_axes={
@@ -302,7 +317,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                         1: 'n_tokens'
                     },
                     **encoder_common_axes,
-                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {})
+                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {}),
+                    **mix_axes
                 },
                 opset_version=17,
                 **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS

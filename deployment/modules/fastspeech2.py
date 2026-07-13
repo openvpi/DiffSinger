@@ -188,8 +188,16 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
             self.use_lang_id = False
         self.lr = LengthRegulator()
 
-    def forward_encoder_word(self, tokens, word_div, word_dur, languages=None):
-        txt_embed = self.txt_embed(tokens)
+    def _blend_txt_embed(self, tokens, tokens_b, blend):
+        # P1-a phoneme mix (experiment): per-token convex blend of two phoneme embeddings.
+        #   blend in [0, 1], shape [B, n_tokens]; 0 => plain lookup (bit-identical to no-mix export).
+        if tokens_b is None or blend is None:
+            return self.txt_embed(tokens)
+        w = blend.unsqueeze(-1)  # [B, n_tokens, 1]
+        return (1.0 - w) * self.txt_embed(tokens) + w * self.txt_embed(tokens_b)
+
+    def forward_encoder_word(self, tokens, word_div, word_dur, languages=None, tokens_b=None, blend=None):
+        txt_embed = self._blend_txt_embed(tokens, tokens_b, blend)
         ph2word = self.lr(word_div)
         onset = ph2word > F.pad(ph2word, [1, -1])
         onset_embed = self.onset_embed(onset.long())
@@ -206,8 +214,8 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         x_masks = tokens == PAD_INDEX
         return self.encoder(txt_embed, extra_embed, x_masks), x_masks
 
-    def forward_encoder_phoneme(self, tokens, ph_dur, languages=None):
-        txt_embed = self.txt_embed(tokens)
+    def forward_encoder_phoneme(self, tokens, ph_dur, languages=None, tokens_b=None, blend=None):
+        txt_embed = self._blend_txt_embed(tokens, tokens_b, blend)
         if self.use_variance_scaling:
             ph_dur_embed = self.ph_dur_embed(torch.log(1 + ph_dur.float())[:, :, None])
         else:

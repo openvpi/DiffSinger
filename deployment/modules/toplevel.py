@@ -203,13 +203,15 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             encoder_out += self.frozen_spk_embed
         return encoder_out
 
-    def forward_linguistic_encoder_word(self, tokens, word_div, word_dur, languages=None):
-        encoder_out, x_masks = self.fs2.forward_encoder_word(tokens, word_div, word_dur, languages=languages)
+    def forward_linguistic_encoder_word(self, tokens, word_div, word_dur, languages=None, tokens_b=None, blend=None):
+        encoder_out, x_masks = self.fs2.forward_encoder_word(
+            tokens, word_div, word_dur, languages=languages, tokens_b=tokens_b, blend=blend)
         encoder_out = self.embed_frozen_spk(encoder_out)
         return encoder_out, x_masks
 
-    def forward_linguistic_encoder_phoneme(self, tokens, ph_dur, languages=None):
-        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(tokens, ph_dur, languages=languages)
+    def forward_linguistic_encoder_phoneme(self, tokens, ph_dur, languages=None, tokens_b=None, blend=None):
+        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(
+            tokens, ph_dur, languages=languages, tokens_b=tokens_b, blend=blend)
         encoder_out = self.embed_frozen_spk(encoder_out)
         return encoder_out, x_masks
 
