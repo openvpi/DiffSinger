@@ -336,6 +336,10 @@ class DiffSingerVarianceExporter(BaseExporter):
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
             retake = torch.ones_like(pitch, dtype=torch.bool)
+            # Phoneme mix (P3 envelope): S target encoder_outs + per-frame blend, slot axis 0 dynamic.
+            #   Trace with 2 slots; blend all-zeros => bit-identical to no-mix.
+            pitch_encoder_out_b = encoder_out.expand(2, -1, -1).contiguous()
+            pitch_blend = torch.zeros((2, pitch.shape[1]), dtype=torch.float32, device=self.device)
             pitch_input_args = (
                 encoder_out,
                 ph_dur,
@@ -349,7 +353,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'retake': retake,
                     **({'spk_embed': torch.rand(
                         1, 15, hparams['hidden_size'], dtype=torch.float32, device=self.device
-                    )} if input_spk_embed else {})
+                    )} if input_spk_embed else {}),
+                    'encoder_out_b': pitch_encoder_out_b,
+                    'blend': pitch_blend
                 }
             )
             torch.onnx.export(
@@ -364,7 +370,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'pitch',
                     *(['expr'] if self.expose_expr else []),
                     'retake',
-                    *(['spk_embed'] if input_spk_embed else [])
+                    *(['spk_embed'] if input_spk_embed else []),
+                    'encoder_out_b',
+                    'blend'
                 ],
                 output_names=[
                     'pitch_cond', 'base_pitch'
@@ -397,7 +405,15 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'base_pitch': {
                         1: 'n_frames'
                     },
-                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {})
+                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {}),
+                    'encoder_out_b': {
+                        0: 'n_mix',
+                        1: 'n_tokens'
+                    },
+                    'blend': {
+                        0: 'n_mix',
+                        1: 'n_frames'
+                    }
                 },
                 opset_version=17,
                 **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
@@ -512,6 +528,10 @@ class DiffSingerVarianceExporter(BaseExporter):
                 for v_name in self.model.variance_prediction_list
             }
             retake = torch.ones_like(pitch, dtype=torch.bool)[..., None].tile(len(self.model.variance_prediction_list))
+            # Phoneme mix (P3 envelope): S target encoder_outs + per-frame blend (trailing kwargs so the
+            #   optional spk_embed positional does not shift). Trace with 2 slots; zeros => bit-identical.
+            var_encoder_out_b = encoder_out.expand(2, -1, -1).contiguous()
+            var_blend = torch.zeros((2, pitch.shape[1]), dtype=torch.float32, device=self.device)
             torch.onnx.export(
                 self.model.view_as_variance_preprocess(),
                 (
@@ -523,14 +543,17 @@ class DiffSingerVarianceExporter(BaseExporter):
                     *([torch.rand(
                         1, 15, hparams['hidden_size'],
                         dtype=torch.float32, device=self.device
-                    )] if input_spk_embed else [])
+                    )] if input_spk_embed else []),
+                    {'encoder_out_b': var_encoder_out_b, 'blend': var_blend}
                 ),
                 self.variance_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur', 'pitch',
                     *self.model.variance_prediction_list,
                     'retake',
-                    *(['spk_embed'] if input_spk_embed else [])
+                    *(['spk_embed'] if input_spk_embed else []),
+                    'encoder_out_b',
+                    'blend'
                 ],
                 output_names=[
                     'variance_cond'
@@ -554,7 +577,15 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'retake': {
                         1: 'n_frames'
                     },
-                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {})
+                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {}),
+                    'encoder_out_b': {
+                        0: 'n_mix',
+                        1: 'n_tokens'
+                    },
+                    'blend': {
+                        0: 'n_mix',
+                        1: 'n_frames'
+                    }
                 },
                 opset_version=17,
                 **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS

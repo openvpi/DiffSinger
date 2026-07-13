@@ -236,12 +236,28 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             x_cond += stretch_embed_rnn_out
         return x_cond
 
+    # Phoneme mix (P3 envelope, experiment): blend the encoder_out-derived condition PER FRAME with
+    #   S target streams' conditions (each gathered to frames on the SHARED ph_dur), convex per frame.
+    #   encoder_out_b: [S, n_tokens, H]; blend: [S, n_frames]; base weight = 1 - sum_S(blend), clamped >=0.
+    #   Only the encoder_out-derived condition is mixed; all other conditions (melody/retake/pitch/spk)
+    #   are shared and added once on the blended result. blend all-zeros => bit-identical to no-mix.
+    def _blend_condition(self, condition, encoder_out_b, blend, ph_dur):
+        if encoder_out_b is None or blend is None:
+            return condition
+        n_mix = encoder_out_b.shape[0]
+        cond_b = self.forward_mel2x_gather(
+            encoder_out_b, ph_dur.expand(n_mix, -1), x_dim=self.hidden_size, check_stretch_embed=True)  # [S, n_frames, H]
+        base_w = (1.0 - blend.sum(dim=0, keepdim=True)).clamp(min=0.0)  # [1, n_frames]
+        return base_w[:, :, None] * condition + (blend[:, :, None] * cond_b).sum(dim=0, keepdim=True)
+
     def forward_pitch_preprocess(
             self, encoder_out, ph_dur,
             note_midi=None, note_rest=None, note_dur=None, note_glide=None,
-            pitch=None, expr=None, retake=None, spk_embed=None
+            pitch=None, expr=None, retake=None, spk_embed=None,
+            encoder_out_b=None, blend=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True)
+        condition = self._blend_condition(condition, encoder_out_b, blend, ph_dur)
         if self.use_melody_encoder:
             if self.melody_encoder.use_glide_embed and note_glide is None:
                 note_glide = torch.LongTensor([[0]]).to(encoder_out.device)
@@ -293,9 +309,11 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def forward_variance_preprocess(
             self, encoder_out, ph_dur, pitch,
-            variances: dict = None, retake=None, spk_embed=None
+            variances: dict = None, retake=None, spk_embed=None,
+            encoder_out_b=None, blend=None
     ):
         condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True)
+        condition = self._blend_condition(condition, encoder_out_b, blend, ph_dur)
         if self.use_variance_scaling:
             variance_cond = condition + self.pitch_embed(pitch[:, :, None] / 12)
         else:
