@@ -86,6 +86,9 @@ nccl_p2p: true
 # fusing
 ###########
 use_fused_kernels: false
+# Variance backbones are too small for meaningful Triton fusion speedup.
+# Enable explicitly if using softsign_glu for pitch/variance predictors.
+use_fused_kernels_variance: false
 
 ###########
 # finetune

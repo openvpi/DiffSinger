@@ -18,11 +18,6 @@ from utils.plot import dur_to_figure, pitch_note_to_figure, curve_to_figure
 
 matplotlib.use('Agg')
 
-# Enable TF32 for cuBLAS and cuDNN on Ampere+ GPUs (RTX 4090, 5090, etc.)
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-torch.set_float32_matmul_precision("medium")
-
 
 class VarianceDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
@@ -125,27 +120,33 @@ class VarianceTask(BaseTask):
         # fusion to provide meaningful speedup. Disabled by default.
         # To enable, set use_fused_kernels_variance: true in config.
         self._fused_kernels_patched = 0
+        self._fused_kernels_fallback = False
         if hparams.get('use_fused_kernels_variance', False):
-            from modules.kernels.integration import patch_diffusion_module
-            from lightning.pytorch.utilities.rank_zero import rank_zero_info
-            # Each predictor has its own backbone config; patch only the ones
-            # actually configured with softsign_glu (others are skipped with
-            # a warning instead of silently changing their math).
-            # NOTE: LYNXNet2 defaults to swiglu when glu_type is unset.
-            for predictor_attr, args_key in (
-                ('pitch_predictor', 'pitch_prediction_args'),
-                ('variance_predictor', 'variances_prediction_args'),
-            ):
-                predictor = getattr(self.model, predictor_attr, None)
-                if predictor is None:
-                    continue
-                glu = (hparams.get(args_key) or {}).get('backbone_args', {}).get('glu_type', 'swiglu')
-                n = patch_diffusion_module(predictor, glu_type=glu)
-                self._fused_kernels_patched += n
-                rank_zero_info(
-                    'Fused kernels: patched %d LYNXNet2 blocks in %s (glu_type=%s)',
-                    n, predictor_attr, glu
-                )
+            try:
+                from modules.kernels.integration import patch_diffusion_module
+                from lightning.pytorch.utilities.rank_zero import rank_zero_info
+                # Each predictor has its own backbone config; patch only the ones
+                # actually configured with softsign_glu (others are skipped with
+                # a warning instead of silently changing their math).
+                # NOTE: LYNXNet2 defaults to swiglu when glu_type is unset.
+                for predictor_attr, args_key in (
+                    ('pitch_predictor', 'pitch_prediction_args'),
+                    ('variance_predictor', 'variances_prediction_args'),
+                ):
+                    predictor = getattr(self.model, predictor_attr, None)
+                    if predictor is None:
+                        continue
+                    glu = (hparams.get(args_key) or {}).get('backbone_args', {}).get('glu_type', 'swiglu')
+                    n = patch_diffusion_module(predictor, glu_type=glu)
+                    self._fused_kernels_patched += n
+                    rank_zero_info(
+                        'Fused kernels: patched %d LYNXNet2 blocks in %s (glu_type=%s)',
+                        n, predictor_attr, glu
+                    )
+            except ImportError as e:
+                from lightning.pytorch.utilities.rank_zero import rank_zero_info
+                rank_zero_info('Fused kernels unavailable (ImportError: %s); running eager.', e)
+                self._fused_kernels_fallback = True
 
 
     def _build_model(self):

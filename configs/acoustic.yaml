@@ -82,7 +82,7 @@ backbone_args:
   kernel_size: 31
   dropout_rate: 0.0
   use_conditioner_cache: true
-  glu_type: 'softsign_glu'
+  glu_type: 'atanglu'
 main_loss_type: l2
 main_loss_log_norm: false
 schedule_type: 'linear'

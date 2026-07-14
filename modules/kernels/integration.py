@@ -53,35 +53,35 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
         )
         return block
 
-    net = block.net  # nn.Sequential
-    glu_fn = fused_linear_softsign_glu
-
     def fused_forward(self, x):
         residual = x
 
         # Original: LayerNorm → Transpose → Conv1d → Transpose
-        x = net[0](x)  # LayerNorm
-        x = net[1](x)  # Transpose
-        x = net[2](x)  # Conv1d(depthwise)
-        x = net[3](x)  # Transpose
+        x = self.net[0](x)  # LayerNorm
+        x = self.net[1](x)  # Transpose
+        x = self.net[2](x)  # Conv1d(depthwise)
+        x = self.net[3](x)  # Transpose
 
         if self.training:
             # Fused: Linear+GLU → Linear+GLU
-            x = glu_fn(x, net[4].weight, net[4].bias)
-            x = glu_fn(x, net[6].weight, net[6].bias)  # index 6 = second Linear
+            x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias)
+            x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias)
         else:
             # Original: Linear → GLU → Linear → GLU
-            x = net[4](x)
-            x = net[5](x)  # SoftSignGLU
-            x = net[6](x)
-            x = net[7](x)
+            x = self.net[4](x)
+            x = self.net[5](x)  # SoftSignGLU
+            x = self.net[6](x)
+            x = self.net[7](x)
 
         # Original: Linear → Dropout → +residual
-        x = net[8](x)  # output projection
-        x = net[9](x)  # Dropout
+        x = self.net[8](x)  # output projection
+        x = self.net[9](x)  # Dropout
         return x + residual
 
-    # Monkey-patch
+    # Monkey-patch — use descriptor protocol so the bound method captures
+    # ``self`` dynamically (avoids the deepcopy stale-closure issue: a
+    # deepcopy'ed block would otherwise keep a reference to the original's
+    # ``net``).
     block.forward = fused_forward.__get__(block, type(block))
     return block
 
@@ -193,11 +193,14 @@ def patch_variance_model(model, glu_type='softsign_glu'):
 # Warmup — trigger Triton autotune before training starts
 # ---------------------------------------------------------------------------
 
-def warmup_fused_backbone(backbone, glu_type='softsign_glu', num_channels=1024, max_frames=None,
-                          autocast_dtype=None):
-    """Run dummy forward+backward passes to trigger Triton autotune compilation
+def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
+    """Run dummy forward passes to trigger Triton autotune compilation
     for all fused kernels (fwd + bwd elem). Call after patching, before
     the first real training step (model must already be on its CUDA device).
+
+    Only forward is executed (``torch.no_grad``) — the element-wise backward
+    kernel's autotune key depends on ``N`` (a single fixed value per model),
+    so its one-off compile cost is paid on the first real step instead.
 
     Autotune timings are cached in process memory only (Triton persists
     compiled binaries to disk, but re-runs the config benchmark per process),
@@ -207,8 +210,6 @@ def warmup_fused_backbone(backbone, glu_type='softsign_glu', num_channels=1024, 
 
     Args:
         backbone: LYNXNet2 model (already patched).
-        glu_type: GLU type (only softsign_glu fuses).
-        num_channels: backbone width (1024 for acoustic, 512/384 for variance).
         max_frames: max total frames per batch (hparams['max_batch_frames']).
             If None, warms a single small bucket only.
         autocast_dtype: torch.float16 for '16-mixed', torch.bfloat16 for
@@ -217,9 +218,13 @@ def warmup_fused_backbone(backbone, glu_type='softsign_glu', num_channels=1024, 
     """
     import contextlib
     import triton
+    import warnings
 
     device = next(backbone.parameters()).device
     dtype = next(backbone.parameters()).dtype
+
+    if not device.type == 'cuda':
+        return
 
     # cond hidden size from the conditioner projection (Linear or Conv1d)
     proj = backbone.conditioner_projection
@@ -245,27 +250,22 @@ def warmup_fused_backbone(backbone, glu_type='softsign_glu', num_channels=1024, 
     for T in t_list:
         # spec shape: [B, n_feats, in_dims, T]
         spec = torch.randn(B, backbone.n_feats, backbone.in_dims, T,
-                           device=device, dtype=dtype, requires_grad=True)
+                           device=device, dtype=dtype)
         t = torch.randint(0, 1000, (B,), device=device).float()
         cond = torch.randn(B, hidden, T, device=device, dtype=dtype)
 
         try:
-            with ac_factory():
-                out = backbone(spec, t, cond=cond)
-            out.sum().backward()
+            with torch.no_grad():
+                with ac_factory():
+                    backbone(spec, t, cond=cond)
         except Exception as e:
             # Autotune failure should not crash training — Triton cache
             # can be built on the first real step instead.
-            import warnings
             warnings.warn(f'Fused kernel warmup skipped at T={T} ({e})')
             break
         finally:
-            for p in backbone.parameters():
-                if p.grad is not None:
-                    p.grad = None
             del spec, cond
-    if device.type == 'cuda':
-        torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
 
 
 # ---------------------------------------------------------------------------

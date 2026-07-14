@@ -18,11 +18,6 @@ from utils.plot import spec_to_figure
 
 matplotlib.use('Agg')
 
-# Enable TF32 for cuBLAS and cuDNN on Ampere+ GPUs (RTX 4090, 5090, etc.)
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-torch.set_float32_matmul_precision("medium")
-
 
 class AcousticDataset(BaseDataset):
     def __init__(self, prefix, preload=False):
@@ -103,32 +98,43 @@ class AcousticTask(BaseTask):
         # Only softsign_glu backbones are patched; other GLU types keep the
         # eager path (patch_diffusion_module returns 0 and warns).
         self._fused_kernels_patched = 0
+        self._fused_kernels_fallback = False
         if hparams.get('use_fused_kernels', False):
-            from modules.kernels.integration import patch_diffusion_module
-            from lightning.pytorch.utilities.rank_zero import rank_zero_info
-            # NOTE: LYNXNet2 defaults to swiglu when glu_type is unset
-            self._fused_kernels_patched = patch_diffusion_module(
-                self.model.diffusion,
-                glu_type=hparams['backbone_args'].get('glu_type', 'swiglu'),
-            )
-            rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks', self._fused_kernels_patched)
+            try:
+                from modules.kernels.integration import patch_diffusion_module
+                from lightning.pytorch.utilities.rank_zero import rank_zero_info
+                # NOTE: LYNXNet2 defaults to swiglu when glu_type is unset
+                self._fused_kernels_patched = patch_diffusion_module(
+                    self.model.diffusion,
+                    glu_type=hparams['backbone_args'].get('glu_type', 'swiglu'),
+                )
+                rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks', self._fused_kernels_patched)
+            except ImportError as e:
+                rank_zero_info('Fused kernels unavailable (ImportError: %s); running eager.', e)
+                self._fused_kernels_fallback = True
 
     def on_fit_start(self):
         # Warm Triton autotune caches after the model is on its CUDA device,
         # so the first training steps don't pay the per-bucket benchmark cost.
         if self._fused_kernels_patched > 0 and self.device.type == 'cuda':
             from modules.kernels.integration import warmup_fused_backbone
+            from lightning.pytorch.utilities.rank_zero import rank_zero_info
             precision = str(hparams.get('pl_trainer_precision', '32'))
             autocast_dtype = (
                 torch.float16 if '16' in precision and 'bf16' not in precision
                 else torch.bfloat16 if 'bf16' in precision
                 else None
             )
+            if autocast_dtype is None:
+                rank_zero_info(
+                    'Fused kernels: precision=%s has no autocast dtype; '
+                    'fused kernel will fall back to eager at runtime.', precision
+                )
             for attr in ('denoise_fn', 'velocity_fn'):
                 backbone = getattr(self.model.diffusion, attr, None)
                 if backbone is not None:
                     warmup_fused_backbone(
-                        backbone, glu_type='softsign_glu',
+                        backbone,
                         max_frames=hparams['max_batch_frames'],
                         autocast_dtype=autocast_dtype,
                     )
