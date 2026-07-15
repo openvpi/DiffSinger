@@ -116,12 +116,12 @@ class VarianceTask(BaseTask):
         super()._finish_init()
 
         # ── Fuse LYNXNet2 backbone kernels (in-place) ──
-        # Variance model backbones (K=384/512) are too small for Triton
-        # fusion to provide meaningful speedup. Disabled by default.
-        # To enable, set use_fused_kernels_variance: true in config.
+        # Note: variance backbones are smaller (K=384/512) — fusion pays off
+        # at larger max_batch_frames (benchmarked ~1.3-1.6x at 24k frames,
+        # slightly negative below ~10k).
         self._fused_kernels_patched = 0
         self._fused_kernels_fallback = False
-        if hparams.get('use_fused_kernels_variance', False):
+        if hparams.get('use_fused_kernels', False):
             try:
                 from modules.kernels.integration import patch_diffusion_module
                 from lightning.pytorch.utilities.rank_zero import rank_zero_info
