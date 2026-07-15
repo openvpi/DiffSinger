@@ -110,6 +110,7 @@ class AcousticTask(BaseTask):
                 )
                 rank_zero_info('Fused kernels: patched %d LYNXNet2 blocks', self._fused_kernels_patched)
             except ImportError as e:
+                from lightning.pytorch.utilities.rank_zero import rank_zero_info
                 rank_zero_info('Fused kernels unavailable (ImportError: %s); running eager.', e)
                 self._fused_kernels_fallback = True
 
