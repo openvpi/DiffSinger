@@ -19,7 +19,7 @@ This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesi
 
 ## User Guidance
 
-> 中文教程 / Chinese Tutorials: [Text](https://openvpi-docs.feishu.cn/wiki/KmBFwoYDEixrS4kHcTAcajPinPe), [Video](https://space.bilibili.com/179281251/channel/collectiondetail?sid=1747910)
+> Navigation page including all tutorials and resources (Chinese): https://diffsinger.com
 
 - **Installation & basic usages**: See [Getting Started](docs/GettingStarted.md)
 - **Dataset creation pipelines & tools**: See [MakeDiffSinger](https://github.com/openvpi/MakeDiffSinger)
@@ -61,6 +61,7 @@ TBD
 ### Dependencies & Submodules
 
 - [RoPE](https://github.com/lucidrains/rotary-embedding-torch) for transformer encoder
+- [Mix-LN](https://www.isca-archive.org/interspeech_2024/hwang24_interspeech.pdf) for cross-speaker/lingual learning
 - [HiFi-GAN](https://github.com/jik876/hifi-gan) and [NSF](https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/tree/master/project/01-nsf) for waveform reconstruction
 - [pc-ddsp](https://github.com/yxlllc/pc-ddsp) for waveform reconstruction
 - [RMVPE](https://github.com/Dream-High/RMVPE) and yxlllc's [fork](https://github.com/yxlllc/RMVPE) for pitch extraction

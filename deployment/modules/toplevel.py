@@ -67,12 +67,17 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             gender: Tensor = None,
             velocity: Tensor = None,
             spk_embed: Tensor = None,
-            languages: Tensor = None
+            languages: Tensor = None,
+            retake: Tensor = None,
+            gt_mel: Tensor = None,
+            tokens_b: Tensor = None,
+            blend: Tensor = None
     ):
         condition = self.fs2(
             tokens, durations, f0, variances=variances,
             gender=gender, velocity=velocity, spk_embed=spk_embed,
-            languages=languages
+            languages=languages, retake=retake, gt_mel=gt_mel,
+            tokens_b=tokens_b, blend=blend
         )
         if self.use_shallow_diffusion:
             aux_mel_pred = self.aux_decoder(condition, infer=True)
@@ -82,24 +87,24 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
 
     def forward_shallow_diffusion(
             self, condition: Tensor, x_start: Tensor,
-            depth, steps: int
+            depth, steps: int, noise=None
     ) -> Tensor:
-        mel_pred = self.diffusion(condition, x_start=x_start, depth=depth, steps=steps)
+        mel_pred = self.diffusion(condition, x_start=x_start, depth=depth, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
-    def forward_diffusion(self, condition: Tensor, steps: int):
-        mel_pred = self.diffusion(condition, steps=steps)
+    def forward_diffusion(self, condition: Tensor, steps: int, noise=None):
+        mel_pred = self.diffusion(condition, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
     def forward_shallow_reflow(
             self, condition: Tensor, x_end: Tensor,
-            depth, steps: int
+            depth, steps: int, noise=None
     ):
-        mel_pred = self.diffusion(condition, x_end=x_end, depth=depth, steps=steps)
+        mel_pred = self.diffusion(condition, x_end=x_end, depth=depth, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
-    def forward_reflow(self, condition: Tensor, steps: int):
-        mel_pred = self.diffusion(condition, steps=steps)
+    def forward_reflow(self, condition: Tensor, steps: int, noise=None):
+        mel_pred = self.diffusion(condition, steps=steps, noise=noise)
         return self.ensure_mel_base(mel_pred)
 
     def view_as_fs2_aux(self) -> nn.Module:
@@ -198,35 +203,63 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             encoder_out += self.frozen_spk_embed
         return encoder_out
 
-    def forward_linguistic_encoder_word(self, tokens, word_div, word_dur, languages=None):
-        encoder_out, x_masks = self.fs2.forward_encoder_word(tokens, word_div, word_dur, languages=languages)
+    def forward_linguistic_encoder_word(self, tokens, word_div, word_dur, languages=None, tokens_b=None, blend=None):
+        encoder_out, x_masks = self.fs2.forward_encoder_word(
+            tokens, word_div, word_dur, languages=languages, tokens_b=tokens_b, blend=blend)
         encoder_out = self.embed_frozen_spk(encoder_out)
         return encoder_out, x_masks
 
-    def forward_linguistic_encoder_phoneme(self, tokens, ph_dur, languages=None):
-        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(tokens, ph_dur, languages=languages)
+    def forward_linguistic_encoder_phoneme(self, tokens, ph_dur, languages=None, tokens_b=None, blend=None):
+        encoder_out, x_masks = self.fs2.forward_encoder_phoneme(
+            tokens, ph_dur, languages=languages, tokens_b=tokens_b, blend=blend)
         encoder_out = self.embed_frozen_spk(encoder_out)
         return encoder_out, x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
         return self.fs2.forward_dur_predictor(encoder_out, x_masks, ph_midi, spk_embed=spk_embed)
 
-    def forward_mel2x_gather(self, x_src, x_dur, x_dim=None):
+    def forward_mel2x_gather(self, x_src, x_dur, x_dim=None, check_stretch_embed=False):
         mel2x = self.lr(x_dur)
+        _mel2x = mel2x
         if x_dim is not None:
             x_src = F.pad(x_src, [0, 0, 1, 0])
             mel2x = mel2x[..., None].repeat([1, 1, x_dim])
         else:
             x_src = F.pad(x_src, [1, 0])
         x_cond = torch.gather(x_src, 1, mel2x)
+        if self.use_stretch_embed and check_stretch_embed:
+            stretch = torch.round(1000 * self.sr(_mel2x, x_dur))
+            table = self.stretch_embed(torch.arange(0, 1001, device=stretch.device))
+            stretch_embed = torch.index_select(table, 0, stretch.view(-1).long()).view_as(x_cond)
+            x_cond += stretch_embed
+            stretch_embed_rnn_out, _ = self.stretch_embed_rnn(x_cond)
+            x_cond += stretch_embed_rnn_out
         return x_cond
+
+    # Phoneme mix (P3 envelope, experiment): blend the encoder_out-derived condition PER FRAME with
+    #   S target streams' conditions (each gathered to frames on the SHARED ph_dur), convex per frame.
+    #   encoder_out_b: [S, n_tokens, H]; blend: [S, n_frames]; base weight = 1 - sum_S(blend), clamped >=0.
+    #   Only the encoder_out-derived condition is mixed; all other conditions (melody/retake/pitch/spk)
+    #   are shared and added once on the blended result. blend all-zeros => bit-identical to no-mix.
+    def _blend_condition(self, condition, encoder_out_b, blend, ph_dur):
+        if encoder_out_b is None or blend is None:
+            return condition
+        n_mix = encoder_out_b.shape[0]
+        cond_b = self.forward_mel2x_gather(
+            encoder_out_b, ph_dur.expand(n_mix, -1), x_dim=self.hidden_size, check_stretch_embed=True)  # [S, n_frames, H]
+        # base 权重 = 1 - Σblend。不 clamp（会引入 Clip 节点、与 post 的 clamp_spec 撞边名）——
+        #   凸性由 C# 保证(单槽 blend∈[0,1] ⇒ Σ≤1;N 槽 C# 归一)，故 1-Σ≥0，无需 clamp。
+        base_w = 1.0 - blend.sum(dim=0, keepdim=True)  # [1, n_frames]
+        return base_w[:, :, None] * condition + (blend[:, :, None] * cond_b).sum(dim=0, keepdim=True)
 
     def forward_pitch_preprocess(
             self, encoder_out, ph_dur,
             note_midi=None, note_rest=None, note_dur=None, note_glide=None,
-            pitch=None, expr=None, retake=None, spk_embed=None
+            pitch=None, expr=None, retake=None, spk_embed=None,
+            encoder_out_b=None, blend=None
     ):
-        condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
+        condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True)
+        condition = self._blend_condition(condition, encoder_out_b, blend, ph_dur)
         if self.use_melody_encoder:
             if self.melody_encoder.use_glide_embed and note_glide is None:
                 note_glide = torch.LongTensor([[0]]).to(encoder_out.device)
@@ -252,18 +285,24 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
         base_pitch = self.smooth(frame_midi_pitch)
         if self.use_melody_encoder:
             delta_pitch = (pitch - base_pitch) * ~retake
-            pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None])
+            if self.use_variance_scaling:
+                pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None] / 12)
+            else:
+                pitch_cond += self.delta_pitch_embed(delta_pitch[:, :, None])
         else:
             base_pitch = base_pitch * retake + pitch * ~retake
-            pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
+            if self.use_variance_scaling:
+                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None] / 128)
+            else:
+                pitch_cond += self.base_pitch_embed(base_pitch[:, :, None])
         if hparams['use_spk_id'] and spk_embed is not None:
             pitch_cond += spk_embed
         return pitch_cond, base_pitch
 
     def forward_pitch_reflow(
-            self, pitch_cond, steps: int = 10
+            self, pitch_cond, steps: int = 10, noise=None
     ):
-        x_pred = self.pitch_predictor(pitch_cond, steps=steps)
+        x_pred = self.pitch_predictor(pitch_cond, steps=steps, noise=noise)
         return x_pred
 
     def forward_pitch_postprocess(self, x_pred, base_pitch):
@@ -272,16 +311,21 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def forward_variance_preprocess(
             self, encoder_out, ph_dur, pitch,
-            variances: dict = None, retake=None, spk_embed=None
+            variances: dict = None, retake=None, spk_embed=None,
+            encoder_out_b=None, blend=None
     ):
-        condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size)
-        variance_cond = condition + self.pitch_embed(pitch[:, :, None])
+        condition = self.forward_mel2x_gather(encoder_out, ph_dur, x_dim=self.hidden_size, check_stretch_embed=True)
+        condition = self._blend_condition(condition, encoder_out_b, blend, ph_dur)
+        if self.use_variance_scaling:
+            variance_cond = condition + self.pitch_embed(pitch[:, :, None] / 12)
+        else:
+            variance_cond = condition + self.pitch_embed(pitch[:, :, None])
         non_retake_masks = [
             v_retake.float()  # [B, T, 1]
             for v_retake in (~retake).split(1, dim=2)
         ]
         variance_embeds = [
-            self.variance_embeds[v_name](variances[v_name][:, :, None]) * v_masks
+            self.variance_embeds[v_name](variances[v_name][:, :, None] * self.variance_retake_scaling[v_name]) * v_masks
             for v_name, v_masks in zip(self.variance_prediction_list, non_retake_masks)
         ]
         variance_cond += torch.stack(variance_embeds, dim=-1).sum(-1)
@@ -289,8 +333,8 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
             variance_cond += spk_embed
         return variance_cond
 
-    def forward_variance_reflow(self, variance_cond, steps: int = 10):
-        xs_pred = self.variance_predictor(variance_cond, steps=steps)
+    def forward_variance_reflow(self, variance_cond, steps: int = 10, noise=None):
+        xs_pred = self.variance_predictor(variance_cond, steps=steps, noise=noise)
         return xs_pred
 
     def forward_variance_postprocess(self, xs_pred):

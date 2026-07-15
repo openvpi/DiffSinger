@@ -52,6 +52,15 @@ def random_continuous_masks(*shape: int, dim: int, device: str | torch.device = 
     return masks
 
 
+def random_retake_masks(b, t, device):
+    # 1/4 segments are True in average
+    B_masks = torch.randint(low=0, high=4, size=(b, 1), dtype=torch.long, device=device) == 0
+    # 1/3 frames are True in average
+    T_masks = random_continuous_masks(b, t, dim=1, device=device)
+    # 1/4 segments and 1/2 frames are True in average (1/4 + 3/4 * 1/3 = 1/2)
+    return B_masks | T_masks
+
+
 def _is_batch_full(batch, num_frames, max_batch_frames, max_batch_size):
     if len(batch) == 0:
         return 0
@@ -141,7 +150,7 @@ def unpack_dict_to_list(samples):
         for k, v in samples.items():
             try:
                 res[k] = v[i]
-            except:
+            except (IndexError, TypeError):
                 pass
         samples_.append(res)
     return samples_
@@ -200,8 +209,9 @@ def load_ckpt(
     else:
         state_dict = ckpt_loaded[key_in_ckpt]
     if prefix_in_ckpt is not None:
+        old_state_dict = state_dict
         state_dict = OrderedDict()
-        for k, v in ckpt_loaded[key_in_ckpt].items():
+        for k, v in old_state_dict.items():
             if not k.startswith(f'{prefix_in_ckpt}.'):
                 continue
             k = k[len(prefix_in_ckpt) + 1:]
@@ -213,6 +223,18 @@ def load_ckpt(
             if excluded:
                 continue
             state_dict[k] = v
+
+    # Manual self-attention (MultiheadSelfAttentionWithRoPE) uses 'in_proj.weight',
+    # while older checkpoints saved from torch.nn.MultiheadAttention use 'in_proj_weight'.
+    # The two tensors have identical shape and semantics (Q/K/V stacked along dim 0),
+    # so a key rename is sufficient to load legacy ckpts.
+    renamed = OrderedDict()
+    for k, v in state_dict.items():
+        if k.endswith('.self_attn.in_proj_weight'):
+            k = k[:-len('in_proj_weight')] + 'in_proj.weight'
+        renamed[k] = v
+    state_dict = renamed
+
     if not strict:
         cur_model_state_dict = cur_model.state_dict()
         unmatched_keys = []
@@ -304,7 +326,7 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
                     resolved["cls"] == "torch.optim.lr_scheduler.ChainedScheduler"
                     and scheduler_args["scheduler_cls"] == "torch.optim.lr_scheduler.SequentialLR"
                 ):
-                    raise ValueError(f"ChainedScheduler cannot be part of a SequentialLR.")
+                    raise ValueError("ChainedScheduler cannot be part of a SequentialLR.")
                 resolved['optimizer'] = optimizer
                 obj = build_object_from_class_name(
                     resolved['cls'],
@@ -326,8 +348,9 @@ def build_lr_scheduler_from_config(optimizer, scheduler_args):
 
 
 def simulate_lr_scheduler(optimizer_args, scheduler_args, step_count, num_param_groups=1):
+    optimizer_cls = optimizer_args['optimizer_cls']
     optimizer = build_object_from_class_name(
-        optimizer_args['optimizer_cls'],
+        'torch.optim.AdamW' if optimizer_cls == 'modules.optimizer.muon.Muon_AdamW' else optimizer_cls,
         torch.optim.Optimizer,
         [{'params': torch.nn.Parameter(), 'initial_lr': optimizer_args['lr']} for _ in range(num_param_groups)],
         **optimizer_args

@@ -23,7 +23,7 @@ dataloader_prefetch_factor: 2
 #########
 # model
 #########
-hidden_size: 256
+hidden_size: 384
 dropout: 0.1
 use_pos_embed: true
 enc_layers: 4
@@ -36,15 +36,15 @@ use_spk_id: false
 # optimization
 ###########
 optimizer_args:
-  optimizer_cls: torch.optim.AdamW
-  lr: 0.0004
+  optimizer_cls: modules.optimizer.muon.Muon_AdamW
+  lr: 0.0006
   beta1: 0.9
   beta2: 0.98
   weight_decay: 0
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR
-  step_size: 50000
-  gamma: 0.5
+  step_size: 5000
+  gamma: 0.8
 clip_grad_norm: 1
 
 ###########
@@ -54,9 +54,9 @@ num_ckpt_keep: 5
 accumulate_grad_batches: 1
 log_interval: 100
 num_sanity_val_steps: 1  # steps of validation at the beginning
-val_check_interval: 2000
-max_updates: 120000
-max_batch_frames: 32000
+val_check_interval: 4000
+max_updates: 100000
+max_batch_frames: 50000
 max_batch_size: 100000
 max_val_batch_frames: 60000
 max_val_batch_size: 1

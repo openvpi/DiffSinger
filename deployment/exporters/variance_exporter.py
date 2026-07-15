@@ -209,6 +209,14 @@ class DiffSingerVarianceExporter(BaseExporter):
         input_lang_id = self.use_lang_id
         input_spk_embed = hparams['use_spk_id'] and not self.freeze_spk
 
+        # P1-a phoneme mix (experiment, unconditional on this branch): secondary phoneme tokens
+        # + per-token blend weight [0, 1]; passed as trailing kwargs so the optional `languages`
+        # positional does not shift. blend all-zeros => bit-identical to the no-mix encoder.
+        tokens_b = tokens.clone()
+        blend = torch.zeros_like(tokens, dtype=torch.float32)
+        mix_kwargs = {'tokens_b': tokens_b, 'blend': blend}
+        mix_axes = {'tokens_b': {1: 'n_tokens'}, 'blend': {1: 'n_tokens'}}
+
         print(f'Exporting {self.fs2_class_name}...')
         if self.model.predict_dur:
             torch.onnx.export(
@@ -217,14 +225,17 @@ class DiffSingerVarianceExporter(BaseExporter):
                     tokens,
                     word_div,
                     word_dur,
-                    *([languages] if input_lang_id else [])
+                    *([languages] if input_lang_id else []),
+                    mix_kwargs
                 ),
                 self.linguistic_encoder_cache_path,
                 input_names=[
                     'tokens',
                     'word_div',
                     'word_dur',
-                    *(['languages'] if input_lang_id else [])
+                    *(['languages'] if input_lang_id else []),
+                    'tokens_b',
+                    'blend'
                 ],
                 output_names=encoder_output_names,
                 dynamic_axes={
@@ -238,9 +249,11 @@ class DiffSingerVarianceExporter(BaseExporter):
                         1: 'n_words'
                     },
                     **encoder_common_axes,
-                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {})
+                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {}),
+                    **mix_axes
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
             print(f'Exporting {self.dur_predictor_class_name}...')
@@ -275,7 +288,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     **({'spk_embed': {1: 'n_tokens'}} if input_spk_embed else {}),
                     **encoder_common_axes
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
         else:
             torch.onnx.export(
@@ -283,13 +297,16 @@ class DiffSingerVarianceExporter(BaseExporter):
                 (
                     tokens,
                     ph_dur,
-                    *([languages] if input_lang_id else [])
+                    *([languages] if input_lang_id else []),
+                    mix_kwargs
                 ),
                 self.linguistic_encoder_cache_path,
                 input_names=[
                     'tokens',
                     'ph_dur',
-                    *(['languages'] if input_lang_id else [])
+                    *(['languages'] if input_lang_id else []),
+                    'tokens_b',
+                    'blend'
                 ],
                 output_names=encoder_output_names,
                 dynamic_axes={
@@ -300,9 +317,11 @@ class DiffSingerVarianceExporter(BaseExporter):
                         1: 'n_tokens'
                     },
                     **encoder_common_axes,
-                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {})
+                    **({'languages': {1: 'n_tokens'}} if input_lang_id else {}),
+                    **mix_axes
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
         # Common dummy inputs
@@ -317,6 +336,10 @@ class DiffSingerVarianceExporter(BaseExporter):
             note_dur = torch.LongTensor([[2, 6, 3, 4]]).to(self.device)
             pitch = torch.FloatTensor([[60.] * 15]).to(self.device)
             retake = torch.ones_like(pitch, dtype=torch.bool)
+            # Phoneme mix (P3 envelope): S target encoder_outs + per-frame blend, slot axis 0 dynamic.
+            #   Trace with 2 slots; blend all-zeros => bit-identical to no-mix.
+            pitch_encoder_out_b = encoder_out.expand(2, -1, -1).contiguous()
+            pitch_blend = torch.zeros((2, pitch.shape[1]), dtype=torch.float32, device=self.device)
             pitch_input_args = (
                 encoder_out,
                 ph_dur,
@@ -330,7 +353,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'retake': retake,
                     **({'spk_embed': torch.rand(
                         1, 15, hparams['hidden_size'], dtype=torch.float32, device=self.device
-                    )} if input_spk_embed else {})
+                    )} if input_spk_embed else {}),
+                    'encoder_out_b': pitch_encoder_out_b,
+                    'blend': pitch_blend
                 }
             )
             torch.onnx.export(
@@ -345,7 +370,9 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'pitch',
                     *(['expr'] if self.expose_expr else []),
                     'retake',
-                    *(['spk_embed'] if input_spk_embed else [])
+                    *(['spk_embed'] if input_spk_embed else []),
+                    'encoder_out_b',
+                    'blend'
                 ],
                 output_names=[
                     'pitch_cond', 'base_pitch'
@@ -378,9 +405,18 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'base_pitch': {
                         1: 'n_frames'
                     },
-                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {})
+                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {}),
+                    'encoder_out_b': {
+                        0: 'n_mix',
+                        1: 'n_tokens'
+                    },
+                    'blend': {
+                        0: 'n_mix',
+                        1: 'n_frames'
+                    }
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
             # Prepare inputs for backbone tracing and pitch predictor scripting
@@ -407,11 +443,13 @@ class DiffSingerVarianceExporter(BaseExporter):
                 example_inputs=[
                     (
                         condition.transpose(1, 2),
-                        1  # p_sample branch
+                        1,  # p_sample branch
+                        noise  # externalized initial noise (last positional arg of forward)
                     ),
                     (
                         condition.transpose(1, 2),
-                        dummy_steps  # p_sample_plms branch
+                        dummy_steps,  # p_sample_plms branch
+                        noise
                     )
                 ]
             )
@@ -421,12 +459,14 @@ class DiffSingerVarianceExporter(BaseExporter):
                 pitch_predictor,
                 (
                     condition.transpose(1, 2),
-                    dummy_steps
+                    dummy_steps,
+                    noise
                 ),
                 self.pitch_predictor_cache_path,
                 input_names=[
                     'pitch_cond',
-                    'steps'
+                    'steps',
+                    'noise'
                 ],
                 output_names=[
                     'x_pred'
@@ -435,11 +475,16 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'pitch_cond': {
                         1: 'n_frames'
                     },
+                    # noise = [1, 1, repeat_bins, n_frames]; only the frame axis is dynamic.
+                    'noise': {
+                        3: 'n_frames'
+                    },
                     'x_pred': {
                         1: 'n_frames'
                     }
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
             # Prepare inputs for postprocessor of the multi-variance predictor
@@ -468,7 +513,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                         1: 'n_frames'
                     }
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
         if self.model.predict_variances:
@@ -482,6 +528,10 @@ class DiffSingerVarianceExporter(BaseExporter):
                 for v_name in self.model.variance_prediction_list
             }
             retake = torch.ones_like(pitch, dtype=torch.bool)[..., None].tile(len(self.model.variance_prediction_list))
+            # Phoneme mix (P3 envelope): S target encoder_outs + per-frame blend (trailing kwargs so the
+            #   optional spk_embed positional does not shift). Trace with 2 slots; zeros => bit-identical.
+            var_encoder_out_b = encoder_out.expand(2, -1, -1).contiguous()
+            var_blend = torch.zeros((2, pitch.shape[1]), dtype=torch.float32, device=self.device)
             torch.onnx.export(
                 self.model.view_as_variance_preprocess(),
                 (
@@ -493,14 +543,17 @@ class DiffSingerVarianceExporter(BaseExporter):
                     *([torch.rand(
                         1, 15, hparams['hidden_size'],
                         dtype=torch.float32, device=self.device
-                    )] if input_spk_embed else [])
+                    )] if input_spk_embed else []),
+                    {'encoder_out_b': var_encoder_out_b, 'blend': var_blend}
                 ),
                 self.variance_preprocess_cache_path,
                 input_names=[
                     'encoder_out', 'ph_dur', 'pitch',
                     *self.model.variance_prediction_list,
                     'retake',
-                    *(['spk_embed'] if input_spk_embed else [])
+                    *(['spk_embed'] if input_spk_embed else []),
+                    'encoder_out_b',
+                    'blend'
                 ],
                 output_names=[
                     'variance_cond'
@@ -524,16 +577,25 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'retake': {
                         1: 'n_frames'
                     },
-                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {})
+                    **({'spk_embed': {1: 'n_frames'}} if input_spk_embed else {}),
+                    'encoder_out_b': {
+                        0: 'n_mix',
+                        1: 'n_tokens'
+                    },
+                    'blend': {
+                        0: 'n_mix',
+                        1: 'n_frames'
+                    }
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
             # Prepare inputs for backbone tracing and multi-variance predictor scripting
             shape = (1, len(self.model.variance_prediction_list), repeat_bins, 15)
             noise = torch.randn(shape, device=self.device)
             condition = torch.rand((1, hparams['hidden_size'], 15), device=self.device)
-            step = (torch.rand((1,), device=self.device) * hparams['K_step']).long()
+            step = (torch.rand((1,), device=self.device) * hparams.get('time_scale_factor', hparams['K_step']))
 
             print(f'Tracing {self.variance_backbone_class_name} backbone...')
             multi_var_predictor = self.model.view_as_variance_predictor()
@@ -554,11 +616,13 @@ class DiffSingerVarianceExporter(BaseExporter):
                 example_inputs=[
                     (
                         condition.transpose(1, 2),
-                        1  # p_sample branch
+                        1,  # p_sample branch
+                        noise  # externalized initial noise (last positional arg of forward)
                     ),
                     (
                         condition.transpose(1, 2),
-                        dummy_steps  # p_sample_plms branch
+                        dummy_steps,  # p_sample_plms branch
+                        noise
                     )
                 ]
             )
@@ -568,12 +632,14 @@ class DiffSingerVarianceExporter(BaseExporter):
                 multi_var_predictor,
                 (
                     condition.transpose(1, 2),
-                    dummy_steps
+                    dummy_steps,
+                    noise
                 ),
                 self.multi_var_predictor_cache_path,
                 input_names=[
                     'variance_cond',
-                    'steps'
+                    'steps',
+                    'noise'
                 ],
                 output_names=[
                     'xs_pred'
@@ -582,11 +648,16 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'variance_cond': {
                         1: 'n_frames'
                     },
+                    # noise = [1, num_variances, repeat_bins, n_frames]; only frame axis dynamic.
+                    'noise': {
+                        3: 'n_frames'
+                    },
                     'xs_pred': {
                         (1 if len(self.model.variance_prediction_list) == 1 else 2): 'n_frames'
                     }
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
             # Prepare inputs for postprocessor of the multi-variance predictor
@@ -618,7 +689,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                         for v_name in self.model.variance_prediction_list
                     }
                 },
-                opset_version=15
+                opset_version=17,
+                **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
     @torch.no_grad()
@@ -633,8 +705,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         spk_mix_id_N = torch.LongTensor(spk_mix_ids).to(self.device)[None]  # => [1, N]
         spk_mix_value_N = torch.FloatTensor(spk_mix_values).to(self.device)[None]  # => [1, N]
         spk_mix_value_sum = spk_mix_value_N.sum()
-        assert spk_mix_value_sum > 0., f'Speaker mix checks failed.\n' \
-                                       f'Proportions of speaker mix sum to zero.'
+        assert spk_mix_value_sum > 0., 'Speaker mix checks failed.\n' \
+                                       'Proportions of speaker mix sum to zero.'
         spk_mix_value_N /= spk_mix_value_sum  # normalize
         spk_mix_embed = torch.sum(
             self.model.spk_embed(spk_mix_id_N) * spk_mix_value_N.unsqueeze(2),  # => [1, N, H]

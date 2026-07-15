@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from modules.commons.common_layers import (
     NormalInitEmbedding as Embedding,
     XavierUniformInitLinear as Linear,
+    AdamWLinear,
 )
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
@@ -17,16 +18,16 @@ class FastSpeech2Variance(nn.Module):
         self.predict_dur = hparams['predict_dur']
         self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
         self.use_lang_id = hparams['use_lang_id']
-
+        self.use_variance_scaling = hparams.get('use_variance_scaling', False)
         self.txt_embed = Embedding(vocab_size, hparams['hidden_size'], PAD_INDEX)
         if self.use_lang_id:
             self.lang_embed = Embedding(hparams['num_lang'] + 1, hparams['hidden_size'], padding_idx=0)
 
         if self.predict_dur:
             self.onset_embed = Embedding(2, hparams['hidden_size'])
-            self.word_dur_embed = Linear(1, hparams['hidden_size'])
+            self.word_dur_embed = AdamWLinear(1, hparams['hidden_size'])
         else:
-            self.ph_dur_embed = Linear(1, hparams['hidden_size'])
+            self.ph_dur_embed = AdamWLinear(1, hparams['hidden_size'])
 
         self.encoder = FastSpeech2Encoder(
             hidden_size=hparams['hidden_size'], num_layers=hparams['enc_layers'],
@@ -46,7 +47,8 @@ class FastSpeech2Variance(nn.Module):
                 dropout_rate=dur_hparams['dropout'],
                 kernel_size=dur_hparams['kernel_size'],
                 offset=dur_hparams['log_offset'],
-                dur_loss_type=dur_hparams['loss_type']
+                dur_loss_type=dur_hparams['loss_type'],
+                arch=dur_hparams['arch']
             )
 
     def forward(
@@ -79,9 +81,11 @@ class FastSpeech2Variance(nn.Module):
             word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
             word_dur_embed = self.word_dur_embed(word_dur.float()[:, :, None])
             extra_embed = onset_embed + word_dur_embed
+        elif self.use_variance_scaling:
+            extra_embed = self.ph_dur_embed(torch.log(1 + ph_dur.float())[:, :, None])
         else:
-            ph_dur_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
-            extra_embed = ph_dur_embed
+            extra_embed = self.ph_dur_embed(ph_dur.float()[:, :, None])
+            
         if self.use_lang_id:
             lang_embed = self.lang_embed(languages)
             extra_embed += lang_embed
@@ -108,8 +112,9 @@ class MelodyEncoder(nn.Module):
 
         # MIDI inputs
         hidden_size = get_hparam('hidden_size')
-        self.note_midi_embed = Linear(1, hidden_size)
-        self.note_dur_embed = Linear(1, hidden_size)
+        self.use_variance_scaling = hparams.get('use_variance_scaling', False)
+        self.note_midi_embed = AdamWLinear(1, hidden_size)
+        self.note_dur_embed = AdamWLinear(1, hidden_size)
 
         # ornament inputs
         self.use_glide_embed = hparams['use_glide_embed']
@@ -135,8 +140,13 @@ class MelodyEncoder(nn.Module):
         :param glide: int64 [B, T_n]
         :return: [B, T_n, H]
         """
-        midi_embed = self.note_midi_embed(note_midi[:, :, None]) * ~note_rest[:, :, None]
-        dur_embed = self.note_dur_embed(note_dur.float()[:, :, None])
+        if self.use_variance_scaling:
+            midi_embed = self.note_midi_embed(note_midi[:, :, None] / 128)
+            dur_embed = self.note_dur_embed(torch.log(1 + note_dur.float())[:, :, None])
+        else:
+            midi_embed = self.note_midi_embed(note_midi[:, :, None])
+            dur_embed = self.note_dur_embed(note_dur.float()[:, :, None])
+        midi_embed *= ~note_rest[:, :, None]
         ornament_embed = 0
         if self.use_glide_embed:
             ornament_embed += self.note_glide_embed(glide) * self.glide_embed_scale

@@ -8,7 +8,7 @@ def spec_to_figure(spec, vmin=None, vmax=None, title=None):
     if isinstance(spec, torch.Tensor):
         spec = spec.cpu().numpy()
     fig = plt.figure(figsize=(12, 9))
-    plt.pcolor(spec.T, vmin=vmin, vmax=vmax)
+    plt.pcolormesh(spec.T, vmin=vmin, vmax=vmax)
     if title is not None:
         plt.title(title, fontsize=15)
     plt.tight_layout()

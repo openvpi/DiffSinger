@@ -10,7 +10,7 @@ from torch import nn
 
 from basics.base_exporter import BaseExporter
 from deployment.modules.nsf_hifigan import NSFHiFiGANONNX
-from utils import load_ckpt, remove_suffix
+from utils import load_ckpt, onnx_helper, remove_suffix
 from utils.hparams import hparams
 
 
@@ -116,7 +116,8 @@ class NSFHiFiGANExporter(BaseExporter):
                     1: 'n_samples'
                 }
             },
-            opset_version=15
+            opset_version=17,
+            **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
         )
 
     def _optimize_model_graph(self, model: onnx.ModelProto) -> onnx.ModelProto:
