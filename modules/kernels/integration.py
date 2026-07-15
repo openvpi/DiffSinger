@@ -27,16 +27,19 @@ import torch.nn as nn
 from modules.kernels.fused_linear_softsign_glu import fused_linear_softsign_glu
 
 
+_FUSABLE_GLU_TYPES = ('softsign_glu', 'double_softsign_glu')
+
+
 def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
     """Wrap an existing LYNXNet2Block to use fused forward.
 
     Keeps all weights in-place (state_dict compatible).
     Only modifies the forward pass.
 
-    Only 'softsign_glu' is fused. Other GLU types are returned unpatched:
-    the ATanGLU Triton kernel (fused_linear_glu.py) predates the autotune
-    M-bucketing / cuBLAS-backward fixes and is slower than eager in real
-    training shapes, and SwiGLU never had a fused kernel.
+    'softsign_glu' and 'double_softsign_glu' are fused. Other GLU types are
+    returned unpatched: the ATanGLU Triton kernel (fused_linear_glu.py)
+    predates the autotune M-bucketing / cuBLAS-backward fixes and is slower
+    than eager in real training shapes, and SwiGLU never had a fused kernel.
 
     Args:
         block: LYNXNet2Block instance
@@ -45,13 +48,15 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
     Returns:
         The same block, with patched forward if glu_type is supported.
     """
-    if glu_type != 'softsign_glu':
+    if glu_type not in _FUSABLE_GLU_TYPES:
         import warnings
         warnings.warn(
-            f"Fused kernels support only softsign_glu; leaving block with "
-            f"glu_type={glu_type!r} unpatched."
+            f"Fused kernels support only {_FUSABLE_GLU_TYPES}; leaving block "
+            f"with glu_type={glu_type!r} unpatched."
         )
         return block
+
+    is_double = glu_type == 'double_softsign_glu'
 
     def fused_forward(self, x):
         residual = x
@@ -64,12 +69,12 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
 
         if self.training:
             # Fused: Linear+GLU → Linear+GLU
-            x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias)
-            x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias)
+            x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias, is_double)
+            x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias, is_double)
         else:
             # Original: Linear → GLU → Linear → GLU
             x = self.net[4](x)
-            x = self.net[5](x)  # SoftSignGLU
+            x = self.net[5](x)  # (Double)SoftSignGLU
             x = self.net[6](x)
             x = self.net[7](x)
 
@@ -97,10 +102,10 @@ def patch_lynxnet2_model(model, glu_type='softsign_glu'):
         Number of blocks patched (0 if glu_type unsupported).
     """
     from modules.backbones.lynxnet2 import LYNXNet2Block
-    if glu_type != 'softsign_glu':
+    if glu_type not in _FUSABLE_GLU_TYPES:
         import warnings
         warnings.warn(
-            f"Fused kernels require glu_type='softsign_glu'; "
+            f"Fused kernels require glu_type in {_FUSABLE_GLU_TYPES}; "
             f"got {glu_type!r}. Skipping patch."
         )
         return 0

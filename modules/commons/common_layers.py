@@ -175,6 +175,29 @@ class ATanGLU(nn.Module):
             return out * torch.atan(gate)
 
 
+class SoftSignGLUFunction(torch.autograd.Function):
+    """ATanGLUFunction-style memory trick for SoftSignGLU.
+
+    softsign'(x) = 1/(1+|x|)^2 = (1-|softsign(x)|)^2, so both partial
+    derivatives of y = out * softsign(gate) are precomputable in forward:
+      dy/dout = softsign(gate)
+      dy/dgate = out * (1-|softsign(gate)|)^2
+    Saves 2 tensors (vs 3 for naive autograd) and backward is two pure
+    multiplies with no softsign recompute.
+    """
+    @staticmethod
+    def forward(ctx, out, gate):
+        ss_gate = torch.nn.functional.softsign(gate)
+        decay_out = out * (1.0 - ss_gate.abs()).square()
+        ctx.save_for_backward(ss_gate, decay_out)
+        return out * ss_gate
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        ss_gate, decay_out = ctx.saved_tensors
+        return grad_output * ss_gate, grad_output * decay_out
+
+
 class SoftSignGLU(nn.Module):
     """Gated Linear Unit with SoftSign gate: out * softsign(gate).
 
@@ -187,7 +210,61 @@ class SoftSignGLU(nn.Module):
 
     def forward(self, x):
         out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
-        return out * torch.nn.functional.softsign(gate)
+        if self.training:
+            return SoftSignGLUFunction.apply(out, gate)
+        else:
+            return out * torch.nn.functional.softsign(gate)
+
+
+class DoubleSoftSignGLUFunction(torch.autograd.Function):
+    """Memory-optimized backward for DoubleSoftSignGLU (same trick).
+
+    Operates on the WHOLE Linear output x = [out | gate] (softsign is
+    elementwise, so softsign-then-split == split-then-softsign). With
+    a = softsign(out), b = softsign(gate), y = a * b:
+      dy/dout = b * (1-|a|)^2
+      dy/dgate = a * (1-|b|)^2
+    Both partials are precomputed into ONE [.., 2N] tensor in forward, so
+    backward is a single multiply against the (broadcast) upstream grad —
+    no softsign recompute, no cat.
+    """
+    @staticmethod
+    def forward(ctx, x, dim):
+        ss = torch.nn.functional.softsign(x)
+        a, b = torch.split(ss, ss.size(dim) // 2, dim=dim)
+        decay_sq = (1.0 - ss.abs()).square()
+        da, db = torch.split(decay_sq, decay_sq.size(dim) // 2, dim=dim)
+        # decay = [b*(1-|a|)^2 | a*(1-|b|)^2], written into decay_sq's halves
+        da.mul_(b)
+        db.mul_(a)
+        ctx.save_for_backward(decay_sq)
+        ctx.dim = dim
+        return a * b
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        decay, = ctx.saved_tensors
+        grad_x = decay * torch.cat([grad_output, grad_output], dim=ctx.dim)
+        return grad_x, None
+
+
+class DoubleSoftSignGLU(nn.Module):
+    """FastWaveD-style double-gated unit: softsign applied to the whole
+    Linear output, then split and multiplied:
+      y = softsign(out) * softsign(gate)
+    Output is bounded in (-1, 1) since both branches saturate.
+    """
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        if self.training:
+            return DoubleSoftSignGLUFunction.apply(x, self.dim)
+        # softsign whole tensor first (one elementwise op), then split
+        ss = torch.nn.functional.softsign(x)
+        out, gate = torch.split(ss, ss.size(self.dim) // 2, dim=self.dim)
+        return out * gate
 
 
 class AdamWConv1d(torch.nn.Conv1d):

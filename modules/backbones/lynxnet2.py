@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, Transpose, AdamWLinear
+from modules.commons.common_layers import (
+    SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, DoubleSoftSignGLU, Transpose, AdamWLinear
+)
 from utils.hparams import hparams
 
 
@@ -16,6 +18,8 @@ class LYNXNet2Block(nn.Module):
             _glu = ATanGLU()
         elif glu_type == 'softsign_glu':
             _glu = SoftSignGLU()
+        elif glu_type == 'double_softsign_glu':
+            _glu = DoubleSoftSignGLU()
         else:
             raise ValueError(f'{glu_type} is not a valid activation')
         if float(dropout) > 0.:
