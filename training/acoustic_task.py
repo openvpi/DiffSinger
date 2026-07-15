@@ -46,15 +46,6 @@ class AcousticDataset(BaseDataset):
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         f0 = utils.collate_nd([s['f0'] for s in samples], 0.0)
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
-        # Pad mel with spec_min (silence) instead of 0.0. Raw log-mel 0.0 lies at
-        # the TOP of the normalized range (norm_spec maps it to +1.0, i.e. maximum
-        # loudness), so zero-padding used to fill the padded tail of every shorter
-        # sample with full-loudness garbage. The diffusion loss masks these frames,
-        # but the backbone has no padding mask and its receptive field (~181 frames
-        # for LYNXNet2 k=31 x 6 layers) leaks the fake signal into the trailing
-        # valid frames; the aux decoder loss is not masked at all. spec_min (-12)
-        # sits right at the true silence floor log(1e-5) = -11.51 of the mel
-        # extractor, i.e. padding now looks like silence.
         mel_pad = float(hparams['spec_min'][0]) if hparams.get('spec_min') else -12.0
         mel = utils.collate_nd([s['mel'] for s in samples], mel_pad)
         batch.update({
