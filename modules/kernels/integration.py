@@ -24,7 +24,10 @@ ONNX export:
 import torch
 import torch.nn as nn
 
-from modules.kernels.fused_linear_softsign_glu import fused_linear_softsign_glu
+from modules.kernels.fused_linear_softsign_glu import (
+    fused_linear_softsign_glu,
+    is_triton_available,
+)
 
 
 _FUSABLE_GLU_TYPES = ('softsign_glu', 'double_softsign_glu')
@@ -109,6 +112,11 @@ def patch_lynxnet2_model(model, glu_type='softsign_glu'):
             f"got {glu_type!r}. Skipping patch."
         )
         return 0
+    if not is_triton_available():
+        raise RuntimeError(
+            'Fused kernels require a working Triton installation. '
+            'Install Triton for this platform or set use_fused_kernels=false.'
+        )
     patched = 0
     for i, layer in enumerate(model.residual_layers):
         if isinstance(layer, LYNXNet2Block):
@@ -221,6 +229,12 @@ def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
             'bf16-mixed'. If None, no autocast — with fp32 parameters the
             fused path falls back to eager and the warmup is a no-op.
     """
+    if not is_triton_available():
+        raise RuntimeError(
+            'Fused kernel warmup requires a working Triton installation. '
+            'Install Triton for this platform or set use_fused_kernels=false.'
+        )
+
     import contextlib
     import triton
     import warnings

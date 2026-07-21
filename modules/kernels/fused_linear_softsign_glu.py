@@ -55,6 +55,11 @@ _MIN_CAPABILITY = (7, 0)
 _FUSED_CAPABLE = None
 
 
+def is_triton_available():
+    """Whether the Triton Python package imported successfully."""
+    return _TRITON_AVAILABLE
+
+
 def _fused_capable():
     """True only if the current CUDA device can run the fused kernel.
 
