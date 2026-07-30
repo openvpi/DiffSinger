@@ -135,7 +135,7 @@ class BaseTask(pl.LightningModule):
         if not checkpoint_path:
             raise ValueError('finetune_enabled=true requires a non-empty finetune_ckpt_path.')
 
-        checkpoint = torch.load(checkpoint_path, weights_only=True)
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
         if isinstance(self.model, CategorizedModule):
             self.model.check_category(checkpoint.get('category'))
 
