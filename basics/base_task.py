@@ -89,92 +89,80 @@ class BaseTask(pl.LightningModule):
         self.valid_dataset = self.dataset_cls('valid')
         self.num_replicas = (self.trainer.distributed_sampler_kwargs or {}).get('num_replicas', 1)
 
-    def get_need_freeze_state_dict_key(self, model_state_dict) -> list:
-        key_list = []
-        for i in hparams['frozen_params']:
-            for j in model_state_dict:
-                if j.startswith(i):
-                    key_list.append(j)
-        return list(set(key_list))
-
     def freeze_params(self) -> None:
-        model_state_dict = self.state_dict().keys()
-        freeze_key = self.get_need_freeze_state_dict_key(model_state_dict=model_state_dict)
-
-        for i in freeze_key:
-            params=self.get_parameter(i)
-
-            params.requires_grad = False
+        frozen_prefixes = hparams['frozen_params']
+        frozen_count = 0
+        for name, parameter in self.named_parameters():
+            if any(name.startswith(prefix) for prefix in frozen_prefixes):
+                parameter.requires_grad = False
+                frozen_count += 1
+        rank_zero_info(f'| Frozen {frozen_count} parameter(s).')
 
     def unfreeze_all_params(self) -> None:
-        for i in self.model.parameters():
-            i.requires_grad = True
+        for parameter in self.model.parameters():
+            parameter.requires_grad = True
 
-    def load_finetune_ckpt(
-            self, state_dict
-    ) -> None:
-        adapt_shapes = hparams['finetune_strict_shapes']
-        if not adapt_shapes:
-            cur_model_state_dict = self.state_dict()
-            unmatched_keys = []
-            for key, param in state_dict.items():
-                if key in cur_model_state_dict:
-                    new_param = cur_model_state_dict[key]
-                    if new_param.shape != param.shape:
-                        unmatched_keys.append(key)
-                        print('| Unmatched keys: ', key, new_param.shape, param.shape)
-            for key in unmatched_keys:
-                del state_dict[key]
-        self.load_state_dict(state_dict, strict=False)
+    def load_finetune_weights(self, state_dict: dict) -> None:
+        source_state_dict = state_dict.copy()
+        if not hparams['finetune_strict_shapes']:
+            target_state_dict = self.state_dict()
+            mismatched_shapes = {
+                name: (tuple(source.shape), tuple(target_state_dict[name].shape))
+                for name, source in source_state_dict.items()
+                if name in target_state_dict and source.shape != target_state_dict[name].shape
+            }
+            for name in mismatched_shapes:
+                del source_state_dict[name]
+            if mismatched_shapes:
+                details = '\n'.join(
+                    f'  {name}: source={source_shape}, target={target_shape}'
+                    for name, (source_shape, target_shape) in mismatched_shapes.items()
+                )
+                rank_zero_info(
+                    f'| Finetune: skipped {len(mismatched_shapes)} parameter(s) with mismatched shapes:\n{details}'
+                )
 
-    def load_pre_train_model(self):
-        pre_train_ckpt_path = hparams['finetune_ckpt_path']
-        blacklist = hparams['finetune_ignored_params']
-        # whitelist=hparams['pre_train_whitelist']
-        if blacklist is None:
-            blacklist = []
-        # if whitelist is  None:
-        #     raise RuntimeError("")
+        incompatible_keys = self.load_state_dict(source_state_dict, strict=False)
+        loaded_count = len(source_state_dict) - len(incompatible_keys.unexpected_keys)
+        rank_zero_info(
+            f'| Finetune: loaded {loaded_count} parameter(s); '
+            f'missing={len(incompatible_keys.missing_keys)}, '
+            f'unexpected={len(incompatible_keys.unexpected_keys)}.'
+        )
 
-        if pre_train_ckpt_path is not None:
-            ckpt = torch.load(pre_train_ckpt_path)
-            # if ckpt.get('category') is None:
-            #     raise RuntimeError("")
+    def load_finetune_checkpoint(self) -> dict:
+        checkpoint_path = hparams['finetune_ckpt_path']
+        if not checkpoint_path:
+            raise ValueError('finetune_enabled=true requires a non-empty finetune_ckpt_path.')
 
-            if isinstance(self.model, CategorizedModule):
-                self.model.check_category(ckpt.get('category'))
+        checkpoint = torch.load(checkpoint_path, weights_only=True)
+        if isinstance(self.model, CategorizedModule):
+            self.model.check_category(checkpoint.get('category'))
 
-            state_dict = {}
-            for i in ckpt['state_dict']:
-                # if 'diffusion' in i:
-                # if i in rrrr:
-                #     continue
-                skip = False
-                for b in blacklist:
-                    if i.startswith(b):
-                        skip = True
-                        break
-
-                if skip:
-                    continue
-
-                state_dict[i] = ckpt['state_dict'][i]
-                print(i)
-            return state_dict
-        else:
-            raise RuntimeError("")
+        ignored_prefixes = hparams['finetune_ignored_params'] or []
+        source_state_dict = checkpoint['state_dict']
+        selected_state_dict = {
+            name: parameter
+            for name, parameter in source_state_dict.items()
+            if not any(name.startswith(prefix) for prefix in ignored_prefixes)
+        }
+        ignored_count = len(source_state_dict) - len(selected_state_dict)
+        rank_zero_info(
+            f"| Finetune: selected {len(selected_state_dict)} parameter(s) from '{checkpoint_path}'; "
+            f'ignored={ignored_count}.'
+        )
+        return selected_state_dict
 
     def _build_model(self):
         raise NotImplementedError()
 
     def build_model(self):
         self.model = self._build_model()
-        # utils.load_warp(self)
         self.unfreeze_all_params()
         if hparams['freezing_enabled']:
             self.freeze_params()
         if hparams['finetune_enabled'] and get_latest_checkpoint_path(pathlib.Path(hparams['work_dir'])) is None:
-            self.load_finetune_ckpt(self.load_pre_train_model())
+            self.load_finetune_weights(self.load_finetune_checkpoint())
         self.print_arch()
 
     @rank_zero_only
