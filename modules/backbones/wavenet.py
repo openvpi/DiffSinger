@@ -26,7 +26,7 @@ class ResidualBlock(nn.Module):
         self.output_projection = nn.Conv1d(residual_channels, 2 * residual_channels, 1)
 
     def forward(self, x, conditioner, diffusion_step):
-        diffusion_step = self.diffusion_projection(diffusion_step).unsqueeze(-1)
+        diffusion_step = self.diffusion_projection(diffusion_step).transpose(1, 2)
         conditioner = self.conditioner_projection(conditioner)
         y = x + diffusion_step
 
@@ -67,7 +67,7 @@ class WaveNet(nn.Module):
         self.output_projection = AdamWConv1d(num_channels, in_dims * n_feats, 1)
         nn.init.zeros_(self.output_projection.weight)
 
-    def forward(self, spec, diffusion_step, cond):
+    def forward(self, spec, diffusion_step, cond, diffusion_step_2=None, mask=None):
         """
         :param spec: [B, F, M, T]
         :param diffusion_step: [B, 1]
@@ -84,11 +84,21 @@ class WaveNet(nn.Module):
         x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)
-        diffusion_step = self.diffusion_embedding(diffusion_step)
-        diffusion_step = self.mlp(diffusion_step)
+           
+        if mask is not None:
+            step = torch.cat((diffusion_step, diffusion_step_2), dim=0)
+            step = self.diffusion_embedding(step)
+            step = self.mlp(step)
+            step, step_2 = torch.split(step, x.shape[0], dim=0) #[B, 1, C]
+            mask = mask.to(x).unsqueeze(-1) # [B, T, 1]
+            step = step + (step_2 - step) * mask
+        else:
+            step = self.diffusion_embedding(diffusion_step)
+            step = self.mlp(step)
+            
         skip = []
         for layer in self.residual_layers:
-            x, skip_connection = layer(x, cond, diffusion_step)
+            x, skip_connection = layer(x, cond, step)
             skip.append(skip_connection)
 
         x = torch.sum(torch.stack(skip), dim=0) / sqrt(len(self.residual_layers))

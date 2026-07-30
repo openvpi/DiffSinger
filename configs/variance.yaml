@@ -106,6 +106,7 @@ lambda_pitch_loss: 1.0
 lambda_var_loss: 1.0
 
 diffusion_type: reflow  # ddpm
+use_dual_timestep: true
 time_scale_factor: 1000
 schedule_type: 'linear'
 K_step: 1000

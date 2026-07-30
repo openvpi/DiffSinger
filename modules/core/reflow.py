@@ -18,6 +18,7 @@ class RectifiedFlow(nn.Module):
         self.velocity_fn: nn.Module = build_backbone(out_dims, num_feats, backbone_type, backbone_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
+        self.use_dual_timestep = hparams.get('use_dual_timestep', False)
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
             assert 0. <= t_start <= 1., 'T_start should be in [0, 1].'
@@ -33,24 +34,34 @@ class RectifiedFlow(nn.Module):
         self.register_buffer('spec_min', spec_min, persistent=False)
         self.register_buffer('spec_max', spec_max, persistent=False)
 
-    def p_losses(self, x_end, t, cond):
+    def p_losses(self, x_end, t1, cond, t2=None, mask=None):
+        t = t1 if mask is None else t1 + (t2 - t1) * mask
         x_start = torch.randn_like(x_end)
-        x_t = x_start + t[:, None, None, None] * (x_end - x_start)
-        v_pred = self.velocity_fn(x_t, t * self.time_scale_factor, cond)
+        x_t = x_start + t[:, None, None,:] * (x_end - x_start)
+        s1 = t1 * self.time_scale_factor
+        s2 = None if t2 is None else t2 * self.time_scale_factor
+        v_pred = self.velocity_fn(x_t, s1, cond, s2, mask)
 
-        return v_pred, x_end - x_start
+        return v_pred, x_end - x_start, t
 
     def forward(self, condition, gt_spec=None, src_spec=None, infer=True):
         cond = condition.transpose(1, 2)
-        b, device = condition.shape[0], condition.device
+        b, _, n_frames = cond.shape
+        device = condition.device
 
         if not infer:
             # gt_spec: [B, T, M] or [B, F, T, M]
             spec = self.norm_spec(gt_spec).transpose(-2, -1)  # [B, M, T] or [B, F, M, T]
             if self.num_feats == 1:
                 spec = spec[:, None, :, :]  # [B, F=1, M, T]
-            t = self.t_start + (1.0 - self.t_start) * torch.rand((b,), device=device)
-            v_pred, v_gt = self.p_losses(spec, t, cond=cond)
+            t1 = self.t_start + (1.0 - self.t_start) * torch.rand((b, 1), device=device)
+            if self.use_dual_timestep:
+                t2 = self.t_start + (1.0 - self.t_start) * torch.rand((b, 1), device=device)
+                mask = (torch.rand(b, n_frames, device=device) < 0.25).float()
+            else:
+                t2 = None
+                mask = None
+            v_pred, v_gt, t = self.p_losses(spec, t1, cond=cond, t2=t2, mask=mask)
             return v_pred, v_gt, t
         else:
             # src_spec: [B, T, M] or [B, F, T, M]
