@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from typing import Callable
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -195,6 +197,25 @@ class Transpose(nn.Module):
 
     def forward(self, x):
         return x.transpose(*self.dims)
+
+
+def interpolate_dual_timestep_embedding(
+        embedding: nn.Module | Callable[[torch.Tensor], torch.Tensor],
+        timestep: torch.Tensor,
+        timestep_2: torch.Tensor | None = None,
+        mask: torch.Tensor | None = None
+) -> torch.Tensor:
+    """Embed one or two timesteps and interpolate the second on masked frames."""
+    if mask is None:
+        return embedding(timestep)
+    if timestep_2 is None:
+        raise ValueError('timestep_2 is required when mask is provided')
+
+    batch_size = timestep.shape[0]
+    embedded = embedding(torch.cat((timestep, timestep_2), dim=0))
+    step, step_2 = torch.split(embedded, batch_size, dim=0)
+    frame_mask = mask.to(step).unsqueeze(-1)
+    return step + (step_2 - step) * frame_mask
 
 
 class Mixed_LayerNorm(nn.Module):
