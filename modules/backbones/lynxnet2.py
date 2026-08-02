@@ -103,7 +103,10 @@ class LYNXNet2(nn.Module):
             mask = mask.to(x).unsqueeze(-1) # [B, T, 1]
             x = x + step + (step_2 - step) * mask
         else:
-            x = x + self.diffusion_embedding(diffusion_step)
+            step = self.diffusion_embedding(diffusion_step)
+            if step.dim() == 2:
+                step = step.unsqueeze(1)
+            x = x + step
 
         for layer in self.residual_layers:
             x = layer(x)

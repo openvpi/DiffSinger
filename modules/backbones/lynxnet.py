@@ -135,6 +135,8 @@ class LYNXNet(nn.Module):
             step = step + (step_2 - step) * mask
         else:
             step = self.diffusion_embedding(diffusion_step)
+            if step.dim() == 2:
+                step = step.unsqueeze(1)
 
         for layer in self.residual_layers:
             x = layer(x, cond, step.transpose(1, 2), front_cond_inject=self.strong_cond)
