@@ -337,7 +337,7 @@ class AcousticBinarizer(BaseBinarizer):
                     aug_list.append(aug_task)
                 elif aug_type == 1:
                     aug_task = {
-                        'name': aug_item,
+                        'name': aug_item['name'],
                         'func': aug_item['func'],
                         'kwargs': deepcopy(aug_item['kwargs'])
                     }
