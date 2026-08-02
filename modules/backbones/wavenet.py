@@ -95,6 +95,8 @@ class WaveNet(nn.Module):
         else:
             step = self.diffusion_embedding(diffusion_step)
             step = self.mlp(step)
+            if step.dim() == 2:
+                step = step.unsqueeze(1)
             
         skip = []
         for layer in self.residual_layers:
