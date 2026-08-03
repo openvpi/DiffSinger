@@ -241,14 +241,15 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         batch['midi'] = ph_midi
 
         if load_pitch:
+            # Interpolate unvoiced parts before resampling.
             f0 = resample_align_curve(
-                np.array(param['f0_seq'].split(), np.float32),
+                interp_f0(np.array(param['f0_seq'].split(), np.float32))[0],
                 original_timestep=float(param['f0_timestep']),
                 target_timestep=self.timestep,
                 align_length=T_s
             )
             batch['pitch'] = torch.from_numpy(
-                librosa.hz_to_midi(interp_f0(f0)[0]).astype(np.float32)
+                librosa.hz_to_midi(f0).astype(np.float32)
             ).to(self.device)[None]
 
         if self.model.predict_dur:

@@ -314,14 +314,21 @@ class VarianceBinarizer(BaseBinarizer):
         if self.prefer_ds:
             f0_seq = self.load_attr_from_ds(ds_id, name, 'f0_seq', idx=ds_seg_idx)
             if f0_seq is not None:
+                f0_timestep = float(self.load_attr_from_ds(ds_id, name, 'f0_timestep', idx=ds_seg_idx))
+                # Interpolate unvoiced parts before resampling.
+                f0_points, uv_points = interp_f0(np.array(f0_seq.split(), np.float32))
                 f0 = resample_align_curve(
-                    np.array(f0_seq.split(), np.float32),
-                    original_timestep=float(self.load_attr_from_ds(ds_id, name, 'f0_timestep', idx=ds_seg_idx)),
+                    f0_points,
+                    original_timestep=f0_timestep,
                     target_timestep=self.timestep,
                     align_length=length
                 )
-                uv = f0 == 0
-                f0, _ = interp_f0(f0, uv)
+                uv = resample_align_curve(
+                    uv_points.astype(np.float32),
+                    original_timestep=f0_timestep,
+                    target_timestep=self.timestep,
+                    align_length=length
+                ) > 0.5
         if f0 is None:
             f0, uv = pitch_extractor.get_pitch(
                 waveform, samplerate=hparams['audio_sample_rate'], length=length,
