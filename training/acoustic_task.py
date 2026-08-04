@@ -1,3 +1,5 @@
+import math
+
 import matplotlib
 import torch
 import torch.distributions
@@ -45,7 +47,7 @@ class AcousticDataset(BaseDataset):
         tokens = utils.collate_nd([s['tokens'] for s in samples], 0)
         f0 = utils.collate_nd([s['f0'] for s in samples], 0.0)
         mel2ph = utils.collate_nd([s['mel2ph'] for s in samples], 0)
-        mel = utils.collate_nd([s['mel'] for s in samples], 0.0)
+        mel = utils.collate_nd([s['mel'] for s in samples], math.log(1e-5))
         batch.update({
             'tokens': tokens,
             'mel2ph': mel2ph,
