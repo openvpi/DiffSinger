@@ -126,11 +126,10 @@ def patch_lynxnet2_model(model, glu_type='softsign_glu'):
         )
         return 0
     if not is_triton_available():
-        warnings.warn(
-            'Fused kernels unavailable because Triton is not installed; running eager.',
-            stacklevel=2,
+        raise RuntimeError(
+            'Fused kernels require a working Triton installation. '
+            'Install Triton for this platform or set use_fused_kernels=false.'
         )
-        return 0
     patched = 0
     for i, layer in enumerate(model.residual_layers):
         if isinstance(layer, LYNXNet2Block):
@@ -219,11 +218,10 @@ def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
     if device.type != 'cuda':
         return 0
     if not is_triton_available():
-        warnings.warn(
-            'Fused kernel warmup skipped because Triton is not installed.',
-            stacklevel=2,
+        raise RuntimeError(
+            'Fused kernel warmup requires a working Triton installation. '
+            'Install Triton for this platform or set use_fused_kernels=false.'
         )
-        return 0
 
     import triton
 
