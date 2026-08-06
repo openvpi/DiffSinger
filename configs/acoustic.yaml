@@ -3,6 +3,9 @@ base_config:
 
 task_cls: training.acoustic_task.AcousticTask
 
+# Enable Triton-fused Linear+SoftSignGLU kernels for LYNXNet2 backbones.
+use_fused_kernels: false
+
 dictionaries: {}
 extra_phonemes: []
 merged_phoneme_groups: []

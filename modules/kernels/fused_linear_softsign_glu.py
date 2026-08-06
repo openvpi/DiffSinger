@@ -1,40 +1,9 @@
-"""
-Fused Linear + SoftSignGLU for LYNXNet2.
+"""Fused Linear + SoftSignGLU for LYNXNet2.
 
-Computes: y = (x @ W_left^T + b_left) * softsign(x @ W_right^T + b_right)
-
-where softsign(x) = x / (1 + |x|).
-
-Compared to ATanGLU:
-  - No Taylor approximation needed (exact in Triton)
-  - No overflow risk in gate² terms
-  - Derivative is 1 / (1 + |x|)², simple and stable
-  - Slight trade-off: softsign saturates slower than atan
-    (atan → π/2 for x→∞, softsign → 1 for x→∞)
-
-Weight-split strategy:
-  Split W [2K, K] into W_left [K, K] and W_right [K, K] (views).
-  Each Triton program handles one [BLOCK_M, BLOCK_N] tile of BOTH halves,
-  applying SoftSignGLU within the tile — no cross-program communication.
-
-Autotune strategy (multi-GPU):
-  - The autotune key uses next_power_of_2(M) instead of raw M. DsBatchSampler
-    packs variable frame counts, so raw M changes almost every batch and
-    re-triggers the (seconds-long) autotune benchmark per step. Bucketing
-    bounds this to a handful of compilations per training run.
-  - The config list spans small tiles (Turing / RTX 20xx, 64 KB smem per
-    block) through large tiles (Ada / Blackwell, RTX 4090/5090, 100+ KB
-    smem). Configs whose shared-memory footprint exceeds the running GPU
-    are pruned automatically by Triton (OutOfResources), so the same list
-    serves both the local debug GPU and the training GPUs.
-
-Backward strategy:
-  Only the element-wise GLU backward runs in Triton (one kernel, no
-  intermediate HBM round-trips). The three backward matmuls (grad_x,
-  grad_w_left, grad_w_right) go through cuBLAS — a plain GEMM in Triton
-  does not beat cuBLAS (measured 3.4x slower on RTX 2070, and the gap
-  does not close on Ada/Blackwell), and cuBLAS keeps full dtype fidelity
-  for fp16 / bf16 / fp32 runs alike.
+Computes ``left * softsign(gate)`` directly from a Linear layer whose output
+weights are split into left and gate halves. The forward kernel uses fp32
+accumulators, and the backward path uses a Triton element-wise kernel followed
+by cuBLAS matrix multiplications.
 """
 import torch
 import torch.nn.functional as F
@@ -84,13 +53,12 @@ if _TRITON_AVAILABLE:
 
     @triton.autotune(
         configs=[
-            # Small tiles — fit Turing (RTX 20xx, 64 KB smem/block) and small M
+            # Small tiles
             triton.Config({'BLOCK_M': 32, 'BLOCK_N': 32,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
             triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
             triton.Config({'BLOCK_M': 64, 'BLOCK_N': 32,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
             triton.Config({'BLOCK_M': 64, 'BLOCK_N': 64,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=3),
-            # Large tiles — Ada/Blackwell (RTX 4090/5090). Pruned automatically
-            # on GPUs where the smem footprint exceeds the per-block limit.
+            # Larger tiles; unsupported shared-memory sizes are pruned by Triton.
             triton.Config({'BLOCK_M': 64,  'BLOCK_N': 64,  'BLOCK_K': 64, 'GROUP_M': 8}, num_warps=4, num_stages=4),
             triton.Config({'BLOCK_M': 128, 'BLOCK_N': 64,  'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=4),
             triton.Config({'BLOCK_M': 64,  'BLOCK_N': 128, 'BLOCK_K': 32, 'GROUP_M': 8}, num_warps=4, num_stages=4),
@@ -113,13 +81,9 @@ if _TRITON_AVAILABLE:
         stride_g_b, stride_g_n,
         BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
         GROUP_M: tl.constexpr,
-        IS_DOUBLE: tl.constexpr,
     ):
         """
-        SoftSignGLU (IS_DOUBLE=False):
-            y = (x @ W_left^T + b_left) * softsign(x @ W_right^T + b_right)
-        DoubleSoftSignGLU (IS_DOUBLE=True, FastWaveD style):
-            y = softsign(x @ W_left^T + b_left) * softsign(x @ W_right^T + b_right)
+        y = (x @ W_left^T + b_left) * softsign(x @ W_right^T + b_right)
 
         N = output dim per GLU half (= inner_dim = dim × expansion_factor)
         K = input feature dim (= dim for first Linear, inner_dim for second)
@@ -180,13 +144,7 @@ if _TRITON_AVAILABLE:
         # Computed in fp32 for numerical safety
         gate_f32 = acc_gate.to(tl.float32)
         ss_gate = gate_f32 / (1.0 + tl.abs(gate_f32))
-        if IS_DOUBLE:
-            # DoubleSoftSignGLU: softsign(left) * softsign(gate)
-            left_f32 = acc_left.to(tl.float32)
-            gated = (left_f32 / (1.0 + tl.abs(left_f32))) * ss_gate
-        else:
-            # SoftSignGLU: left * softsign(gate)
-            gated = acc_left * ss_gate
+        gated = acc_left * ss_gate
 
         # Write output y
         tl.store(
@@ -208,11 +166,7 @@ if _TRITON_AVAILABLE:
     # ---------------------------------------------------------------------------
     # Element-wise backward kernel — grad_left_pre, grad_gate
     #
-    # This is the only Triton kernel in the backward pass. The three backward
-    # GEMMs (grad_x, grad_w_left, grad_w_right) run on cuBLAS in the autograd
-    # Function below: a hand-written Triton GEMM was measured 3.4x slower than
-    # cuBLAS for these shapes, and cuBLAS preserves the active dtype
-    # (fp16 / bf16 / fp32) without forced down-casts.
+    # GEMMs run through cuBLAS; Triton handles the element-wise gradient.
     # ---------------------------------------------------------------------------
 
     @triton.autotune(
@@ -235,14 +189,12 @@ if _TRITON_AVAILABLE:
         stride_glp_b, stride_glp_n,
         stride_gg_b, stride_gg_n,
         BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr,
-        IS_DOUBLE: tl.constexpr,
     ):
-        """Element-wise (Double)SoftSignGLU backward — no intermediates to HBM.
+        """Element-wise SoftSignGLU backward.
 
-        SoftSignGLU (IS_DOUBLE=False), y = l * ss(g):
-            dy/dl = ss(g);           dy/dg = l / (1+|g|)^2
-        DoubleSoftSignGLU (IS_DOUBLE=True), y = ss(l) * ss(g):
-            dy/dl = ss(g) / (1+|l|)^2;   dy/dg = ss(l) / (1+|g|)^2
+        For y = l * softsign(g):
+            dy/dl = softsign(g)
+            dy/dg = l / (1+|g|)^2
         """
         pid = tl.program_id(0)
         num_pid_m = tl.cdiv(M, BLOCK_M)
@@ -265,21 +217,11 @@ if _TRITON_AVAILABLE:
 
         gate_f32 = gate.to(tl.float32)
         left_f32 = left.to(tl.float32)
-        abs_gate = tl.abs(gate_f32)
-        denom_g = 1.0 / (1.0 + abs_gate)
+        denom_g = 1.0 / (1.0 + tl.abs(gate_f32))
         denom_g2 = denom_g * denom_g
         ss_gate = gate_f32 * denom_g
-
-        if IS_DOUBLE:
-            abs_left = tl.abs(left_f32)
-            denom_l = 1.0 / (1.0 + abs_left)
-            denom_l2 = denom_l * denom_l
-            ss_left = left_f32 * denom_l
-            grad_left_pre = gy * (ss_gate * denom_l2)
-            grad_gate = gy * (ss_left * denom_g2)
-        else:
-            grad_left_pre = gy * ss_gate
-            grad_gate = gy * (left_f32 * denom_g2)
+        grad_left_pre = gy * ss_gate
+        grad_gate = gy * (left_f32 * denom_g2)
 
         tl.store(glp_ptr + offs_m[:, None] * stride_glp_b + offs_n[None, :] * stride_glp_n,
                  grad_left_pre, mask=m_mask & n_mask)
@@ -292,10 +234,10 @@ if _TRITON_AVAILABLE:
     # ---------------------------------------------------------------------------
 
     class FusedLinearSoftSignGLUFn(torch.autograd.Function):
-        """Fused Linear(2K, K) + SoftSignGLU / DoubleSoftSignGLU."""
+        """Fused Linear(2K, K) + SoftSignGLU."""
 
         @staticmethod
-        def forward(ctx, x, weight, bias, is_double):
+        def forward(ctx, x, weight, bias):
             orig_shape = x.shape
             K = weight.shape[1]               # input feature dim (contraction dim)
             N = weight.shape[0] // 2           # output dim per GLU half
@@ -326,7 +268,6 @@ if _TRITON_AVAILABLE:
                 out.stride(0), out.stride(1),
                 left.stride(0), left.stride(1),
                 gate.stride(0), gate.stride(1),
-                IS_DOUBLE=is_double,
             )
 
             if x.dim() > 2:
@@ -335,7 +276,6 @@ if _TRITON_AVAILABLE:
             ctx.save_for_backward(x_2d, weight, left, gate)
             ctx.orig_x_shape = orig_shape
             ctx.N = N
-            ctx.is_double = is_double
             return out
 
         @staticmethod
@@ -367,7 +307,6 @@ if _TRITON_AVAILABLE:
                 grad_y.stride(0), grad_y.stride(1),
                 grad_left_pre.stride(0), grad_left_pre.stride(1),
                 grad_gate.stride(0), grad_gate.stride(1),
-                IS_DOUBLE=ctx.is_double,
             )
 
             # Step 2/3: All backward GEMMs on cuBLAS (faster than a Triton GEMM
@@ -386,19 +325,17 @@ if _TRITON_AVAILABLE:
             if len(ctx.orig_x_shape) > 2:
                 grad_x = grad_x.view(*ctx.orig_x_shape)
 
-            return grad_x, grad_weight, grad_bias, None
+            return grad_x, grad_weight, grad_bias
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def _eager_linear_softsign_glu(x, weight, bias, is_double=False):
-    """Unfused reference path — used as fallback for unsupported dtypes/GPUs."""
+def _eager_linear_softsign_glu(x, weight, bias):
+    """Unfused reference path for unsupported dtypes and devices."""
     linear = F.linear(x, weight, bias)
     left, gate = torch.split(linear, linear.shape[-1] // 2, dim=-1)
-    if is_double:
-        return F.softsign(left) * F.softsign(gate)
     return left * F.softsign(gate)
 
 
@@ -424,34 +361,26 @@ def _fused_supported_dtypes():
     return _FUSED_SUPPORTED_DTYPES
 
 
-def fused_linear_softsign_glu(x, weight, bias, is_double=False):
-    """Fused Linear(C, 2*C) + SoftSignGLU / DoubleSoftSignGLU.
+def fused_linear_softsign_glu(x, weight, bias):
+    """Fused Linear(C, 2*N) + SoftSignGLU.
 
-    is_double=False:  y = left * softsign(gate)          (SoftSignGLU)
-    is_double=True:   y = softsign(left) * softsign(gate) (DoubleSoftSignGLU,
-                      FastWaveD style — softsign the whole Linear output,
-                      then split and multiply)
-
-    Supports expansion_factor != 1 by splitting weight at midpoint.
-    Falls back to the unfused path for dtypes the current GPU cannot
-    run through tl.dot (bf16 on pre-Ampere, fp32 everywhere).
+    Supports expansion_factor != 1 by splitting weight at its midpoint.
+    Unsupported dtypes and devices use the eager implementation.
 
     Args:
-        x: Input [..., K] where K = weight.shape[1] (input dim). Must be CUDA.
-        weight: [2*N, K] where N = output dim per GLU half (= K × expansion_factor)
-        bias: [2*N] or None (None falls back to eager).
-        is_double: apply softsign to both halves (DoubleSoftSignGLU).
+        x: Input [..., K].
+        weight: Linear weight [2*N, K].
+        bias: Linear bias [2*N] or None.
 
     Returns:
-        [..., N]
+        Output [..., N].
     """
-    # Fast-fail for unsupported environments
     if not _TRITON_AVAILABLE or not _fused_capable():
-        return _eager_linear_softsign_glu(x, weight, bias, is_double)
+        return _eager_linear_softsign_glu(x, weight, bias)
     if not x.is_cuda:
-        return _eager_linear_softsign_glu(x, weight, bias, is_double)
+        return _eager_linear_softsign_glu(x, weight, bias)
     if bias is None:
-        return _eager_linear_softsign_glu(x, weight, bias, is_double)
+        return _eager_linear_softsign_glu(x, weight, bias)
 
     fallback_key = (x.dtype, x.shape[-1])
     if x.dtype not in _fused_supported_dtypes():
@@ -463,7 +392,7 @@ def fused_linear_softsign_glu(x, weight, bias, is_double=False):
                 f'falling back to eager. (This message is shown once per (dtype, K) pair.)',
                 stacklevel=2,
             )
-        return _eager_linear_softsign_glu(x, weight, bias, is_double)
+        return _eager_linear_softsign_glu(x, weight, bias)
     # Match weight/bias dtype to input (handles 16-mixed precision where
     # weights are fp32 but activations are autocast to fp16)
     if weight.dtype != x.dtype:
@@ -474,7 +403,7 @@ def fused_linear_softsign_glu(x, weight, bias, is_double=False):
         weight = weight.contiguous()
     if not bias.is_contiguous():
         bias = bias.contiguous()
-    return FusedLinearSoftSignGLUFn.apply(x, weight, bias, is_double)
+    return FusedLinearSoftSignGLUFn.apply(x, weight, bias)
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +411,7 @@ def fused_linear_softsign_glu(x, weight, bias, is_double=False):
 # ---------------------------------------------------------------------------
 
 def _test():
-    """Numerical check against an fp32 reference for both GLU modes."""
+    """Numerical check against an fp32 reference."""
     import time
 
     torch.manual_seed(42)
@@ -494,60 +423,57 @@ def _test():
 
     for K in [256, 512, 1024]:
         M = 4096 if K == 256 else (2048 if K == 512 else 1024)
-        for is_double in (False, True):
-            x16 = torch.randn(M, K, device=device, dtype=torch.float16, requires_grad=True)
-            w16 = torch.randn(2 * K, K, device=device, dtype=torch.float16, requires_grad=True)
-            b16 = torch.randn(2 * K, device=device, dtype=torch.float16, requires_grad=True)
-            grad = torch.randn(M, K, device=device, dtype=torch.float16)
+        x16 = torch.randn(M, K, device=device, dtype=torch.float16, requires_grad=True)
+        w16 = torch.randn(2 * K, K, device=device, dtype=torch.float16, requires_grad=True)
+        b16 = torch.randn(2 * K, device=device, dtype=torch.float16, requires_grad=True)
+        grad = torch.randn(M, K, device=device, dtype=torch.float16)
 
-            x32 = x16.detach().float().requires_grad_(True)
-            w32 = w16.detach().float().requires_grad_(True)
-            b32 = b16.detach().float().requires_grad_(True)
-            l32, g32 = torch.split(F.linear(x32, w32, b32), K, dim=-1)
-            ref = F.softsign(l32) * F.softsign(g32) if is_double else l32 * F.softsign(g32)
-            ref.backward(grad.float())
+        x32 = x16.detach().float().requires_grad_(True)
+        w32 = w16.detach().float().requires_grad_(True)
+        b32 = b16.detach().float().requires_grad_(True)
+        l32, g32 = torch.split(F.linear(x32, w32, b32), K, dim=-1)
+        ref = l32 * F.softsign(g32)
+        ref.backward(grad.float())
 
-            l16, g16 = torch.split(F.linear(x16, w16, b16), K, dim=-1)
-            y_eager = F.softsign(l16) * F.softsign(g16) if is_double else l16 * F.softsign(g16)
-            y_eager.backward(grad)
-            eager_errors = (
-                rel_err(y_eager, ref),
-                rel_err(x16.grad, x32.grad),
-                rel_err(w16.grad, w32.grad),
-                rel_err(b16.grad, b32.grad),
+        l16, g16 = torch.split(F.linear(x16, w16, b16), K, dim=-1)
+        y_eager = l16 * F.softsign(g16)
+        y_eager.backward(grad)
+        eager_errors = (
+            rel_err(y_eager, ref),
+            rel_err(x16.grad, x32.grad),
+            rel_err(w16.grad, w32.grad),
+            rel_err(b16.grad, b32.grad),
+        )
+
+        x16.grad = w16.grad = b16.grad = None
+        y_fused = fused_linear_softsign_glu(x16, w16, b16)
+        y_fused.backward(grad)
+        fused_errors = (
+            rel_err(y_fused, ref),
+            rel_err(x16.grad, x32.grad),
+            rel_err(w16.grad, w32.grad),
+            rel_err(b16.grad, b32.grad),
+        )
+
+        for name, fused_error, eager_error in zip(
+            ('fwd', 'grad_x', 'grad_w', 'grad_b'), fused_errors, eager_errors
+        ):
+            assert fused_error <= eager_error * margin + 1e-6, (
+                f'K={K} {name}: fused={fused_error:.4e} vs eager={eager_error:.4e}'
             )
 
-            x16.grad = w16.grad = b16.grad = None
-            y_fused = fused_linear_softsign_glu(x16, w16, b16, is_double=is_double)
-            y_fused.backward(grad)
-            fused_errors = (
-                rel_err(y_fused, ref),
-                rel_err(x16.grad, x32.grad),
-                rel_err(w16.grad, w32.grad),
-                rel_err(b16.grad, b32.grad),
-            )
+        torch.cuda.synchronize()
+        t0 = time.time()
+        for _ in range(50):
+            fused_linear_softsign_glu(x16, w16, b16)
+        torch.cuda.synchronize()
+        fused_t = (time.time() - t0) / 50
 
-            for name, fused_error, eager_error in zip(
-                ('fwd', 'grad_x', 'grad_w', 'grad_b'), fused_errors, eager_errors
-            ):
-                assert fused_error <= eager_error * margin + 1e-6, (
-                    f'K={K} double={is_double} {name}: '
-                    f'fused={fused_error:.4e} vs eager={eager_error:.4e}'
-                )
-
-            torch.cuda.synchronize()
-            t0 = time.time()
-            for _ in range(50):
-                fused_linear_softsign_glu(x16, w16, b16, is_double=is_double)
-            torch.cuda.synchronize()
-            fused_t = (time.time() - t0) / 50
-
-            print(
-                f"K={K:4d} double={is_double} "
-                f"fwd={fused_errors[0]:.2e} dx={fused_errors[1]:.2e} "
-                f"dw={fused_errors[2]:.2e} db={fused_errors[3]:.2e} "
-                f"t={fused_t * 1000:.2f}ms"
-            )
+        print(
+            f"K={K:4d} fwd={fused_errors[0]:.2e} dx={fused_errors[1]:.2e} "
+            f"dw={fused_errors[2]:.2e} db={fused_errors[3]:.2e} "
+            f"t={fused_t * 1000:.2f}ms"
+        )
 
     print("\nAll tests passed: fused error is within fp16 rounding of the eager path.")
 

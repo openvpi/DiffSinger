@@ -35,7 +35,7 @@ from modules.kernels.fused_linear_softsign_glu import (
 )
 
 
-_FUSABLE_GLU_TYPES = ('softsign_glu', 'double_softsign_glu')
+_FUSABLE_GLU_TYPES = ('softsign_glu',)
 
 
 class _FusedLYNXNet2BlockMixin:
@@ -50,9 +50,8 @@ class _FusedLYNXNet2BlockMixin:
         x = self.net[1](x)
         x = self.net[2](x)
         x = self.net[3](x)
-        is_double = self._fused_softsign_is_double
-        x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias, is_double)
-        x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias, is_double)
+        x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias)
+        x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias)
         x = self.net[8](x)
         x = self.net[9](x)
         return x + residual
@@ -68,10 +67,7 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
     Keeps all weights in-place (state_dict compatible).
     Only modifies the forward pass.
 
-    'softsign_glu' and 'double_softsign_glu' are fused. Other GLU types are
-    returned unpatched: the ATanGLU Triton kernel (fused_linear_glu.py)
-    predates the autotune M-bucketing / cuBLAS-backward fixes and is slower
-    than eager in real training shapes, and SwiGLU never had a fused kernel.
+    Only 'softsign_glu' is fused. Other GLU types are returned unpatched.
 
     Args:
         block: LYNXNet2Block instance
@@ -103,7 +99,6 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
         )
         return block
 
-    block._fused_softsign_is_double = glu_type == 'double_softsign_glu'
     block.__class__ = FusedLYNXNet2Block
     return block
 

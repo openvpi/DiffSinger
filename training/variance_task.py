@@ -116,9 +116,6 @@ class VarianceTask(BaseTask):
         super()._finish_init()
 
         # ── Fuse LYNXNet2 backbone kernels (in-place) ──
-        # Note: variance backbones are smaller (K=384/512) — fusion pays off
-        # at larger max_batch_frames (benchmarked ~1.3-1.6x at 24k frames,
-        # slightly negative below ~10k).
         self._fused_kernels_patched = 0
         self._fused_kernel_backbones = []
         if hparams.get('use_fused_kernels', False):

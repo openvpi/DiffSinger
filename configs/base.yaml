@@ -83,15 +83,6 @@ pl_trainer_strategy:
 nccl_p2p: true
 
 ###########
-# fusing
-###########
-# Fuse Linear+GLU in LYNXNet2 backbones via Triton (softsign_glu /
-# double_softsign_glu only). Applies to acoustic and variance training.
-# Benefit scales with max_batch_frames; below ~10k frames per batch the
-# launch overhead can outweigh the bandwidth savings.
-use_fused_kernels: false
-
-###########
 # finetune
 ###########
 finetune_enabled: false

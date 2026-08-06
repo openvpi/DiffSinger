@@ -216,57 +216,6 @@ class SoftSignGLU(nn.Module):
             return out * torch.nn.functional.softsign(gate)
 
 
-class DoubleSoftSignGLUFunction(torch.autograd.Function):
-    """Memory-optimized backward for DoubleSoftSignGLU (same trick).
-
-    Operates on the WHOLE Linear output x = [out | gate] (softsign is
-    elementwise, so softsign-then-split == split-then-softsign). With
-    a = softsign(out), b = softsign(gate), y = a * b:
-      dy/dout = b * (1-|a|)^2
-      dy/dgate = a * (1-|b|)^2
-    Both partials are precomputed into ONE [.., 2N] tensor in forward, so
-    backward is a single multiply against the (broadcast) upstream grad —
-    no softsign recompute, no cat.
-    """
-    @staticmethod
-    def forward(ctx, x, dim):
-        ss = torch.nn.functional.softsign(x)
-        a, b = torch.split(ss, ss.size(dim) // 2, dim=dim)
-        decay_sq = (1.0 - ss.abs()).square()
-        da, db = torch.split(decay_sq, decay_sq.size(dim) // 2, dim=dim)
-        # decay = [b*(1-|a|)^2 | a*(1-|b|)^2], written into decay_sq's halves
-        da.mul_(b)
-        db.mul_(a)
-        ctx.save_for_backward(decay_sq)
-        ctx.dim = dim
-        return a * b
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        decay, = ctx.saved_tensors
-        grad_x = decay * torch.cat([grad_output, grad_output], dim=ctx.dim)
-        return grad_x, None
-
-
-class DoubleSoftSignGLU(nn.Module):
-    """FastWaveD-style double-gated unit: softsign applied to the whole
-    Linear output, then split and multiplied:
-      y = softsign(out) * softsign(gate)
-    Output is bounded in (-1, 1) since both branches saturate.
-    """
-    def __init__(self, dim=-1):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        if self.training:
-            return DoubleSoftSignGLUFunction.apply(x, self.dim)
-        # softsign whole tensor first (one elementwise op), then split
-        ss = torch.nn.functional.softsign(x)
-        out, gate = torch.split(ss, ss.size(self.dim) // 2, dim=self.dim)
-        return out * gate
-
-
 class AdamWConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

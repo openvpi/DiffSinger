@@ -95,8 +95,7 @@ class AcousticTask(BaseTask):
         super()._finish_init()
 
         # ── Fuse LYNXNet2 backbone kernels (in-place) ──
-        # Only softsign_glu backbones are patched; other GLU types keep the
-        # eager path (patch_diffusion_module returns 0 and warns).
+        # Only SoftSignGLU backbones are patched.
         self._fused_kernels_patched = 0
         if hparams.get('use_fused_kernels', False):
             try:
