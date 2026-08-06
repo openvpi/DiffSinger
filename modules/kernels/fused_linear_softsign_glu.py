@@ -395,10 +395,8 @@ if _TRITON_AVAILABLE:
 
 def _eager_linear_softsign_glu(x, weight, bias, is_double=False):
     """Unfused reference path — used as fallback for unsupported dtypes/GPUs."""
-    if bias is not None:
-        left, gate = F.linear(x, weight, bias).chunk(2, dim=-1)
-    else:
-        left, gate = F.linear(x, weight).chunk(2, dim=-1)
+    linear = F.linear(x, weight, bias)
+    left, gate = torch.split(linear, linear.shape[-1] // 2, dim=-1)
     if is_double:
         return F.softsign(left) * F.softsign(gate)
     return left * F.softsign(gate)
@@ -462,7 +460,8 @@ def fused_linear_softsign_glu(x, weight, bias, is_double=False):
             import warnings
             warnings.warn(
                 f'Fused SoftSignGLU: dtype {x.dtype} not supported for this GPU; '
-                f'falling back to eager. (This message is shown once per (dtype, K) pair.)'
+                f'falling back to eager. (This message is shown once per (dtype, K) pair.)',
+                stacklevel=2,
             )
         return _eager_linear_softsign_glu(x, weight, bias, is_double)
     # Match weight/bias dtype to input (handles 16-mixed precision where
@@ -483,71 +482,72 @@ def fused_linear_softsign_glu(x, weight, bias, is_double=False):
 # ---------------------------------------------------------------------------
 
 def _test():
-    """Numerical check against an fp32 reference.
+    """Numerical check against an fp32 reference for both GLU modes."""
+    import time
 
-    fp16 eager and fp16 fused accumulate in different orders, so comparing
-    them directly conflates rounding with kernel bugs (measured ~9e-3
-    relative just from eager fp16 rounding on K=512). Instead, both paths
-    are compared to the same fp32 reference and the fused error must not
-    exceed the eager error by more than a small margin.
-    """
     torch.manual_seed(42)
     device = 'cuda'
-    MARGIN = 2.0  # fused may be at most 2x the eager fp16 rounding error
+    margin = 2.0
+
+    def rel_err(actual, reference):
+        return (actual.float() - reference).abs().max().item() / reference.abs().mean().item()
 
     for K in [256, 512, 1024]:
         M = 4096 if K == 256 else (2048 if K == 512 else 1024)
-        x16 = torch.randn(M, K, device=device, dtype=torch.float16, requires_grad=True)
-        w16 = torch.randn(2 * K, K, device=device, dtype=torch.float16, requires_grad=True)
-        b16 = torch.randn(2 * K, device=device, dtype=torch.float16, requires_grad=True)
-        grad = torch.randn(M, K, device=device, dtype=torch.float16)
+        for is_double in (False, True):
+            x16 = torch.randn(M, K, device=device, dtype=torch.float16, requires_grad=True)
+            w16 = torch.randn(2 * K, K, device=device, dtype=torch.float16, requires_grad=True)
+            b16 = torch.randn(2 * K, device=device, dtype=torch.float16, requires_grad=True)
+            grad = torch.randn(M, K, device=device, dtype=torch.float16)
 
-        # fp32 reference
-        x32 = x16.detach().float().requires_grad_(True)
-        w32 = w16.detach().float().requires_grad_(True)
-        b32 = b16.detach().float().requires_grad_(True)
-        l32, g32 = F.linear(x32, w32, b32).chunk(2, dim=-1)
-        ref = l32 * F.softsign(g32)
-        ref.backward(grad.float())
+            x32 = x16.detach().float().requires_grad_(True)
+            w32 = w16.detach().float().requires_grad_(True)
+            b32 = b16.detach().float().requires_grad_(True)
+            l32, g32 = torch.split(F.linear(x32, w32, b32), K, dim=-1)
+            ref = F.softsign(l32) * F.softsign(g32) if is_double else l32 * F.softsign(g32)
+            ref.backward(grad.float())
 
-        def rel_err(a, b_ref):
-            return (a.float() - b_ref).abs().max().item() / b_ref.abs().mean().item()
+            l16, g16 = torch.split(F.linear(x16, w16, b16), K, dim=-1)
+            y_eager = F.softsign(l16) * F.softsign(g16) if is_double else l16 * F.softsign(g16)
+            y_eager.backward(grad)
+            eager_errors = (
+                rel_err(y_eager, ref),
+                rel_err(x16.grad, x32.grad),
+                rel_err(w16.grad, w32.grad),
+                rel_err(b16.grad, b32.grad),
+            )
 
-        # fp16 eager
-        l16, g16 = F.linear(x16, w16, b16).chunk(2, dim=-1)
-        y_eager = l16 * F.softsign(g16)
-        y_eager.backward(grad)
-        eager_fwd = rel_err(y_eager, ref)
-        eager_dx = rel_err(x16.grad, x32.grad)
-        eager_dw = rel_err(w16.grad, w32.grad)
+            x16.grad = w16.grad = b16.grad = None
+            y_fused = fused_linear_softsign_glu(x16, w16, b16, is_double=is_double)
+            y_fused.backward(grad)
+            fused_errors = (
+                rel_err(y_fused, ref),
+                rel_err(x16.grad, x32.grad),
+                rel_err(w16.grad, w32.grad),
+                rel_err(b16.grad, b32.grad),
+            )
 
-        # fp16 fused
-        x16.grad = w16.grad = None
-        y_fused = fused_linear_softsign_glu(x16, w16, b16)
-        y_fused.backward(grad)
-        fused_fwd = rel_err(y_fused, ref)
-        fused_dx = rel_err(x16.grad, x32.grad)
-        fused_dw = rel_err(w16.grad, w32.grad)
+            for name, fused_error, eager_error in zip(
+                ('fwd', 'grad_x', 'grad_w', 'grad_b'), fused_errors, eager_errors
+            ):
+                assert fused_error <= eager_error * margin + 1e-6, (
+                    f'K={K} double={is_double} {name}: '
+                    f'fused={fused_error:.4e} vs eager={eager_error:.4e}'
+                )
 
-        assert fused_fwd <= eager_fwd * MARGIN + 1e-6, \
-            f'K={K} fwd: fused={fused_fwd:.4e} vs eager={eager_fwd:.4e}'
-        assert fused_dx <= eager_dx * MARGIN + 1e-6, \
-            f'K={K} grad_x: fused={fused_dx:.4e} vs eager={eager_dx:.4e}'
-        assert fused_dw <= eager_dw * MARGIN + 1e-6, \
-            f'K={K} grad_w: fused={fused_dw:.4e} vs eager={eager_dw:.4e}'
+            torch.cuda.synchronize()
+            t0 = time.time()
+            for _ in range(50):
+                fused_linear_softsign_glu(x16, w16, b16, is_double=is_double)
+            torch.cuda.synchronize()
+            fused_t = (time.time() - t0) / 50
 
-        import time
-        torch.cuda.synchronize()
-        t0 = time.time()
-        for _ in range(50):
-            _ = fused_linear_softsign_glu(x16, w16, b16)
-        torch.cuda.synchronize()
-        fused_t = (time.time() - t0) / 50
-
-        print(f"K={K:4d}  fwd: fused={fused_fwd:.2e} eager={eager_fwd:.2e}  "
-              f"dx: fused={fused_dx:.2e} eager={eager_dx:.2e}  "
-              f"dw: fused={fused_dw:.2e} eager={eager_dw:.2e}  "
-              f"t={fused_t*1000:.2f}ms")
+            print(
+                f"K={K:4d} double={is_double} "
+                f"fwd={fused_errors[0]:.2e} dx={fused_errors[1]:.2e} "
+                f"dw={fused_errors[2]:.2e} db={fused_errors[3]:.2e} "
+                f"t={fused_t * 1000:.2f}ms"
+            )
 
     print("\nAll tests passed: fused error is within fp16 rounding of the eager path.")
 

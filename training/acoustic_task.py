@@ -98,7 +98,6 @@ class AcousticTask(BaseTask):
         # Only softsign_glu backbones are patched; other GLU types keep the
         # eager path (patch_diffusion_module returns 0 and warns).
         self._fused_kernels_patched = 0
-        self._fused_kernels_fallback = False
         if hparams.get('use_fused_kernels', False):
             try:
                 from modules.kernels.integration import patch_diffusion_module
@@ -112,33 +111,21 @@ class AcousticTask(BaseTask):
             except ImportError as e:
                 from lightning.pytorch.utilities.rank_zero import rank_zero_info
                 rank_zero_info('Fused kernels unavailable (ImportError: %s); running eager.', e)
-                self._fused_kernels_fallback = True
 
     def on_fit_start(self):
         # Warm Triton autotune caches after the model is on its CUDA device,
         # so the first training steps don't pay the per-bucket benchmark cost.
         if self._fused_kernels_patched > 0 and self.device.type == 'cuda':
-            from modules.kernels.integration import warmup_fused_backbone
-            from lightning.pytorch.utilities.rank_zero import rank_zero_info
-            precision = str(hparams.get('pl_trainer_precision', '32'))
-            autocast_dtype = (
-                torch.float16 if '16' in precision and 'bf16' not in precision
-                else torch.bfloat16 if 'bf16' in precision
-                else None
+            from modules.kernels.integration import warmup_fused_backbones
+            backbones = [
+                backbone for attr in ('denoise_fn', 'velocity_fn')
+                if (backbone := getattr(self.model.diffusion, attr, None)) is not None
+            ]
+            warmup_fused_backbones(
+                backbones,
+                max_frames=hparams['max_batch_frames'],
+                precision=self.trainer.precision,
             )
-            if autocast_dtype is None:
-                rank_zero_info(
-                    'Fused kernels: precision=%s has no autocast dtype; '
-                    'fused kernel will fall back to eager at runtime.', precision
-                )
-            for attr in ('denoise_fn', 'velocity_fn'):
-                backbone = getattr(self.model.diffusion, attr, None)
-                if backbone is not None:
-                    warmup_fused_backbone(
-                        backbone,
-                        max_frames=hparams['max_batch_frames'],
-                        autocast_dtype=autocast_dtype,
-                    )
 
     def _build_model(self):
         return DiffSingerAcoustic(

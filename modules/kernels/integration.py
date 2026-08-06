@@ -21,9 +21,14 @@ element-wise gradient into one kernel; all GEMMs stay on cuBLAS.
 ONNX export:
   Use `model.eval()` → falls back to original path → ONNX export works
 """
+import contextlib
+import traceback
+import warnings
+
 import torch
 import torch.nn as nn
 
+from modules.backbones.lynxnet2 import LYNXNet2Block
 from modules.kernels.fused_linear_softsign_glu import (
     fused_linear_softsign_glu,
     is_triton_available,
@@ -31,6 +36,30 @@ from modules.kernels.fused_linear_softsign_glu import (
 
 
 _FUSABLE_GLU_TYPES = ('softsign_glu', 'double_softsign_glu')
+
+
+class _FusedLYNXNet2BlockMixin:
+    """Pickle-safe fused forward mixed into an existing LYNXNet2Block."""
+
+    def forward(self, x):
+        if not self.training:
+            return super().forward(x)
+
+        residual = x
+        x = self.net[0](x)
+        x = self.net[1](x)
+        x = self.net[2](x)
+        x = self.net[3](x)
+        is_double = self._fused_softsign_is_double
+        x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias, is_double)
+        x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias, is_double)
+        x = self.net[8](x)
+        x = self.net[9](x)
+        return x + residual
+
+
+class FusedLYNXNet2Block(_FusedLYNXNet2BlockMixin, LYNXNet2Block):
+    """LYNXNet2Block variant with a pickle-safe fused training forward."""
 
 
 def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
@@ -52,45 +81,30 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
         The same block, with patched forward if glu_type is supported.
     """
     if glu_type not in _FUSABLE_GLU_TYPES:
-        import warnings
         warnings.warn(
             f"Fused kernels support only {_FUSABLE_GLU_TYPES}; leaving block "
-            f"with glu_type={glu_type!r} unpatched."
+            f"with glu_type={glu_type!r} unpatched.",
+            stacklevel=2,
         )
         return block
 
-    is_double = glu_type == 'double_softsign_glu'
+    net = block.net
+    if not (
+        len(net) == 10
+        and isinstance(net[4], nn.Linear)
+        and isinstance(net[6], nn.Linear)
+        and isinstance(net[8], nn.Linear)
+        and net[4].out_features == 2 * net[6].in_features
+        and net[6].out_features == 2 * net[8].in_features
+    ):
+        warnings.warn(
+            'Unexpected LYNXNet2Block.net layout; leaving block unpatched.',
+            stacklevel=2,
+        )
+        return block
 
-    def fused_forward(self, x):
-        residual = x
-
-        # Original: LayerNorm → Transpose → Conv1d → Transpose
-        x = self.net[0](x)  # LayerNorm
-        x = self.net[1](x)  # Transpose
-        x = self.net[2](x)  # Conv1d(depthwise)
-        x = self.net[3](x)  # Transpose
-
-        if self.training:
-            # Fused: Linear+GLU → Linear+GLU
-            x = fused_linear_softsign_glu(x, self.net[4].weight, self.net[4].bias, is_double)
-            x = fused_linear_softsign_glu(x, self.net[6].weight, self.net[6].bias, is_double)
-        else:
-            # Original: Linear → GLU → Linear → GLU
-            x = self.net[4](x)
-            x = self.net[5](x)  # (Double)SoftSignGLU
-            x = self.net[6](x)
-            x = self.net[7](x)
-
-        # Original: Linear → Dropout → +residual
-        x = self.net[8](x)  # output projection
-        x = self.net[9](x)  # Dropout
-        return x + residual
-
-    # Monkey-patch — use descriptor protocol so the bound method captures
-    # ``self`` dynamically (avoids the deepcopy stale-closure issue: a
-    # deepcopy'ed block would otherwise keep a reference to the original's
-    # ``net``).
-    block.forward = fused_forward.__get__(block, type(block))
+    block._fused_softsign_is_double = glu_type == 'double_softsign_glu'
+    block.__class__ = FusedLYNXNet2Block
     return block
 
 
@@ -104,24 +118,25 @@ def patch_lynxnet2_model(model, glu_type='softsign_glu'):
     Returns:
         Number of blocks patched (0 if glu_type unsupported).
     """
-    from modules.backbones.lynxnet2 import LYNXNet2Block
     if glu_type not in _FUSABLE_GLU_TYPES:
-        import warnings
         warnings.warn(
             f"Fused kernels require glu_type in {_FUSABLE_GLU_TYPES}; "
-            f"got {glu_type!r}. Skipping patch."
+            f"got {glu_type!r}. Skipping patch.",
+            stacklevel=2,
         )
         return 0
     if not is_triton_available():
-        raise RuntimeError(
-            'Fused kernels require a working Triton installation. '
-            'Install Triton for this platform or set use_fused_kernels=false.'
+        warnings.warn(
+            'Fused kernels unavailable because Triton is not installed; running eager.',
+            stacklevel=2,
         )
+        return 0
     patched = 0
     for i, layer in enumerate(model.residual_layers):
         if isinstance(layer, LYNXNet2Block):
-            model.residual_layers[i] = wrap_lynxnet2_block(layer, glu_type=glu_type)
-            patched += 1
+            layer = wrap_lynxnet2_block(layer, glu_type=glu_type)
+            model.residual_layers[i] = layer
+            patched += isinstance(layer, FusedLYNXNet2Block)
     return patched
 
 
@@ -171,37 +186,6 @@ def patch_diffusion_module(diffusion, glu_type='softsign_glu'):
     )
 
 
-def patch_acoustic_model(model, glu_type='softsign_glu'):
-    """Patch the LYNXNet2 backbone in a DiffSingerAcoustic.
-
-    The backbone is at model.diffusion.denoise_fn (DDPM) or
-    model.diffusion.velocity_fn (ReFlow).
-
-    Returns:
-        Number of blocks patched.
-    """
-    if hasattr(model, 'diffusion') and model.diffusion is not None:
-        return patch_diffusion_module(model.diffusion, glu_type=glu_type)
-    return 0
-
-
-def patch_variance_model(model, glu_type='softsign_glu'):
-    """Patch all LYNXNet2 backbones in a DiffSingerVariance.
-
-    The variance model has separate predictors for pitch and other
-    variances, each with their own backbone. Handles both DDPM and ReFlow.
-
-    Returns:
-        Number of blocks patched.
-    """
-    total = 0
-    for predictor_attr in ['pitch_predictor', 'variance_predictor']:
-        predictor = getattr(model, predictor_attr, None)
-        if predictor is not None:
-            total += patch_diffusion_module(predictor, glu_type=glu_type)
-    return total
-
-
 # ---------------------------------------------------------------------------
 # Warmup — trigger Triton autotune before training starts
 # ---------------------------------------------------------------------------
@@ -229,21 +213,19 @@ def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
             'bf16-mixed'. If None, no autocast — with fp32 parameters the
             fused path falls back to eager and the warmup is a no-op.
     """
-    if not is_triton_available():
-        raise RuntimeError(
-            'Fused kernel warmup requires a working Triton installation. '
-            'Install Triton for this platform or set use_fused_kernels=false.'
-        )
-
-    import contextlib
-    import triton
-    import warnings
-
     device = next(backbone.parameters()).device
     dtype = next(backbone.parameters()).dtype
 
-    if not device.type == 'cuda':
-        return
+    if device.type != 'cuda':
+        return 0
+    if not is_triton_available():
+        warnings.warn(
+            'Fused kernel warmup skipped because Triton is not installed.',
+            stacklevel=2,
+        )
+        return 0
+
+    import triton
 
     # cond hidden size from the conditioner projection (Linear or Conv1d)
     proj = backbone.conditioner_projection
@@ -277,14 +259,41 @@ def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
             with torch.no_grad():
                 with ac_factory():
                     backbone(spec, t, cond=cond)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - warmup must remain non-fatal
             # Autotune failure should not crash training — Triton cache
             # can be built on the first real step instead.
-            warnings.warn(f'Fused kernel warmup skipped at T={T} ({e})')
+            warnings.warn(
+                f'Fused kernel warmup skipped at T={T} '
+                f'({type(e).__name__}: {e})\n{traceback.format_exc()}',
+                stacklevel=2,
+            )
             break
         finally:
             del spec, cond
     torch.cuda.empty_cache()
+    return len(t_list)
+
+
+def warmup_fused_backbones(backbones, max_frames, precision):
+    """Warm all patched backbones using Lightning's effective precision."""
+    precision = str(precision)
+    autocast_dtype = (
+        torch.float16 if '16' in precision and 'bf16' not in precision
+        else torch.bfloat16 if 'bf16' in precision
+        else None
+    )
+    if autocast_dtype is None:
+        from lightning.pytorch.utilities.rank_zero import rank_zero_info
+        rank_zero_info(
+            'Fused kernels: precision=%s has no autocast dtype; '
+            'fused kernel will fall back to eager at runtime.', precision
+        )
+    for backbone in backbones:
+        warmup_fused_backbone(
+            backbone,
+            max_frames=max_frames,
+            autocast_dtype=autocast_dtype,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +344,7 @@ def _test():
         for n in grads_ref
     )
     print(f"Block weight grad max diff: {max_w_diff:.4e}")
-    print(f"\nIntegration works! Use model.eval() for ONNX export fallback.")
+    print("\nIntegration works! Use model.eval() for ONNX export fallback.")
 
 
 if __name__ == '__main__':
