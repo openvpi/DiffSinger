@@ -241,28 +241,30 @@ def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
         (lambda: torch.autocast(device_type=device.type, dtype=autocast_dtype))
         if autocast_dtype is not None else contextlib.nullcontext
     )
-    for T in t_list:
-        # spec shape: [B, n_feats, in_dims, T]
-        spec = torch.randn(B, backbone.n_feats, backbone.in_dims, T,
-                           device=device, dtype=dtype)
-        t = torch.randint(0, 1000, (B,), device=device).float()
-        cond = torch.randn(B, hidden, T, device=device, dtype=dtype)
+    # Fork the RNG so dummy inputs do not advance the training noise stream.
+    with torch.random.fork_rng(devices=[device]):
+        for T in t_list:
+            # spec shape: [B, n_feats, in_dims, T]
+            spec = torch.randn(B, backbone.n_feats, backbone.in_dims, T,
+                               device=device, dtype=dtype)
+            t = torch.randint(0, 1000, (B,), device=device).float()
+            cond = torch.randn(B, hidden, T, device=device, dtype=dtype)
 
-        try:
-            with torch.no_grad():
-                with ac_factory():
-                    backbone(spec, t, cond=cond)
-        except Exception as e:  # noqa: BLE001 - warmup must remain non-fatal
-            # Autotune failure should not crash training — Triton cache
-            # can be built on the first real step instead.
-            warnings.warn(
-                f'Fused kernel warmup skipped at T={T} '
-                f'({type(e).__name__}: {e})\n{traceback.format_exc()}',
-                stacklevel=2,
-            )
-            break
-        finally:
-            del spec, cond
+            try:
+                with torch.no_grad():
+                    with ac_factory():
+                        backbone(spec, t, cond=cond)
+            except Exception as e:  # noqa: BLE001 - warmup must remain non-fatal
+                # Autotune failure should not crash training — Triton cache
+                # can be built on the first real step instead.
+                warnings.warn(
+                    f'Fused kernel warmup skipped at T={T} '
+                    f'({type(e).__name__}: {e})\n{traceback.format_exc()}',
+                    stacklevel=2,
+                )
+                break
+            finally:
+                del spec, cond
     torch.cuda.empty_cache()
     return len(t_list)
 

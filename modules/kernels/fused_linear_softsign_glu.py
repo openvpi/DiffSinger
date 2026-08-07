@@ -270,7 +270,7 @@ if _TRITON_AVAILABLE:
                 gate.stride(0), gate.stride(1),
             )
 
-            if x.dim() > 2:
+            if x.dim() != 2:
                 out = out.view(*orig_shape[:-1], N)
 
             ctx.save_for_backward(x_2d, weight, left, gate)
@@ -285,7 +285,7 @@ if _TRITON_AVAILABLE:
             N = ctx.N
             w_left, w_right = weight.split(N, dim=0)
 
-            if grad_y.dim() > 2:
+            if grad_y.dim() != 2:
                 grad_y = grad_y.reshape(-1, N)
             if not grad_y.is_contiguous():
                 grad_y = grad_y.contiguous()
@@ -322,7 +322,7 @@ if _TRITON_AVAILABLE:
             grad_x = torch.mm(grad_left_pre, w_left)
             grad_x.addmm_(grad_gate, w_right)
 
-            if len(ctx.orig_x_shape) > 2:
+            if len(ctx.orig_x_shape) != 2:
                 grad_x = grad_x.view(*ctx.orig_x_shape)
 
             return grad_x, grad_weight, grad_bias
