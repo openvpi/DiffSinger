@@ -75,7 +75,7 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         # extraction parameters
         self._hop_size = hop_size
         self._fft_size = fft_size if fft_size is not None else win_size
-        self._win_size = win_size if win_size is not None else win_size
+        self._win_size = win_size if win_size is not None else fft_size
         self._time_step = hop_size / samplerate
         self._half_width = base_harmonic_radius
         self._device = ('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device

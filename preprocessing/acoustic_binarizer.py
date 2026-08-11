@@ -319,7 +319,8 @@ class AcousticBinarizer(BaseBinarizer):
             k_from_aug = int(total_scale * scale / (1 + total_scale) * len(all_item_names))
             k_mutate = int(total_scale * scale / (1 + scale) * len(all_item_names))
             aug_types = [0] * k_from_raw + [1] * k_from_aug + [2] * k_mutate
-            aug_items = random.choices(all_item_names, k=k_from_raw) + random.choices(aug_list, k=k_from_aug + k_mutate)
+            aug_items = random.choices(all_item_names, k=k_from_raw) + \
+                random.choices(aug_list, k=k_from_aug) + random.sample(aug_list, k=min(k_mutate, len(aug_list)))
 
             for aug_type, aug_item in zip(aug_types, aug_items):
                 # Uniform distribution in log domain

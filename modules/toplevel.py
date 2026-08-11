@@ -341,7 +341,10 @@ class DiffSingerVariance(CategorizedModule, ParameterAdaptorModule):
             return dur_pred_out, pitch_pred_out, ({} if infer else None)
 
         if pitch is None:
-            pitch = base_pitch + pitch_pred_out
+            if pitch_pred_out is not None:
+                pitch = base_pitch + pitch_pred_out
+            else:
+                pitch = base_pitch
         if self.use_variance_scaling:
             var_cond = condition + self.pitch_embed(pitch[:, :, None] / 12)
         else:
