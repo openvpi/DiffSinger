@@ -115,6 +115,53 @@ class VarianceTask(BaseTask):
         self.lambda_var_loss = hparams['lambda_var_loss']
         super()._finish_init()
 
+        # ── Fuse LYNXNet2 backbone kernels (in-place) ──
+        self._fused_kernels_patched = 0
+        self._fused_kernel_backbones = []
+        if hparams.get('use_fused_kernels', False):
+            try:
+                from modules.backbones.lynxnet2 import LYNXNet2
+                from modules.kernels.integration import patch_diffusion_module
+                from lightning.pytorch.utilities.rank_zero import rank_zero_info
+                # Each predictor has its own backbone config; patch only the ones
+                # actually configured with softsign_glu (others are skipped with
+                # a warning instead of silently changing their math).
+                # NOTE: LYNXNet2 defaults to swiglu when glu_type is unset.
+                for predictor_attr, args_key in (
+                    ('pitch_predictor', 'pitch_prediction_args'),
+                    ('variance_predictor', 'variances_prediction_args'),
+                ):
+                    predictor = getattr(self.model, predictor_attr, None)
+                    if predictor is None:
+                        continue
+                    glu = (hparams.get(args_key) or {}).get('backbone_args', {}).get('glu_type', 'swiglu')
+                    n = patch_diffusion_module(predictor, glu_type=glu)
+                    self._fused_kernels_patched += n
+                    if n > 0:
+                        for attr in ('denoise_fn', 'velocity_fn'):
+                            backbone = getattr(predictor, attr, None)
+                            if isinstance(backbone, LYNXNet2):
+                                self._fused_kernel_backbones.append(backbone)
+                    rank_zero_info(
+                        'Fused kernels: patched %d LYNXNet2 blocks in %s (glu_type=%s)',
+                        n, predictor_attr, glu
+                    )
+            except ImportError as e:
+                from lightning.pytorch.utilities.rank_zero import rank_zero_info
+                rank_zero_info('Fused kernels unavailable (ImportError: %s); running eager.', e)
+
+    def on_fit_start(self):
+        # Warm Triton autotune caches after the model is on its CUDA device,
+        # so the first training steps don't pay the per-bucket benchmark cost.
+        # Mirrors AcousticTask.on_fit_start, but sweeps both predictors.
+        if self._fused_kernels_patched > 0 and self.device.type == 'cuda':
+            from modules.kernels.integration import warmup_fused_backbones
+            warmup_fused_backbones(
+                self._fused_kernel_backbones,
+                max_frames=hparams['max_batch_frames'],
+                precision=self.trainer.precision,
+            )
+
     def _build_model(self):
         return DiffSingerVariance(
             vocab_size=len(self.phoneme_dictionary),

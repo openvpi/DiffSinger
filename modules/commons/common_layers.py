@@ -175,6 +175,47 @@ class ATanGLU(nn.Module):
             return out * torch.atan(gate)
 
 
+class SoftSignGLUFunction(torch.autograd.Function):
+    """ATanGLUFunction-style memory trick for SoftSignGLU.
+
+    softsign'(x) = 1/(1+|x|)^2 = (1-|softsign(x)|)^2, so both partial
+    derivatives of y = out * softsign(gate) are precomputable in forward:
+      dy/dout = softsign(gate)
+      dy/dgate = out * (1-|softsign(gate)|)^2
+    Saves 2 tensors (vs 3 for naive autograd) and backward is two pure
+    multiplies with no softsign recompute.
+    """
+    @staticmethod
+    def forward(ctx, out, gate):
+        ss_gate = torch.nn.functional.softsign(gate)
+        decay_out = out * (1.0 - ss_gate.abs()).square()
+        ctx.save_for_backward(ss_gate, decay_out)
+        return out * ss_gate
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        ss_gate, decay_out = ctx.saved_tensors
+        return grad_output * ss_gate, grad_output * decay_out
+
+
+class SoftSignGLU(nn.Module):
+    """Gated Linear Unit with SoftSign gate: out * softsign(gate).
+
+    More numerically stable than ATanGLU (no approximation needed in
+    Triton kernels) while providing similar gating behavior.
+    """
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
+        if self.training:
+            return SoftSignGLUFunction.apply(out, gate)
+        else:
+            return out * torch.nn.functional.softsign(gate)
+
+
 class AdamWConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
