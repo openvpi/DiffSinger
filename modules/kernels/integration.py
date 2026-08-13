@@ -29,6 +29,7 @@ import torch
 import torch.nn as nn
 
 from modules.backbones.lynxnet2 import LYNXNet2Block
+from modules.commons.common_layers import Transpose
 from modules.kernels.fused_linear_softsign_glu import (
     fused_linear_softsign_glu,
     is_triton_available,
@@ -87,11 +88,16 @@ def wrap_lynxnet2_block(block, glu_type='softsign_glu'):
     net = block.net
     if not (
         len(net) == 10
+        and isinstance(net[1], Transpose)  # channel-first
+        and isinstance(net[3], Transpose)  # back to channel-last
+        and isinstance(net[2], nn.Conv1d)
+        and net[2].groups == net[2].in_channels  # depthwise conv keeps `dim` channels
         and isinstance(net[4], nn.Linear)
         and isinstance(net[6], nn.Linear)
         and isinstance(net[8], nn.Linear)
         and net[4].out_features == 2 * net[6].in_features
         and net[6].out_features == 2 * net[8].in_features
+        and net[8].out_features == net[4].in_features  # round-trip to dim
     ):
         warnings.warn(
             'Unexpected LYNXNet2Block.net layout; leaving block unpatched.',
