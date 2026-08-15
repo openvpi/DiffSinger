@@ -107,7 +107,7 @@ class VarianceBinarizer(BaseBinarizer):
             if not isinstance(ds, list):
                 ds = [ds]
             self.cached_ds[cache_key] = ds
-            ds = ds[idx]
+            ds = ds[0] if cache_key == item_name_with_idx else ds[idx]
         return ds.get(attr)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang):
@@ -117,11 +117,12 @@ class VarianceBinarizer(BaseBinarizer):
             for utterance_label in csv.DictReader(f):
                 utterance_label: dict
                 item_name = utterance_label['name']
-                item_idx = int(item_name.rsplit(DS_INDEX_SEP, maxsplit=1)[-1]) if DS_INDEX_SEP in item_name else 0
+                item_base_name, *item_seg_idx = item_name.rsplit(DS_INDEX_SEP, maxsplit=1)
+                item_idx = int(item_seg_idx[0]) if item_seg_idx else 0
 
                 def require(attr, optional=False):
                     if self.prefer_ds:
-                        value = self.load_attr_from_ds(ds_id, item_name, attr, item_idx)
+                        value = self.load_attr_from_ds(ds_id, item_base_name, attr, item_idx)
                     else:
                         value = None
                     if value is None:
