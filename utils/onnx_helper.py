@@ -80,7 +80,7 @@ def model_reorder_io_list(
     :param model: model to perform the operation on
     :param input_or_output: 'input' or 'output' to specify the list to reorder
     :param target_name: the name of the input to be reordered
-    :param insert_after_name: the name of the input to be inserted after (None for the first)
+    :param insert_after_name: the name of the input to be inserted after
     """
     def _reorder_input(input_list: RepeatedCompositeFieldContainer[ValueInfoProto]):
         nonlocal input_or_output
@@ -93,7 +93,8 @@ def model_reorder_io_list(
                 insert_after_idx = i
         if target_idx != -1 and insert_after_idx != -1:
             target = input_list.pop(target_idx)
-            input_list.insert(insert_after_idx + 1, target)
+            insert_at = insert_after_idx + (1 if target_idx > insert_after_idx else 0)
+            input_list.insert(insert_at, target)
             _verbose(f'| reorder {input_or_output}: \'{target_name}\' after \'{insert_after_name}\'')
 
     if input_or_output == 'input':
