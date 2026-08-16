@@ -107,7 +107,7 @@ class VarianceBinarizer(BaseBinarizer):
             if not isinstance(ds, list):
                 ds = [ds]
             self.cached_ds[cache_key] = ds
-            ds = ds[idx]
+            ds = ds[0] if cache_key == item_name_with_idx else ds[idx]
         return ds.get(attr)
 
     def load_meta_data(self, raw_data_dir: pathlib.Path, ds_id, spk, lang):
@@ -117,11 +117,12 @@ class VarianceBinarizer(BaseBinarizer):
             for utterance_label in csv.DictReader(f):
                 utterance_label: dict
                 item_name = utterance_label['name']
-                item_idx = int(item_name.rsplit(DS_INDEX_SEP, maxsplit=1)[-1]) if DS_INDEX_SEP in item_name else 0
+                item_base_name, *item_seg_idx = item_name.rsplit(DS_INDEX_SEP, maxsplit=1)
+                item_idx = int(item_seg_idx[0]) if item_seg_idx else 0
 
                 def require(attr, optional=False):
                     if self.prefer_ds:
-                        value = self.load_attr_from_ds(ds_id, item_name, attr, item_idx)
+                        value = self.load_attr_from_ds(ds_id, item_base_name, attr, item_idx)
                     else:
                         value = None
                     if value is None:
@@ -275,7 +276,6 @@ class VarianceBinarizer(BaseBinarizer):
         ds_id = int(ds_id)
         ds_seg_idx = meta_data['ds_idx']
         seconds = sum(meta_data['ph_dur'])
-        length = round(seconds / self.timestep)
         T_ph = len(meta_data['ph_seq'])
         processed_input = {
             'name': item_name,
@@ -283,7 +283,6 @@ class VarianceBinarizer(BaseBinarizer):
             'spk_id': meta_data['spk_id'],
             'spk_name': meta_data['spk_name'],
             'seconds': seconds,
-            'length': length,
             'languages': np.array(meta_data['lang_seq'], dtype=np.int64),
             'tokens': np.array(meta_data['ph_seq'], dtype=np.int64),
             'ph_text': meta_data['ph_text'],
@@ -292,7 +291,9 @@ class VarianceBinarizer(BaseBinarizer):
         ph_dur_sec = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
         ph_acc = torch.round(torch.cumsum(ph_dur_sec, dim=0) / self.timestep + 0.5).long()
         ph_dur = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+        length = int(ph_acc[-1])
         processed_input['ph_dur'] = ph_dur.cpu().numpy()
+        processed_input['length'] = length
 
         mel2ph = get_mel2ph_torch(
             self.lr, ph_dur_sec, length, self.timestep, device=self.device
