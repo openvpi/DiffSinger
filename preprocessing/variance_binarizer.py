@@ -349,6 +349,12 @@ class VarianceBinarizer(BaseBinarizer):
             ph_midi = pitch.new_zeros(T_ph + 1).scatter_add(
                 0, mel2ph, pitch / mel2dur
             )[1:]
+            # Phones collapsed to 0 frames receive no scatter contribution;
+            # fall back to the pitch value at their position on the time axis.
+            zero_dur = ph_dur <= 0
+            if zero_dur.any():
+                bound = torch.cat([ph_acc.new_zeros(1), ph_acc[:-1]]).clamp(min=0, max=length - 1)
+                ph_midi[zero_dur] = pitch[bound[zero_dur]]
             processed_input['midi'] = ph_midi.round().long().clamp(min=0, max=127).cpu().numpy()
 
         if hparams['predict_pitch']:
