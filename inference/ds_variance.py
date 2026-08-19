@@ -229,12 +229,30 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
             ph_midi = frame_midi_pitch.new_zeros(1, T_ph + 1).scatter_add(
                 1, mel2ph, frame_midi_pitch / mel2pdur
             )[:, 1:]
+            # Phones collapsed to 0 frames receive no scatter contribution;
+            # fall back to the pitch value at their position on the time axis.
+            zero_dur = ph_dur <= 0
+            if zero_dur.any():
+                dur_cum = torch.cumsum(ph_dur, dim=1)
+                bound = torch.cat(
+                    [dur_cum.new_zeros(dur_cum.shape[0], 1), dur_cum[:, :-1]], dim=1
+                ).clamp(min=0, max=T_s - 1)
+                ph_midi = torch.where(zero_dur, torch.gather(frame_midi_pitch, 1, bound), ph_midi)
         else:
             # Phone durations are not available, calculate word-level MIDI instead.
             mel2wdur = torch.gather(F.pad(word_dur, [1, 0], value=1), 1, mel2word)
             w_midi = frame_midi_pitch.new_zeros(1, T_w + 1).scatter_add(
                 1, mel2word, frame_midi_pitch / mel2wdur
             )[:, 1:]
+            # Words collapsed to 0 frames receive no scatter contribution;
+            # fall back to the pitch value at their position on the time axis.
+            zero_dur = word_dur <= 0
+            if zero_dur.any():
+                dur_cum = torch.cumsum(word_dur, dim=1)
+                bound = torch.cat(
+                    [dur_cum.new_zeros(dur_cum.shape[0], 1), dur_cum[:, :-1]], dim=1
+                ).clamp(min=0, max=T_s - 1)
+                w_midi = torch.where(zero_dur, torch.gather(frame_midi_pitch, 1, bound), w_midi)
             # Convert word-level MIDI to phoneme-level MIDI
             ph_midi = torch.gather(F.pad(w_midi, [1, 0]), 1, ph2word)
         ph_midi = ph_midi.round().long()
