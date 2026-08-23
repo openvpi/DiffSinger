@@ -252,8 +252,6 @@ class Mixed_LayerNorm(nn.Module):
         super().__init__()
         self.channels = channels
         self.eps = eps
-        # If false, skip the speaker-shuffle mixture while keeping the
-        # conditional-affine structure (default).
         self.shuffle_speakers = shuffle_speakers
 
         self.beta_distribution = torch.distributions.Beta(
