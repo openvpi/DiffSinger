@@ -56,7 +56,6 @@ use_spk_id: false
 num_spk: 1
 use_mix_ln: false
 mix_ln_layer: [0, 2]
-# If true, Mixed_LayerNorm shuffles/mixes speakers within a batch during training.
 mixln_shuffle_speakers: false
 use_energy_embed: false
 use_breathiness_embed: false
