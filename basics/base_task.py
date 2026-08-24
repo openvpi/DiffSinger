@@ -337,7 +337,8 @@ class BaseTask(pl.LightningModule):
             size_reversed=True,
             required_batch_count_multiple=hparams['accumulate_grad_batches'],
             shuffle_sample=True,
-            shuffle_batch=True
+            shuffle_batch=True,
+            probe_and_cap_max_frames=True
         )
         return torch.utils.data.DataLoader(
             self.train_dataset,

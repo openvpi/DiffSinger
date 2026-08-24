@@ -78,7 +78,8 @@ class DsBatchSampler(Sampler):
                  num_replicas=None, rank=None,
                  required_batch_count_multiple=1, batch_by_size=True, sort_by_similar_size=True,
                  size_reversed=False, shuffle_sample=False, shuffle_batch=False,
-                 disallow_empty_batch=True, pad_batch_assignment=True, seed=0, drop_last=False) -> None:
+                 disallow_empty_batch=True, pad_batch_assignment=True, seed=0, drop_last=False,
+                 probe_and_cap_max_frames=False) -> None:
         if rank >= num_replicas or rank < 0:
             raise ValueError(
                 f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]")
@@ -98,6 +99,11 @@ class DsBatchSampler(Sampler):
         self.pad_batch_assignment = pad_batch_assignment
         self.seed = seed
         self.drop_last = drop_last
+        # When enabled, the first epoch is a memory probe: its batches are
+        # served in strictly decreasing padded-frames order, and the measured
+        # maximum becomes the batching cap for all later epochs.
+        self.probe_and_cap_max_frames = probe_and_cap_max_frames
+        self.measured_max_batch_frames = None
         self.epoch = 0
         self.batches = None
         self.formed = None
@@ -105,7 +111,7 @@ class DsBatchSampler(Sampler):
     def __form_batches(self):
         if self.formed == self.epoch + self.seed:
             return
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(self.epoch + self.seed)
         # Create indices
         if self.shuffle_sample:
             if self.sub_indices is not None:
@@ -127,11 +133,33 @@ class DsBatchSampler(Sampler):
 
         # Batching
         if self.batch_by_size:
+            # After the probe epoch, cap by the measured maximum so later
+            # groupings can never exceed the proven memory footprint.
+            max_frames_cap = (
+                self.measured_max_batch_frames
+                if self.probe_and_cap_max_frames and self.measured_max_batch_frames is not None
+                else self.max_batch_frames
+            )
             batches = utils.batch_by_size(
                 indices, self.dataset.num_frames,
-                max_batch_frames=self.max_batch_frames,
+                max_batch_frames=max_frames_cap,
                 max_batch_size=self.max_batch_size
             )
+            if self.probe_and_cap_max_frames and self.measured_max_batch_frames is None:
+                # Probe epoch: sort batches by padded frames (largest first),
+                # then record the measured maximum for later epochs.
+                padded_frames = [
+                    len(b) * max((self.dataset.num_frames(i) for i in b), default=0)
+                    for b in batches
+                ]
+                self.measured_max_batch_frames = (
+                    max(padded_frames) if padded_frames else self.max_batch_frames
+                )
+                batches = [batches[i] for i in sorted(
+                    range(len(batches)), key=lambda i: -padded_frames[i])]
+                rank_zero_info(
+                    'DsBatchSampler: auto-capped batch frames = %d (config max %d).',
+                    self.measured_max_batch_frames, self.max_batch_frames)
         else:
             batches = [indices[i:i + self.max_batch_size] for i in range(0, len(indices), self.max_batch_size)]
         if len(batches) < self.num_replicas and self.disallow_empty_batch:
