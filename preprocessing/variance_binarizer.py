@@ -157,7 +157,7 @@ class VarianceBinarizer(BaseBinarizer):
                             if self.phoneme_dictionary.is_cross_lingual(p if '/' in p else f'{lang}/{p}')
                             else 0
                         )
-                        for p in utterance_label['ph_seq'].split()
+                        for p in require('ph_seq').split()
                     ],
                     'ph_seq': self.phoneme_dictionary.encode(require('ph_seq'), lang=lang),
                     'ph_dur': [float(x) for x in require('ph_dur').split()],
