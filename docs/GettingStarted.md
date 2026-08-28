@@ -6,7 +6,7 @@
 
 DiffSinger requires Python 3.10 or later. We strongly recommend you create a virtual environment via Conda, venv or uv before installing dependencies.
 
-1. Install The latest PyTorch following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware. We recommend using the latest stable release that is >= 2.4.0.
+1. Install the latest PyTorch following the [official instructions](https://pytorch.org/get-started/locally/) according to your OS and hardware. We recommend using a stable release >= 2.4.0.
 
 2. Install other dependencies via the following command:
 
@@ -20,13 +20,14 @@ Before you proceed, it is necessary to understand some fundamental concepts in t
 
 ## Configuration
 
-Every model needs a configuration file to run preprocessing, training, inference and deployment. Templates of configurations files are in [configs/templates](../configs/templates). Please **copy** the templates to your own data directory before you edit them.
+Every model needs a configuration file to run preprocessing, training, inference and deployment. Templates of configuration files are in [configs/templates](../configs/templates). Please **copy** the templates to your own data directory before you edit them.
 
 Before you continue, it is highly recommended to read through [Best Practices](BestPractices.md), which is a more detailed tutorial on how to configure your experiments.
 
 For more details about configurable parameters, see [Configuration Schemas](ConfigurationSchemas.md).
 
-> Tips: to see which parameters are required or recommended to be edited, you can search by _customizability_ in the configuration schemas.
+> [!TIP]
+> To see which parameters are required or recommended to be edited, you can search by _customizability_ in the configuration schemas.
 
 ## Preprocessing
 
@@ -38,7 +39,7 @@ Assume that you have a configuration file called `my_config.yaml`. Run:
 python scripts/binarize.py --config my_config.yaml
 ```
 
-Preprocessing can be accelerated through multiprocessing. See [binarization_args.num_workers](ConfigurationSchemas.md#binarization_args.num_workers) for more explanations.
+Preprocessing can be accelerated through multiprocessing. See [binarization_args.num_workers](ConfigurationSchemas.md#binarization_argsnum_workers) for more explanations.
 
 ## Training
 
@@ -54,15 +55,14 @@ For more suggestions related to training performance, see [performance tuning](B
 
 ### TensorBoard
 
-Run the following command to start the TensorBoard:
+Run the following command to start TensorBoard:
 
 ```bash
 tensorboard --logdir checkpoints/
 ```
 
-> NOTICE
-> 
-> If you are training a model with multiple GPUs (DDP), please add `--reload_multifile=true` option when launching TensorBoard, otherwise it may not update properly.
+> [!NOTE]
+> If you are training a model with multiple GPUs (DDP), please add the `--reload_multifile=true` option when launching TensorBoard, otherwise it may not update properly.
 
 ## Inference
 
@@ -136,7 +136,7 @@ To export an NSF-HiFiGAN vocoder checkpoint, run:
 python scripts/export.py nsf-hifigan --config CONFIG --ckpt CKPT
 ```
 
-where `CONFIG` is a configuration file that has configured the same mel parameters as the vocoder (can be configs/acoustic.yaml for most cases) and `CKPT` is the path of the checkpoint to be exported.
+where `CONFIG` is a configuration file that configures the same mel parameters as the vocoder (can be `configs/acoustic.yaml` for most cases) and `CKPT` is the path of the checkpoint to be exported. `--ckpt` is optional; if it is omitted, the checkpoint path is read from `vocoder_ckpt` in `CONFIG`.
 
 For more configurable options, run
 
@@ -148,5 +148,5 @@ python scripts/export.py nsf-hifigan --help
 
 There are other useful CLI tools in the [scripts/](../scripts) directory not mentioned above:
 
-- drop_spk.py - delete speaker embeddings from checkpoints (for data security reasons when distributing models)
-- vocoder.py - bypass the acoustic model and only run the vocoder on given mel-spectrograms
+- `drop_spk.py` - drop speaker embeddings from a checkpoint and save as a new one, refilling the dropped embeddings with zeros (by default) or other values (for data security reasons when distributing models)
+- `vocode.py` - bypass the acoustic model and only run the vocoder on given mel-spectrograms
