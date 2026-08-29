@@ -374,7 +374,7 @@ class FastSpeech2Encoder(nn.Module):
             self, hidden_size, num_layers,
             ffn_kernel_size=9, ffn_act='gelu',
             dropout=None, num_heads=2, use_pos_embed=True, rel_pos=True,
-            use_rope=False, rope_interleaved=True, mix_ln_layer=None,
+            use_rope=False, rope_interleaved=True, rope_theta=10000, mix_ln_layer=None,
             mixln_shuffle_speakers=False
     ):
         super().__init__()
@@ -388,7 +388,9 @@ class FastSpeech2Encoder(nn.Module):
                     "RoPE requires the hidden size to be multiple of "
                     f"num_heads * 2 = {num_heads * 2}, but got {embed_dim}."
                 )
-            rotary_embed = RotaryEmbedding(dim=embed_dim // num_heads, interleaved=rope_interleaved)
+            rotary_embed = RotaryEmbedding(
+                dim=embed_dim // num_heads, theta=rope_theta, interleaved=rope_interleaved
+            )
         else:
             rotary_embed = None
         self.layers = nn.ModuleList([
