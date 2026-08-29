@@ -297,18 +297,6 @@ Whether to prefer loading attributes and parameters from DS files.
 <tr><td align="center"><b>default</b></td><td>False</td>
 </tbody></table>
 
-### binarization_args.shuffle
-
-Whether binarized dataset will be shuffled or not.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>all</td>
-<tr><td align="center"><b>scope</b></td><td>preprocessing</td>
-<tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>true</td>
-</tbody></table>
-
 ### binarizer_cls
 
 Binarizer class name.
