@@ -36,7 +36,7 @@ pe_ckpt: 'checkpoints/rmvpe/model.pt'
 hnsep: vr
 hnsep_ckpt: 'checkpoints/vr/model.pt'
 vocoder: NsfHifiGAN
-vocoder_ckpt: checkpoints/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
+vocoder_ckpt: checkpoints/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt
 
 use_lang_id: false
 num_lang: 1
