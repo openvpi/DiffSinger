@@ -2,6 +2,7 @@
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/model_conformer_naive.py
 # https://github.com/CNChTu/Diffusion-SVC/blob/v2.0_dev/diffusion/naive_v2/naive_v2_diff.py
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -110,7 +111,7 @@ class LYNXNet(nn.Module):
         self.strong_cond = strong_cond
         nn.init.zeros_(self.output_projection.weight)
 
-    def forward(self, spec, diffusion_step, cond):
+    def forward(self, spec, diffusion_step, cond, diffusion_step_2=None, mask=None):
         """
         :param spec: [B, F, M, T]
         :param diffusion_step: [B, 1]
@@ -127,10 +128,19 @@ class LYNXNet(nn.Module):
         if not self.strong_cond:
             x = F.gelu(x)
 
-        diffusion_step = self.diffusion_embedding(diffusion_step).unsqueeze(-1)
+        if mask is not None:
+            step = torch.cat((diffusion_step, diffusion_step_2), dim=0)
+            step = self.diffusion_embedding(step)
+            step, step_2 = torch.split(step, x.shape[0], dim=0) #[B, 1, C]
+            mask = mask.to(x).unsqueeze(-1) # [B, T, 1]
+            step = step + (step_2 - step) * mask
+        else:
+            step = self.diffusion_embedding(diffusion_step)
+            if step.dim() == 2:
+                step = step.unsqueeze(1)
 
         for layer in self.residual_layers:
-            x = layer(x, cond, diffusion_step, front_cond_inject=self.strong_cond)
+            x = layer(x, cond, step.transpose(1, 2), front_cond_inject=self.strong_cond)
 
         # post-norm
         x = self.norm(x.transpose(1, 2)).transpose(1, 2)

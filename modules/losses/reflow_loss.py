@@ -31,7 +31,7 @@ class RectifiedFlowLoss(nn.Module):
         weights = 0.398942 / t / (1 - t) * torch.exp(
             -0.5 * torch.log(t / (1 - t)) ** 2
         ) + eps
-        return weights[:, None, None, None]
+        return weights[:, None, None, :]
 
     def _forward(self, v_pred, v_gt, t=None):
         if self.log_norm:
@@ -43,7 +43,7 @@ class RectifiedFlowLoss(nn.Module):
         """
         :param v_pred: [B, 1, M, T]
         :param v_gt: [B, 1, M, T]
-        :param t: [B,]
+        :param t: [B, 1] or [B, T]
         :param non_padding: [B, T, M]
         """
         v_pred, v_gt = self._mask_non_padding(v_pred, v_gt, non_padding)

@@ -63,6 +63,7 @@ use_key_shift_embed: false
 use_speed_embed: false
 
 diffusion_type: reflow
+use_dual_timestep: true
 time_scale_factor: 1000
 timesteps: 1000
 max_beta: 0.02
