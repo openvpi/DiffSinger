@@ -1,6 +1,6 @@
 # DiffSinger (OpenVPI maintained version)
 
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2105.02446)
+[![arXiv](https://img.shields.io/badge/arXiv-Paper-b31b1b.svg)](https://arxiv.org/abs/2105.02446)
 [![downloads](https://img.shields.io/github/downloads/openvpi/DiffSinger/total.svg)](https://github.com/openvpi/DiffSinger/releases)
 [![Bilibili](https://img.shields.io/badge/Bilibili-Demo-blue)](https://www.bilibili.com/video/BV1be411N7JA/)
 [![license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/openvpi/DiffSinger/blob/main/LICENSE)
@@ -8,10 +8,10 @@
 This is a refactored and enhanced version of _DiffSinger: Singing Voice Synthesis via Shallow Diffusion Mechanism_ based on the original [paper](https://arxiv.org/abs/2105.02446) and [implementation](https://github.com/MoonInTheRiver/DiffSinger), which provides:
 
 - Cleaner code structure: useless and redundant files are removed and the others are re-organized.
-- Better sound quality: the sampling rate of synthesized audio are adapted to 44.1 kHz instead of the original 24 kHz.
+- Better sound quality: the sampling rate of synthesized audio is adapted to 44.1 kHz instead of the original 24 kHz.
 - Higher fidelity: improved acoustic models and diffusion sampling acceleration algorithms are integrated.
 - More controllability: introduced variance models and parameters for prediction and control of pitch, energy, breathiness, etc.
-- Production compatibility: functionalities are designed to match the requirements of production deployment and the SVS communities.
+- Production compatibility: functionalities are designed to match the requirements of production deployment and the Singing Voice Synthesis (SVS) communities.
 
 |                                       Overview                                        |                                    Variance Model                                     |                                    Acoustic Model                                     |
 |:-------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|:-------------------------------------------------------------------------------------:|
@@ -69,7 +69,7 @@ TBD
 
 ## Disclaimer
 
-Any organization or individual is prohibited from using any functionalities included in this repository to generate someone's speech without his/her consent, including but not limited to government leaders, political figures, and celebrities. If you do not comply with this item, you could be in violation of copyright laws.
+Any organization or individual is prohibited from using any functionalities included in this repository to generate someone's voice without his/her consent, including but not limited to government leaders, political figures, and celebrities. If you do not comply with this item, you could be in violation of copyright laws.
 
 ## License
 
