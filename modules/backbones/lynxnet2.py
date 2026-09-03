@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from modules.commons.common_layers import (
     SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, Transpose, AdamWLinear
 )
+from modules.commons.common_layers import MixedPrecisionLayerNorm as LayerNorm
 from utils.hparams import hparams
 
 
@@ -25,7 +26,7 @@ class LYNXNet2Block(nn.Module):
         else:
             _dropout = nn.Identity()
         self.net = nn.Sequential(
-            nn.LayerNorm(dim),
+            LayerNorm(dim),
             Transpose((1, 2)),
             nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size // 2, groups=dim),
             Transpose((1, 2)),
@@ -75,7 +76,7 @@ class LYNXNet2(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        self.norm = nn.LayerNorm(num_channels)
+        self.norm = LayerNorm(num_channels)
         self.output_projection = AdamWLinear(num_channels, in_dims * n_feats)
         nn.init.kaiming_normal_(self.input_projection.weight)
         nn.init.kaiming_normal_(self.conditioner_projection.weight)

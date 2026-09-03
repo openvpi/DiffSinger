@@ -287,6 +287,22 @@ class Mixed_LayerNorm(nn.Module):
         return mixed_gammas * x + mixed_betas
 
 
+class MixedPrecisionLayerNorm(nn.LayerNorm):
+    """LayerNorm that keeps fp16/bf16 activations under AMP autocast"""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            weight = self.weight
+            bias = self.bias
+            if weight is not None and weight.dtype != x.dtype:
+                weight = weight.to(x.dtype)
+            if bias is not None and bias.dtype != x.dtype:
+                bias = bias.to(x.dtype)
+            return F.layer_norm(
+                x, self.normalized_shape, weight, bias, self.eps
+            )
+            
+            
 class TransformerFFNLayer(nn.Module):
     def __init__(self, hidden_size, filter_size, kernel_size=1, dropout=0., act='gelu'):
         super().__init__()
