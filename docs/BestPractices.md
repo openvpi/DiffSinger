@@ -6,19 +6,19 @@
 
 A configuration file is a YAML file that defines enabled features, model hyperparameters and controls the behavior of the binarizer, trainer and inference. Almost all settings and controls in this repository, including the practices in this guidance, are achieved through configuration files.
 
-For more information of the configuration system and configurable attributes, see [Configuration Schemas](ConfigurationSchemas.md).
+For more information about the configuration system and configurable attributes, see [Configuration Schemas](ConfigurationSchemas.md).
 
 ### Languages
 
-Each language you are dealing with should have a unique tag in the configuration file. **We highly recommend using ISO 639 language codes as language tags.** For example, `zh` and `zho` stands for Chinese (`cmn` specifically for Mandarin Chinese), `ja` and `jpn` for Japanese, `en` and `eng` for English, `yue` for Cantonese (Yue). You can download a complete language code table from https://iso639-3.sil.org/code_tables/download_tables.
+Each language you are dealing with should have a unique tag in the configuration file. **We highly recommend using ISO 639 language codes as language tags.** For example, `zh` and `zho` stand for Chinese (`cmn` specifically for Mandarin Chinese), `ja` and `jpn` for Japanese, `en` and `eng` for English, `yue` for Cantonese (Yue). You can download a complete language code table from https://iso639-3.sil.org/code_tables/download_tables.
 
 ### Phonemes
 
 Phonemes are the fundamental part of dictionaries and labels. There are two types of phonemes: language-specific phonemes and global phonemes.
 
-**Language-specific phonemes:** If there are multiple languages, all language-specific phonemes will be prefixed with its language name. For example: `zh/a`, `ja/o`, `en/eh`. These are called the **full name** of the phonemes, while `a`, `o`, `eh` are called the **short name** which has definite meaning only in a specific language context. If there is only one language, the short names can be used to determine each phoneme.
+**Language-specific phonemes:** If there are multiple languages, all language-specific phonemes will be prefixed with their language name. For example: `zh/a`, `ja/o`, `en/eh`. These are called the **full name** of the phonemes, while `a`, `o`, `eh` are called the **short name** which has definite meaning only in a specific language context. If there is only one language, the short names can be used to determine each phoneme.
 
-**Global phonemes:** Some phonemes do not belong to any language. There are two reserved global phoneme tags: `SP` for space, and `AP` for aspiration. There can also be other user-defined tags (`EP`, `GS`, `VF`, etc.). These tags will not be prefixed with language, and are prior when identifying phoneme names.
+**Global phonemes:** Some phonemes do not belong to any language. There are two reserved global phoneme tags: `SP` for space, and `AP` for aspiration. There can also be other user-defined tags (`EP`, `GS`, `VF`, etc.). These tags will not be prefixed with a language tag, and are prior when identifying phoneme names.
 
 Extra phonemes, including user-defined global phonemes and additional language-specific phonemes that are not present in the dictionaries, can be defined in a list in the configuration file (full names should be used):
 
@@ -34,17 +34,17 @@ merged_phoneme_groups:
   - [zh/s, ja/s, en/s]
   - [ja/cl, SP]  # global phonemes can also be merged
   # ... (other groups omitted for brevity)
-use_lang_id: true  # whether to use language embedding; only take effects if there are cross-lingual phonemes
+use_lang_id: true  # whether to use language embedding; only takes effect if there are cross-lingual phonemes
 ```
 
-Merging phonemes does not mean that they are exactly the same for the dictionary. For those cross-lingual merged phonemes, Setting `use_lang_id` to true will still distinguish them by language IDs.
+Merging phonemes does not mean that they are exactly the same for the dictionary. For those cross-lingual merged phonemes, setting `use_lang_id` to true will still distinguish them by language IDs.
 
 #### Phoneme naming principles
 
 - Short names of language-specific phonemes should not conflict with global phoneme names, including reserved ones.
 - `/` cannot be used because it is already used for splitting the language tag and the short name.
 - `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
-- Other special characters, including but not limited to `@`, `#`, `&`, `|`, `<`, `>`, is not recommended because they may be used as special tags in the future format changes.
+- Other special characters, including but not limited to `@`, `#`, `&`, `|`, `<`, `>`, are not recommended because they may be used as special tags in the future format changes.
 - ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
 
 ### Dictionaries
@@ -71,8 +71,8 @@ Each dictionary is a *.txt* file, in which each line represents a mapping rule f
 - `AP` and `SP` cannot be used because they are reserved tags when using DiffSinger in editors.
 - `/` cannot be used because it is already used for splitting the language tag and the short name.
 - `-` and `+` cannot be used because they are defined as slur tags in most singing voice synthesis editors.
-- Syllable names is not recommended to start with `.` because this may have special meanings in the future editors.
-- Other special characters, including but not limited to `@`, `#`, `&`, `|`, `<`, `>`, is not recommended because they may be used as special tags in the future format changes.
+- Syllable names are not recommended to start with `.` because this may have special meanings in the future editors.
+- Other special characters, including but not limited to `@`, `#`, `&`, `|`, `<`, `>`, are not recommended because they may be used as special tags in the future format changes.
 - ASCII characters are preferred for the best encoding compatibility, but all UTF-8 characters are acceptable.
 
 There are some example dictionaries in the [dictionaries/](../dictionaries) folder.
@@ -119,24 +119,24 @@ datasets:  # define all raw datasets
       - wav1
       - wav2
   # ... (other datasets omitted for brevity)
-num_spk: 2  # number of languages; should be > maximum speaker ID
+num_spk: 2  # number of speakers; should be > maximum speaker ID
 ```
 
 ### DS files
 
-DS files are JSON files with _.ds_ suffix that contains phoneme sequence, phoneme durations, music scores or curve parameters. They are mainly used to run inference on models for test and evaluation purposes, and they can be used as training data in some cases. There are some example DS files in the [samples/](../samples) folder.
+DS files are JSON files with _.ds_ suffix that contain phoneme sequence, phoneme durations, music scores or curve parameters. They are mainly used to run inference on models for test and evaluation purposes, and they can be used as training data in some cases. There are some example DS files in the [samples/](../samples) folder.
 
-The current recommended way of using a model for production purposes is to use [OpenUTAU for DiffSinger](https://github.com/xunmengshe/OpenUtau). It can export DS files as well.
+The current recommended way of using a model for production purposes is to use [OpenUTAU for DiffSinger](https://github.com/stakira/OpenUtau). It can export DS files as well.
 
 ### Other fundamental assets
 
 #### Vocoders
 
-A vocoder is a model that can reconstruct the audio waveform given the low-dimensional mel-spectrogram. The vocoder is the essential dependency if you want to train an acoustic model and hear the voice on the TensorBoard.
+A vocoder is a model that can reconstruct the audio waveform given the low-dimensional mel-spectrogram. The vocoder is the essential dependency if you want to train an acoustic model and hear the voice on TensorBoard.
 
 The [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) provides a universal pre-trained NSF-HiFiGAN vocoder that can be used for starters of this repository. To use it, download the model (~50 MB size) from its releases and unzip it into the `checkpoints/` folder.
 
-The pre-trained vocoder can be fine-tuned on your target dataset. It is highly recommended to do so because fine-tuned vocoder can generate much better results on specific (seen) datasets while does not need much computing resources. See the [vocoder training and fine-tuning repository](https://github.com/openvpi/SingingVocoders) for detailed instructions. After you get the fine-tuned vocoder checkpoint, you can configure it by `vocoder_ckpt` key in your configuration file. The fine-tuned NSF-HiFiGAN vocoder checkpoints can be exported to ONNX format like other DiffSinger user models for further production purposes.
+The pre-trained vocoder can be fine-tuned on your target dataset. It is highly recommended to do so because fine-tuned vocoder can generate much better results on specific (seen) datasets while not requiring much computing resources. See the [vocoder training and fine-tuning repository](https://github.com/openvpi/SingingVocoders) for detailed instructions. After you get the fine-tuned vocoder checkpoint, you can configure it by `vocoder_ckpt` key in your configuration file. The fine-tuned NSF-HiFiGAN vocoder checkpoints can be exported to ONNX format like other DiffSinger user models for further production purposes.
 
 Another unrecommended option: train an ultra-lightweight [DDSP vocoder](https://github.com/yxlllc/pc-ddsp) first by yourself, then configure it according to the relevant [instructions](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 
@@ -152,15 +152,15 @@ An acoustic model takes low-level singing information as input, including (but n
 
 ### Datasets
 
-To train an acoustic model, you must have three columns in your transcriptions.csv: `name`, `ph_seq` and `ph_dur`, where `ph_seq` is the phoneme sequence and `ph_dur` is the phoneme duration sequence in seconds. You must have all corresponding recordings declared by the `name` column in mono, WAV format.
+To train an acoustic model, you must have three columns in your transcriptions.csv: `name`, `ph_seq` and `ph_dur`, where `ph_seq` is the phoneme sequence and `ph_dur` is the phoneme duration sequence in seconds. You must have all corresponding recordings declared by the `name` column placed in the `wavs` folder, in WAV or FLAC format (`.wav` takes precedence if both exist). Although not mandatory, it is recommended to prepare all recordings in mono.
 
-Training from multiple datasets in one model (so that the model is a multi-speaker model) is supported. See `speakers`, `spk_ids` and `use_spk_id` in the configuration schemas.
+Training from multiple datasets in one model (so that the model is a multi-speaker model) is supported. See `datasets[].speaker`, `datasets[].spk_id`, `num_spk` and `use_spk_id` in the configuration schemas.
 
 ### Functionalities
 
 Functionalities of acoustic models are defined by their inputs. Acoustic models have three basic and fixed inputs: phoneme sequence, phoneme duration sequence and F0 (pitch) sequence. There are three categories of additional inputs (control parameters):
 
-- speaker IDs: if your acoustic model is a multi-speaker model, you can use different speaker in the same model, or mix their timbre and style.
+- speaker IDs: if your acoustic model is a multi-speaker model, you can use different speakers in the same model, or mix their timbre and style.
 - variance parameters: these curve parameters are features extracted from the recordings, and can control the timbre and style of the singing voice. See `use_energy_embed` and `use_breathiness_embed` in the configuration schemas. Please note that variance parameters **do not have default values**, so they are usually obtained from the variance model at inference time.
 - transition parameters: these values represent the transition of the mel-spectrogram, and are obtained by enabling data augmentation. They are scalars at training time and sequences at inference time. See `augmentation_args`, `use_key_shift_embed` and `use_speed_embed` in the configuration schemas.
 
@@ -184,7 +184,7 @@ Variance models support multi-speaker settings like acoustic models do.
 
 ### Functionalities
 
-Functionalities of variance models are defined by their outputs. There are three main prediction modules that can be enabled/disable independently:
+Functionalities of variance models are defined by their outputs. There are three main prediction modules that can be enabled/disabled independently:
 
 - Duration Predictor: predicts the phoneme durations. See `predict_dur` in the configuration schemas.
 - Pitch Predictor: predicts the pitch curve. See `predict_pitch` in the configuration schemas.
@@ -194,7 +194,7 @@ There may be some mutual influence between the modules above when they are enabl
 
 ## Build variance datasets with DS files
 
-By default, the variance binarizer loads attributes from transcriptions.csv and searches for recording files (*.wav) to extract features and parameters. These attributes and parameters also exist in DS files, which are normally used for inference. This section introduces the required settings and important notes to build a variance dataset from DS files.
+By default, the variance binarizer loads attributes from transcriptions.csv and searches for recording files (*.wav or *.flac) to extract features and parameters. These attributes and parameters also exist in DS files, which are normally used for inference. This section introduces the required settings and important notes to build a variance dataset from DS files.
 
 First of all, you should edit your configuration file to enable loading from DS files:
 
@@ -218,12 +218,13 @@ The DS files should also use the same dictionary as that of your target model. T
 |           `f0_seq`           |                ✓                |              ✓               |                     ✓                      |       WAV       |     DS/WAV     |
 | `energy`, `breathiness`, ... |                                 |                              |                     ✓                      |       WAV       |     DS/WAV     |
 
-This means you only need one column in transcriptions.csv, the `name` column, to declare all DS files included in the dataset. The name pattern can be:
+This means you only need the `name` column in transcriptions.csv to declare all DS files included in the dataset. The name can be a bare name or a 0-based segment index joined by `#`, and the resolution follows the rule of "the most specific file wins":
 
-- Full name: `some-name` will firstly match the first segment in `some-name.ds`.
-- Name with index: `some-name#0` and `some-name#1` will match segment 0 and segment 1 in `some-name.ds` if there are no match with full name.
+- `some-name#1` first matches the first segment in file `some-name#1.ds` (a dedicated single-segment file);
+- if there is no such file, it matches segment 1 in file `some-name.ds` (a multi-segment file).
+- A bare name `some-name` is equivalent to `some-name#0`.
 
-Though not recommended, the binarizer will still try to load attributes from transcriptions.csv or extract parameters from recordings if there are no matching DS files. In this case the full name matching logic is applied (the same as the normal binarization process).
+If neither file exists, the binarizer falls back to transcriptions.csv or parameter extraction from the recording.
 
 ## Choosing variance parameters
 
@@ -233,9 +234,9 @@ Variance parameters are a type of parameters that are significantly related to s
 
 #### Energy
 
-> WARNING
+> [!WARNING]
 >
-> This parameter is no longer recommended in favor of the new voicing parameter. The latter are less coupled with breathiness than energy.
+> This parameter is no longer recommended in favor of the new voicing parameter. The latter is less coupled with breathiness than energy.
 
 Energy is defined as the RMS curve of the singing, in dB, which can control the strength of voice to a certain extent.
 
@@ -250,13 +251,17 @@ Voicing is defined as the RMS curve of the harmonic part of the singing, in dB, 
 #### Tension
 
 Tension is mostly related to the ratio of the base harmonic to the full harmonics, which can be used to control the strength and timbre of the voice. The ratio is calculated as
+
 $$
-r = \frac{\text{RMS}(H_{full}-H_{base})}{\text{RMS}(H_{full})}
+r = \frac{\sqrt{\text{RMS}(H_{full})^2 - \text{RMS}(H_{base})^2}}{\text{RMS}(H_{full})}
 $$
-where $H_{full}$ is the full harmonics and $H_{base}$ is the base harmonic. The ratio is then mapped to the final domain via the inverse function of Sigmoid, that
+
+where $H_{full}$ is the full harmonics and $H_{base}$ is the base harmonic. The ratio is then mapped to the final domain via the inverse function of Sigmoid, that is
+
 $$
 T = \log{\frac{r}{1-r}}
 $$
+
 where $T$ is the tension value.
 
 ### Principles of choosing multiple parameters
@@ -267,17 +272,17 @@ These three parameters should **NOT** be enabled together. Energy is the RMS of 
 
 #### Energy, voicing and tension
 
-When voicing (or energy) is enabled, it almost fixes the loudness. However, tension sometimes rely on the implicitly predicted loudness for more expressiveness, because when a person sings with higher tension, he/she always produces louder voice. For this reason, some people may find their models or datasets _less natural_ with tension control. To be specific, changing tension will change the timbre but keep the loudness, and changing voicing (or energy) will change the loudness but keep the timbre. This behavior can be suitable for some, but not all datasets and users. Therefore, it is highly recommended for everyone to conduct some experiments on the actual datasets used to train the model.
+When voicing (or energy) is enabled, it almost fixes the loudness. However, tension sometimes relies on the implicitly predicted loudness for more expressiveness, because when a person sings with higher tension, he/she always produces a louder voice. For this reason, some people may find their models or datasets _less natural_ with tension control. To be specific, changing tension will change the timbre but keep the loudness, and changing voicing (or energy) will change the loudness but keep the timbre. This behavior can be suitable for some, but not all datasets and users. Therefore, it is highly recommended for everyone to conduct some experiments on the actual datasets used to train the model.
 
 ## Mutual influence between variance modules
 
-In some recent experiments and researches, some mutual influence between the modules of variance models has been found. In practice, being aware of the influence and making use of it can improve accuracy and avoid instability of the model.
+In some recent experiments and research, some mutual influence between the modules of variance models has been found. In practice, being aware of the influence and making use of it can improve accuracy and avoid instability of the model.
 
 ### Influence on the duration predictor
 
 The duration predictor benefits from its downstream modules, like the pitch predictor and the variance predictor.
 
-The experiments were conducted on both manually refined datasets and automatically labeled datasets, and with pitch predictors driven by both base pitch and melody encoder. All the results have shown that when either of the pitch predictor and the variance predictor is enabled together with the duration predictor, its rhythm correctness and duration accuracy significantly outperforms those of a solely trained duration predictor.
+The experiments were conducted on both manually refined datasets and automatically labeled datasets, and with pitch predictors driven by both base pitch and melody encoder. All the results have shown that when either of the pitch predictor and the variance predictor is enabled together with the duration predictor, its rhythm correctness and duration accuracy significantly outperform those of a solely trained duration predictor.
 
 Possible reason for this difference can be the lack of information carried by pure phoneme duration sequences, which may not fully represent the phoneme features in the real world. With the help of frame-level feature predictors, the encoder learns more knowledge about the voice features related to the phoneme types and durations, thus making the duration predictor produce better results.
 
@@ -324,7 +329,7 @@ pe: parselmouth
 
 #### RMVPE (recommended)
 
-[RMVPE](https://github.com/Dream-High/RMVPE) (Robust Model for Vocal Pitch Estimation) is the state-of-the-art NN-based pitch estimation model for singing voice. It runs slower than parselmouth, consumes more memory, however uses CUDA to accelerate computation (if available) and produce better results on noisy recordings and edge cases.
+[RMVPE](https://github.com/Dream-High/RMVPE) (Robust Model for Vocal Pitch Estimation) is the state-of-the-art NN-based pitch estimation model for singing voice. It runs slower than parselmouth, consumes more memory, however uses CUDA to accelerate computation (if available) and produces better results on noisy recordings and edge cases.
 
 To enable RMVPE, download its pre-trained checkpoint from [here](https://github.com/yxlllc/RMVPE/releases), extract it into the `checkpoints/` folder and edit the configuration file:
 
@@ -343,11 +348,11 @@ To use Harvest, simply include the following line in your configuration file:
 pe: harvest
 ```
 
-**Note:** It is also recommended to change the F0 detection range for Harvest with accordance to your dataset, as they are hard boundaries for this algorithm and the defaults might not suffice for most use cases. To change the F0 detection range, you may include or edit this part in the configuration file:
+**Note:** It is also recommended to change the F0 detection range for Harvest in accordance with your dataset, as they are hard boundaries for this algorithm and the defaults might not suffice for most use cases. To change the F0 detection range, you may include or edit this part in the configuration file:
 
 ```yaml
 f0_min: 65  # Minimum F0 to detect
-f0_max: 800  # Maximum F0 to detect
+f0_max: 1100  # Maximum F0 to detect
 ```
 
 ### Harmonic-noise separation
@@ -356,7 +361,7 @@ Harmonic-noise separation is the process of separating the harmonic part and the
 
 #### WORLD
 
-This algorithm uses Masanori Morise's [WORLD](https://github.com/mmorise/World), a free software for high-quality speech analysis, manipulation and synthesis. It uses CPU (no CUDA required) but runs relatively slow.
+This algorithm uses Masanori Morise's [WORLD](https://github.com/mmorise/World), a free software for high-quality speech analysis, manipulation and synthesis. It uses CPU (no CUDA required) but runs relatively slowly.
 
 To use WORLD, simply include the following line in your configuration file:
 
@@ -377,7 +382,7 @@ hnsep_ckpt: checkpoints/vr/model.pt
 
 ## Shallow diffusion
 
-Shallow diffusion is a mechanism that can improve quality and save inference time for diffusion models that was first introduced in the original DiffSinger [paper](https://arxiv.org/abs/2105.02446). Instead of starting the diffusion process from purely gaussian noise as classic diffusion does, shallow diffusion adds a shallow gaussian noise on a low-quality results generated by a simple network (which is called the auxiliary decoder) to skip many unnecessary steps from the beginning. With the combination of shallow diffusion and sampling acceleration algorithms, we can get better results under the same inference speed as before, or achieve higher inference speed without quality deterioration.
+Shallow diffusion is a mechanism that can improve quality and save inference time for diffusion models that was first introduced in the original DiffSinger [paper](https://arxiv.org/abs/2105.02446). Instead of starting the diffusion process from purely Gaussian noise as classic diffusion does, shallow diffusion adds shallow Gaussian noise to low-quality results generated by a simple network (which is called the auxiliary decoder) to skip many unnecessary steps from the beginning. With the combination of shallow diffusion and sampling acceleration algorithms, we can get better results under the same inference speed as before, or achieve higher inference speed without quality deterioration.
 
 Currently, acoustic models in this repository support shallow diffusion. The main switch of shallow diffusion is `use_shallow_diffusion` in the configuration file, and most arguments of shallow diffusion can be adjusted under `shallow_diffusion_args`. See [Configuration Schemas](ConfigurationSchemas.md) for more details.
 
@@ -387,13 +392,15 @@ To train a full shallow diffusion model from scratch, simply introduce the follo
 
 ```yaml
 use_shallow_diffusion: true
-K_step: 400  # adjust according to your needs
-K_step_infer: 400  # should be <= K_step
+T_start: 0.4        # adjust according to your needs
+T_start_infer: 0.4  # should be >= T_start
 ```
 
-Please note that when shallow diffusion is enabled, only the last $K$ diffusion steps will be trained. Unlike classic diffusion models which are trained on full steps, the limit of `K_step` can make the training more efficient. However, `K_step` should not be set too small because without enough diffusion depth (steps), the low-quality auxiliary decoder results cannot be well refined. 200 ~ 400 should be the proper range of `K_step`.
+With the default `diffusion_type: reflow`, shallow diffusion trains only the tail of the trajectory, $t \in (T_{start}, 1)$. This is more efficient than training on the full trajectory, but `T_start` should not be set too large, because without enough diffusion depth the low-quality auxiliary decoder results cannot be well refined.
 
-The auxiliary decoder and the diffusion decoder shares the same linguistic encoder, which receives gradients from both the decoders. In some experiments, it was found that gradients from the auxiliary decoder will cause mismatching between the encoder and the diffusion decoder, resulting in the latter being unable to produce reasonable results. To prevent this case, a configuration item called `aux_decoder_grad` is introduced to apply a scale factor on the gradients from the auxiliary decoder during training. To adjust this factor, introduce the following in the configuration file:
+For DDPM models (currently not recommended), use `K_step` and `K_step_infer` (in number of steps, and `K_step_infer` should be <= `K_step`) instead; they are equivalent to the above under `T_start = 1 - K_step / timesteps`. See `T_start`, `T_start_infer`, `K_step` and `K_step_infer` in the configuration schemas.
+
+The auxiliary decoder and the diffusion decoder share the same linguistic encoder, which receives gradients from both the decoders. In some experiments, it was found that gradients from the auxiliary decoder will cause mismatching between the encoder and the diffusion decoder, resulting in the latter being unable to produce reasonable results. To prevent this case, a configuration item called `aux_decoder_grad` is introduced to apply a scale factor on the gradients from the auxiliary decoder during training. To adjust this factor, introduce the following in the configuration file:
 
 ```yaml
 shallow_diffusion_args:
@@ -402,11 +409,11 @@ shallow_diffusion_args:
 
 ### Train auxiliary decoder and diffusion decoder separately
 
-Training a full shallow diffusion model can consume more memory because the auxiliary decoder is also in the training graph. In limited situations, the two decoders can be trained separately, i.e. train one decoder after another.
+Training a full shallow diffusion model can consume more memory because the auxiliary decoder is also in the training graph. In resource-limited situations, the two decoders can be trained separately, i.e. train one decoder after another.
 
 **STEP 1: train the diffusion decoder**
 
-In the first stage, the linguistic encoder and the diffusion decoder is trained together, while the auxiliary decoder is left unchanged. Edit your configuration file like this:
+In the first stage, the linguistic encoder and the diffusion decoder are trained together, while the auxiliary decoder is left unchanged. Edit your configuration file like this:
 
 ```yaml
 use_shallow_diffusion: true  # make sure the main option is turned on
@@ -416,11 +423,11 @@ shallow_diffusion_args:
   val_gt_start: true  # should be true because the auxiliary decoder is not trained yet
 ```
 
-Start training until `max_updates` is reached, or until you get satisfactory results on the TensorBoard.
+Start training until `max_updates` is reached, or until you get satisfactory results on TensorBoard.
 
 **STEP 2: train the auxiliary decoder**
 
-In the second stage, the auxiliary decoder is trained besides the linguistic encoder and the diffusion decoder. Edit your configuration file like this:
+In the second stage, only the auxiliary decoder is trained; the diffusion decoder is excluded from the training graph. Edit your configuration file like this:
 
 ```yaml
 shallow_diffusion_args:
@@ -437,14 +444,11 @@ frozen_params:
   - model.fs2  # the linguistic encoder
 ```
 
-You should also manually reset your learning rate scheduler because this is a new training process for the auxiliary decoder. Possible ways are:
-
-1. Rename the latest checkpoint to `model_ckpt_steps_0.ckpt` and remove the other checkpoints from the directory.
-2. Increase the initial learning rate (if you use a scheduler that decreases the LR over training steps) so that the auxiliary decoder gets proper learning rate.
+You should also manually reset your learning rate scheduler because this is a new training process for the auxiliary decoder. For example, increase the initial learning rate (if you use a scheduler that decreases the LR over training steps) so that the auxiliary decoder gets a proper learning rate.
 
 Additionally, `max_updates` should be adjusted to ensure enough training steps for the auxiliary decoder.
 
-Once you finished the configurations above, you can resume the training. The auxiliary decoder normally does not need many steps to train, and you can stop training when you get stable results on the TensorBoard. Because this step is much more complicated than the previous step, it is recommended to run some inference to verify if the model is trained properly after everything is finished.
+Once you have finished the configurations above, you can resume the training. The auxiliary decoder normally does not need many steps to train, and you can stop training when you get stable results on TensorBoard. Because this step is much more complicated than the previous step, it is recommended to run some inference to verify if the model is trained properly after everything is finished.
 
 ### Add shallow diffusion to classic diffusion models
 
@@ -458,7 +462,7 @@ finetune_ckpt_path: xxx.ckpt  # path to your old checkpoint
 finetune_ignored_params: []  # do not ignore any parameters
 ```
 
-Then you can follow the instructions in STEP 2 of the [previous section](#add-shallow-diffusion-to-classic-diffusion-models) to finish your training.
+Then you can follow the instructions in STEP 2 of the [previous section](#train-auxiliary-decoder-and-diffusion-decoder-separately) to finish your training.
 
 ## Performance tuning
 
@@ -485,30 +489,24 @@ For more details of the batch sampler algorithm and this configuration key, see 
 
 ### Automatic mixed precision
 
-Enabling automatic mixed precision (AMP) can accelerate training and save GPU memory. DiffSinger have adapted the latest version of PyTorch Lightning for AMP functionalities.
+Enabling automatic mixed precision (AMP) can accelerate training and save GPU memory. DiffSinger has adapted the latest version of PyTorch Lightning for AMP functionalities.
 
-By default, the training runs in FP32 precision. To enable AMP, edit your configuration file:
-
-```yaml
-pl_trainer_precision: 16-mixed  # FP16 precision
-```
-
-or
+By default, the training runs in 16-mixed precision. To disable AMP, edit your configuration file:
 
 ```yaml
-pl_trainer_precision: bf16-mixed  # BF16 precision
+pl_trainer_precision: 32-true  # FP32 precision
 ```
 
 For more precision options, please check out the [official documentation](https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision).
 
 ### Training on multiple GPUs
 
-Using distributed data parallel (DDP) can divide training tasks to multiple GPUs and synchronize gradients and weights between them. DiffSinger have adapted the latest version of PyTorch Lightning for DDP functionalities.
+Using distributed data parallel (DDP) can divide training tasks to multiple GPUs and synchronize gradients and weights between them. DiffSinger has adapted the latest version of PyTorch Lightning for DDP functionalities.
 
-By default, the trainer will utilize all CUDA devices defined in the `CUDA_VISIBLE_DEVICES` environment variable (empty means using all available devices). If you want to specify which GPUs to use, edit your configuration file:
+By default, the trainer will utilize all CUDA devices defined in the `CUDA_VISIBLE_DEVICES` environment variable (or all available devices if this variable is not set). If you want to specify which GPUs to use, edit your configuration file:
 
 ```yaml
-pl_trainer_devices: [0, 1, 2, 3]  # use the first 4 GPUs defined in CUDA_VISIBLE_DEVICES
+pl_trainer_devices: [0, 1, 2, 3]  # use the first 4 GPUs among the visible devices
 ```
 
 Please note that `max_batch_size` and `max_batch_frames` are values for **each** GPU.
@@ -541,7 +539,7 @@ Please note that enabling gradient accumulation will slow down training because 
 
 ## Optimizers and learning rate schedulers
 
-The optimizer and the learning rate scheduler can take an important role in the training process. DiffSinger uses a flexible configuration logic for these two modules.
+The optimizer and the learning rate scheduler can play an important role in the training process. DiffSinger uses a flexible configuration logic for these two modules.
 
 ### Basic configurations
 
@@ -560,19 +558,18 @@ and for the learning rate scheduler:
 
 ```yaml
 lr_scheduler_args:
-  scheduler_cls: torch.optim.lr_scheduler.StepLR  # class name of learning rate schedule
-  warmup_steps: 2000
+  scheduler_cls: torch.optim.lr_scheduler.StepLR  # class name of learning rate scheduler
   step_size: 50000
   gamma: 0.5
 ```
 
-Note that `optimizer_args` and `lr_scheduler_args` will be filtered by needed parameters and passed to `__init__` as keyword arguments (`kwargs`) when constructing the optimizer and scheduler. Therefore, you could specify all arguments according to your need in the configuration file to directly control the behavior of optimization and LR scheduling. It will also tolerate parameters existing in the configuration but not needed in `__init__`.
+Note that `optimizer_args` and `lr_scheduler_args` will be filtered by needed parameters and passed to `__init__` as keyword arguments (`kwargs`) when constructing the optimizer and scheduler. Therefore, you could specify all arguments according to your needs in the configuration file to directly control the behavior of optimization and LR scheduling. It will also tolerate parameters existing in the configuration but not needed in `__init__`.
 
 Also, note that the LR scheduler performs scheduling on the granularity of steps, not epochs.
 
 The special case applies when a tuple is needed in `__init__`: `beta1` and `beta2` are treated separately and form a tuple in the code. You could try to pass in an array instead. (And as an experiment, AdamW does accept `[beta1, beta2]`). If there is another special treatment required, please submit an issue.
 
-For PyTorch built-in optimizers and LR schedulers, see official [documentation](https://pytorch.org/docs/stable/optim.html) of the `torch.optim` package. If you found other optimizer and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new codes or dependencies.
+For PyTorch built-in optimizers and LR schedulers, see official [documentation](https://pytorch.org/docs/stable/optim.html) of the `torch.optim` package. If you find other optimizers and learning rate scheduler useful, you can raise a topic in [Discussions](https://github.com/openvpi/DiffSinger/discussions), raise [Issues](https://github.com/openvpi/DiffSinger/issues) or submit [PRs](https://github.com/openvpi/DiffSinger/pulls) if it introduces new code or dependencies.
 
 ### Composite LR schedulers
 
@@ -594,7 +591,7 @@ lr_scheduler_args:
   - 20
 ```
 
-The LR scheduler objects will be recursively construct objects if `cls` is present in sub-arguments. Please note that `cls` must be a scheduler class because this is a special design.
+The LR scheduler objects will be recursively constructed if `cls` is present in sub-arguments. Please note that `cls` must be a scheduler class because this is a special design.
 
 **WARNING:** Nested `SequentialLR` and `ChainedScheduler` have unexpected behavior. **DO NOT** nest them. Also, make sure the scheduler is _chainable_ before using it in `ChainedScheduler`.
 
@@ -602,7 +599,7 @@ The LR scheduler objects will be recursively construct objects if `cls` is prese
 
 ### Fine-tuning from existing checkpoints
 
-By default, the training starts from a model from scratch with randomly initialized parameters. However, if you already have some pre-trained checkpoints, and you need to adapt them to other datasets with their functionalities unchanged, fine-tuning may save training steps and time. In general, you need to add the following structure into the configuration file:
+By default, the training starts from a model with randomly initialized parameters. However, if you already have some pre-trained checkpoints, and you need to adapt them to other datasets with their functionalities unchanged, fine-tuning may save training steps and time. In general, you need to add the following structure into the configuration file:
 
 ```yaml
 # take acoustic models as an example
@@ -625,7 +622,7 @@ For the pre-trained checkpoint, it must be a file saved with `torch.save`, conta
     "model.fs2.pitch_embed.bias": null,  // torch.Tensor
     // ... (other parameters)
   }
-  // ... (other possible keys
+  // ... (other possible keys)
 }
 ```
 
@@ -648,4 +645,4 @@ frozen_params:  # prefix rules to freeze specific parameters during training
   - model.fs2.pitch_embed
 ```
 
-You may interrupt the training and change the settings above at any time. Sometimes this will cause mismatching optimizer state - and it will be discarded silently.
+You may interrupt the training and change the settings above at any time. Sometimes this can lead to optimizer state mismatch, resulting in errors.

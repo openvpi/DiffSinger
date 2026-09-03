@@ -1,7 +1,6 @@
 import json
 import pathlib
 import pickle
-import random
 import shutil
 import warnings
 from copy import deepcopy
@@ -176,9 +175,6 @@ class BaseBinarizer:
             )
         self.item_names = sorted(list(self.items.keys()))
         self._train_item_names, self._valid_item_names = self.split_train_valid_set(test_prefixes)
-
-        if self.binarization_args['shuffle']:
-            random.shuffle(self.item_names)
 
         self.binary_data_dir.mkdir(parents=True, exist_ok=True)
 

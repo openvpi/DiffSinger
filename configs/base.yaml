@@ -9,7 +9,6 @@ datasets: []
 binary_data_dir: null
 binarizer_cls: null
 binarization_args:
-  shuffle: false
   num_workers: 0
 
 audio_sample_rate: 44100

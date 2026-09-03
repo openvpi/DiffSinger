@@ -18,7 +18,6 @@ win_size: 2048           # FFT size.
 midi_smooth_width: 0.06  # in seconds
 
 binarization_args:
-  shuffle: true
   num_workers: 0
   prefer_ds: false
 

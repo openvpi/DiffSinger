@@ -22,7 +22,6 @@ fmin: 40
 fmax: 16000
 
 binarization_args:
-  shuffle: true
   num_workers: 0
 augmentation_args:
   random_pitch_shifting:
