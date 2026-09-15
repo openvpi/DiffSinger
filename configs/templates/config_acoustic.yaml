@@ -72,6 +72,7 @@ augmentation_args:
 
 # diffusion and shallow diffusion
 diffusion_type: reflow
+use_dual_timestep: true
 enc_ffn_kernel_size: 3
 use_rope: true
 rope_interleaved: false
