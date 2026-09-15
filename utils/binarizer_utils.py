@@ -94,7 +94,7 @@ def get_energy_librosa(waveform, length, *, hop_size, win_size, domain='db'):
         energy = np.pad(energy, (0, length - len(energy)))
     energy = energy[: length]
     if domain == 'db':
-        energy = librosa.amplitude_to_db(energy)
+        energy = librosa.amplitude_to_db(energy, top_db=None)
     elif domain == 'amplitude':
         pass
     else:
@@ -202,7 +202,7 @@ def get_tension_base_harmonic(
         tension = np.clip(tension, a_min=0, a_max=1)
     elif domain == 'db':
         tension = np.clip(tension, a_min=1e-5, a_max=1)
-        tension = librosa.amplitude_to_db(tension)
+        tension = librosa.amplitude_to_db(tension, top_db=None)
     elif domain == 'logit':
         tension = np.clip(tension, a_min=1e-4, a_max=1 - 1e-4)
         tension = np.log(tension / (1 - tension))
