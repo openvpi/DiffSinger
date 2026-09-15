@@ -76,7 +76,7 @@ class LYNXNet2(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        self.norm = LayerNorm(num_channels)
+        self.norm = nn.LayerNorm(num_channels)
         self.output_projection = AdamWLinear(num_channels, in_dims * n_feats)
         nn.init.kaiming_normal_(self.input_projection.weight)
         nn.init.kaiming_normal_(self.conditioner_projection.weight)
