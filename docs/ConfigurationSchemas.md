@@ -1691,6 +1691,18 @@ Whether to use the interleaved (alternating) layout for RoPE (Rotary Positional 
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### rope_theta
+
+Base used to compute the RoPE (Rotary Positional Encoding) frequencies in encoder self-attention. For attention head dimension $d$, the frequency of dimension pair $i$ is $\theta^{-2i/d}$, where $\theta$ is this value. The frequency buffers are recomputed at initialization and are not saved in checkpoints, so modifying this value does not change parameter shapes or prevent checkpoint loading, but silently changes the behavior of an already trained model.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>10000</td>
+</tbody></table>
+
 ### sampler_frame_count_grid
 
 The batch sampler applies an algorithm called _sorting by similar length_ when collecting batches. Data samples are first shuffled, and then stably sorted by their approximate lengths, so that samples of similar lengths are grouped together while the order within each group stays random. Assuming this value is set to $L_{grid}$, the approximate length of a data sample with length $L_{real}$ can be calculated through the following expression:
@@ -1988,6 +2000,18 @@ Whether to accept and embed breathiness values into the model.
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### use_dual_timestep
+
+Whether to sample two independent timesteps per sample when training Rectified Flow. Only takes effect when [diffusion_type](#diffusion_type) is `'reflow'`; ignored with DDPM.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
 ### use_energy_embed
 
 Whether to accept and embed energy values into the model.
@@ -1998,6 +2022,19 @@ Whether to accept and embed energy values into the model.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
+### use_fused_kernels
+
+Whether to use Triton-fused Linear + SoftSignGLU operations during training in LYNXNet2 backbones, reducing kernel launches and intermediate memory traffic.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Fusion requires a LYNXNet2 backbone with <code>glu_type: softsign_glu</code>, Triton, and a supported CUDA device and activation dtype (float16 or bfloat16).</td>
 </tbody></table>
 
 ### use_glide_embed
