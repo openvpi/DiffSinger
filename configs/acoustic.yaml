@@ -47,6 +47,7 @@ mel_base: 'e'
 energy_smooth_width: 0.06
 breathiness_smooth_width: 0.06
 voicing_smooth_width: 0.06
+voicing_domain: 'mulaw'
 tension_smooth_width: 0.06
 
 use_lang_id: false
