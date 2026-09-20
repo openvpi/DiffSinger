@@ -30,7 +30,8 @@ def chunked_multiprocess_run(map_func, args, num_workers, q_max_size=1000):
     if num_jobs < num_workers:
         num_workers = num_jobs
 
-    queues = [Manager().Queue(maxsize=q_max_size // num_workers) for _ in range(num_workers)]
+    manager = Manager()
+    queues = [manager.Queue(maxsize=q_max_size // num_workers) for _ in range(num_workers)]
     if platform.system().lower() != 'windows':
         process_creation_func = get_context('spawn').Process
     else:
