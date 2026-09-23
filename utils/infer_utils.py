@@ -17,7 +17,8 @@ def trans_key(raw_data, key):
         new_note_seq_list = []
         for note_seq in note_seq_list:
             if note_seq != "rest":
-                new_note_seq = librosa.midi_to_note(librosa.note_to_midi(note_seq) + key, unicode=False)
+                midi = librosa.note_to_midi(note_seq, round_midi=False) + key
+                new_note_seq = librosa.midi_to_note(midi, unicode=False, cents=midi % 1 != 0)
                 # new_note_seq = move_key(note_seq, key)
                 new_note_seq_list.append(new_note_seq)
             else:
