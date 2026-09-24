@@ -15,6 +15,41 @@ from utils.hparams import hparams
 from utils.phoneme_utils import load_phoneme_dictionary
 
 
+def _dur_trace_args(encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed,
+                    needs_word_div, needs_word_dur):
+    """Assemble the positional arguments the duration predictor is traced with.
+
+    ``forward_dur_predictor`` declares ``word_div`` and ``word_dur`` before
+    ``spk_embed``, so a word input the model does not consume still has to
+    occupy its slot. Splicing the arguments in conditionally would let the
+    speaker tensor bind to a word input instead, which silently drops speaker
+    conditioning from the exported graph.
+
+    Args:
+        encoder_out (Tensor): Output of the linguistic encoder (1, T, C).
+        x_masks (BoolTensor): Padding mask (1, T).
+        ph_midi (LongTensor): MIDI pitch of every phoneme (1, T).
+        word_div (LongTensor): Number of phonemes per word (1, T_w).
+        word_dur (LongTensor): Frame budget of every word (1, T_w).
+        spk_embed (Tensor, optional): Speaker embedding (1, 1, C), or ``None``
+            when the exported model does not take speaker conditioning.
+        needs_word_div (bool): Whether the predictor consumes ``word_div``.
+        needs_word_dur (bool): Whether the predictor consumes ``word_dur``.
+
+    Returns:
+        tuple: Positional arguments for the traced forward.
+    """
+    spk_is_on = spk_embed is not None
+    args = (encoder_out, x_masks, ph_midi)
+    if needs_word_div or needs_word_dur or spk_is_on:
+        args += (word_div if needs_word_div else None,)
+    if needs_word_dur or spk_is_on:
+        args += (word_dur if needs_word_dur else None,)
+    if spk_is_on:
+        args += (spk_embed,)
+    return args
+
+
 class DiffSingerVarianceExporter(BaseExporter):
     def __init__(
             self,
@@ -188,6 +223,7 @@ class DiffSingerVarianceExporter(BaseExporter):
 
     @torch.no_grad()
     def _torch_export_model(self):
+        """Trace and export the linguistic encoder and the duration predictor to ONNX."""
         # Prepare inputs for FastSpeech2 and dur predictor tracing
         tokens = torch.LongTensor([[1] * 5]).to(self.device)
         ph_dur = torch.LongTensor([[3, 5, 2, 1, 4]]).to(self.device)
@@ -245,22 +281,29 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             print(f'Exporting {self.dur_predictor_class_name}...')
+            # The duration stack only declares the word-level inputs it actually
+            # consumes, so that models of the convolutional architectures keep
+            # the original signature.
+            needs_word_div = self.model.fs2.dur_needs_word_div
+            needs_word_dur = self.model.fs2.dur_needs_word_dur
+            spk_embed = torch.rand(
+                1, 5, hparams['hidden_size'],
+                dtype=torch.float32, device=self.device
+            ) if input_spk_embed else None
+            dur_inputs = _dur_trace_args(
+                encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed,
+                needs_word_div, needs_word_dur
+            )
             torch.onnx.export(
                 self.model.view_as_dur_predictor(),
-                (
-                    encoder_out,
-                    x_masks,
-                    ph_midi,
-                    *([torch.rand(
-                        1, 5, hparams['hidden_size'],
-                        dtype=torch.float32, device=self.device
-                    )] if input_spk_embed else [])
-                ),
+                dur_inputs,
                 self.dur_predictor_cache_path,
                 input_names=[
                     'encoder_out',
                     'x_masks',
                     'ph_midi',
+                    *(['word_div'] if needs_word_div else []),
+                    *(['word_dur'] if needs_word_dur else []),
                     *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
@@ -273,6 +316,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'ph_dur_pred': {
                         1: 'n_tokens'
                     },
+                    **({'word_div': {1: 'n_words'}} if needs_word_div else {}),
+                    **({'word_dur': {1: 'n_words'}} if needs_word_dur else {}),
                     **({'spk_embed': {1: 'n_tokens'}} if input_spk_embed else {}),
                     **encoder_common_axes
                 },
