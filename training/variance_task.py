@@ -176,7 +176,8 @@ class VarianceTask(BaseTask):
                 loss_type=dur_hparams['loss_type'],
                 lambda_pdur=dur_hparams['lambda_pdur_loss'],
                 lambda_wdur=dur_hparams['lambda_wdur_loss'],
-                lambda_sdur=dur_hparams['lambda_sdur_loss']
+                lambda_sdur=dur_hparams['lambda_sdur_loss'],
+                lambda_alloc=dur_hparams.get('lambda_alloc_loss', 0.0)
             )
             self.register_validation_loss('dur_loss')
             self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))

@@ -70,16 +70,29 @@ use_stretch_embed: false
 use_variance_scaling: true
 hidden_size: 384
 dur_prediction_args:
-  arch: resnet
+  arch: attn
   hidden_size: 256
   dropout: 0.1
-  num_layers: 5
-  kernel_size: 3
+  num_layers: 5          # used by the convolutional archs only
+  kernel_size: 3         # used by the convolutional archs only
   log_offset: 1.0
   loss_type: mse
   lambda_pdur_loss: 0.3
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
+  lambda_alloc_loss: 1.0
+  # Split the frame budget of every word instead of predicting absolute
+  # durations. Consumers of the exported dur model must then provide the
+  # word_div and word_dur inputs; see docs/ConfigurationSchemas.md.
+  use_allocation: true
+  # Used by `arch: attn` only, ignored by the convolutional archs.
+  dur_num_blocks: 4
+  dur_num_heads: 4
+  dur_radius: 8
+  dur_ffn_mult: 4
+  dur_ffn_act: gelu
+  dur_pos_in_group: true
+  dur_max_group_pos: 8
 
 use_melody_encoder: true
 melody_encoder_args:
@@ -120,8 +133,12 @@ lambda_pitch_loss: 1.0
 lambda_var_loss: 1.0
 
 optimizer_args:
-  optimizer_cls: torch.optim.AdamW
+  optimizer_cls: modules.optimizer.muon.Muon_AdamW
   lr: 0.0006
+  muon_args:
+    weight_decay: 0.1
+  adamw_args:
+    weight_decay: 0.0
 lr_scheduler_args:
   scheduler_cls: torch.optim.lr_scheduler.StepLR
   step_size: 5000

@@ -245,12 +245,19 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             print(f'Exporting {self.dur_predictor_class_name}...')
+            # The duration stack only declares the word-level inputs it actually
+            # consumes, so that models of the convolutional archs keep the
+            # original signature.
+            needs_word_div = self.model.fs2.dur_needs_word_div
+            needs_word_dur = self.model.fs2.dur_needs_word_dur
             torch.onnx.export(
                 self.model.view_as_dur_predictor(),
                 (
                     encoder_out,
                     x_masks,
                     ph_midi,
+                    *([word_div] if needs_word_div else []),
+                    *([word_dur] if needs_word_dur else []),
                     *([torch.rand(
                         1, 5, hparams['hidden_size'],
                         dtype=torch.float32, device=self.device
@@ -261,6 +268,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'encoder_out',
                     'x_masks',
                     'ph_midi',
+                    *(['word_div'] if needs_word_div else []),
+                    *(['word_dur'] if needs_word_dur else []),
                     *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
@@ -273,6 +282,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'ph_dur_pred': {
                         1: 'n_tokens'
                     },
+                    **({'word_div': {1: 'n_words'}} if needs_word_div else {}),
+                    **({'word_dur': {1: 'n_words'}} if needs_word_dur else {}),
                     **({'spk_embed': {1: 'n_tokens'}} if input_spk_embed else {}),
                     **encoder_common_axes
                 },

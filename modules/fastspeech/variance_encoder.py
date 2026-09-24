@@ -7,6 +7,8 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     AdamWLinear,
 )
+from modules.duration import DurationPredictorV2
+from modules.duration.word_groups import word_budget
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
@@ -41,16 +43,43 @@ class FastSpeech2Variance(nn.Module):
         dur_hparams = hparams['dur_prediction_args']
         if self.predict_dur:
             self.midi_embed = Embedding(128, hparams['hidden_size'])
-            self.dur_predictor = DurationPredictor(
-                in_dims=hparams['hidden_size'],
-                n_chans=dur_hparams['hidden_size'],
-                n_layers=dur_hparams['num_layers'],
-                dropout_rate=dur_hparams['dropout'],
-                kernel_size=dur_hparams['kernel_size'],
-                offset=dur_hparams['log_offset'],
-                dur_loss_type=dur_hparams['loss_type'],
-                arch=dur_hparams['arch']
-            )
+            if dur_hparams['arch'] == 'attn':
+                # Attention-based predictor. It consumes the word structure of the
+                # score when it predicts within-word positions or splits the frame
+                # budget of a word; the exported graph then declares the matching
+                # inputs, while the convolutional predictors keep their signature.
+                self.dur_predictor = DurationPredictorV2.from_hparams(
+                    in_dims=hparams['hidden_size'],
+                    dur_hparams=dur_hparams
+                )
+                self.dur_needs_word_div = self.dur_predictor.needs_word_div
+                self.dur_needs_word_dur = self.dur_predictor.use_allocation
+            else:
+                self.dur_predictor = DurationPredictor(
+                    in_dims=hparams['hidden_size'],
+                    n_chans=dur_hparams['hidden_size'],
+                    n_layers=dur_hparams['num_layers'],
+                    dropout_rate=dur_hparams['dropout'],
+                    kernel_size=dur_hparams['kernel_size'],
+                    offset=dur_hparams['log_offset'],
+                    dur_loss_type=dur_hparams['loss_type'],
+                    arch=dur_hparams['arch']
+                )
+                self.dur_needs_word_div = False
+                self.dur_needs_word_dur = False
+
+    def dur_word_budget(self, ph_dur, ph2word, word_dur, infer):
+        """Frame budget of every word, in the layout the duration stack expects.
+
+        Built in one place so that it is constant inside a word by construction:
+        the ground-truth word sums while training, the word durations of the score
+        when inferring. Returns ``None`` when the predictor does not consume it.
+        """
+        if not self.dur_needs_word_dur:
+            return None
+        if infer:
+            return word_dur
+        return word_budget(ph_dur, ph2word)
 
     def forward(
             self, txt_tokens, midi, ph2word,
@@ -79,8 +108,8 @@ class FastSpeech2Variance(nn.Module):
                 word_dur = ph_dur.new_zeros(b, ph2word.max() + 1).scatter_add(
                     1, ph2word, ph_dur
                 )[:, 1:]  # [B, T_ph] => [B, T_w]
-            word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
-            word_dur_embed = self.word_dur_embed(word_dur.float()[:, :, None])
+            ph_word_dur = torch.gather(F.pad(word_dur, [1, 0], value=0), 1, ph2word)  # [B, T_w] => [B, T_ph]
+            word_dur_embed = self.word_dur_embed(ph_word_dur.float()[:, :, None])
             extra_embed = onset_embed + word_dur_embed
         elif self.use_variance_scaling:
             extra_embed = self.ph_dur_embed(torch.log(1 + ph_dur.float())[:, :, None])
@@ -97,7 +126,14 @@ class FastSpeech2Variance(nn.Module):
             dur_cond = encoder_out + midi_embed
             if spk_embed is not None:
                 dur_cond += spk_embed
-            ph_dur_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer)
+            if self.dur_needs_word_div:
+                ph_dur_pred = self.dur_predictor(
+                    dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer,
+                    ph2word=ph2word,
+                    word_budget=self.dur_word_budget(ph_dur, ph2word, word_dur, infer)
+                )
+            else:
+                ph_dur_pred = self.dur_predictor(dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer)
 
             return encoder_out, ph_dur_pred
         else:

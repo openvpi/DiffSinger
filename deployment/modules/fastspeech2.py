@@ -197,12 +197,33 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         x_masks = tokens == PAD_INDEX
         return self.encoder(txt_embed, extra_embed, x_masks), x_masks
 
-    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, spk_embed=None):
+    def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, word_div=None, word_dur=None, spk_embed=None):
         midi_embed = self.midi_embed(ph_midi)
         dur_cond = encoder_out + midi_embed
         if hparams['use_spk_id'] and spk_embed is not None:
             dur_cond += spk_embed
-        ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
+        ph2word = None
+        word_budget = None
+        if self.dur_needs_word_div:
+            if word_div is None:
+                raise ValueError(
+                    'this duration predictor splits the frame budget of every word, so the '
+                    'exported graph declares a word_div input and its consumers must provide it'
+                )
+            ph2word = self.lr(word_div)  # [1, T_ph], 1-based, 0 for padding
+        if self.dur_needs_word_dur:
+            if word_dur is None:
+                raise ValueError(
+                    'the allocation output needs the frame budget of every word, so the '
+                    'exported graph declares a word_dur input and its consumers must provide it'
+                )
+            word_budget = word_dur
+        if ph2word is None and word_budget is None:
+            ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
+        else:
+            ph_dur = self.dur_predictor(
+                dur_cond, x_masks=x_masks, ph2word=ph2word, word_budget=word_budget
+            )
         return ph_dur
 
     def view_as_encoder(self):
