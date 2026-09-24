@@ -78,6 +78,10 @@ dur_prediction_args:
   log_offset: 1.0
   loss_type: mse
   lambda_pdur_loss: 0.3
+  # The allocation output is handed the frame budget of every word, so the word
+  # and sentence sums of its prediction are exact by construction and the trainer
+  # zeroes both coefficients while `use_allocation` is true. The values below
+  # apply to the convolutional architectures and to `use_allocation: false`.
   lambda_wdur_loss: 1.0
   lambda_sdur_loss: 3.0
   lambda_alloc_loss: 1.0

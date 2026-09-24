@@ -728,7 +728,7 @@ Coefficient of single-phoneme duration loss when calculating joint duration loss
 
 ### dur_prediction_args.lambda_sdur_loss
 
-Coefficient of sentence duration loss when calculating joint duration loss. When the duration predictor is handed the frame budget of every word ([dur_prediction_args.arch](#dur_prediction_argsarch) `'attn'` with [use_allocation](#dur_prediction_argsuse_allocation) `true`), the sentence sum of its output already matches the target exactly, so this term is constant and the coefficient has no effect.
+Coefficient of sentence duration loss when calculating joint duration loss. When the duration predictor is handed the frame budget of every word ([dur_prediction_args.arch](#dur_prediction_argsarch) `'attn'` with [use_allocation](#dur_prediction_argsuse_allocation) `true`), the sentence sum of its output already matches the target exactly, so this term is identically zero and the coefficient has no effect. The trainer observes that and forces the coefficient to zero, so the value configured here only applies to a predictor that has to predict the absolute frame scale itself.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -740,7 +740,7 @@ Coefficient of sentence duration loss when calculating joint duration loss. When
 
 ### dur_prediction_args.lambda_wdur_loss
 
-Coefficient of word duration loss when calculating joint duration loss. When the duration predictor is handed the frame budget of every word ([dur_prediction_args.arch](#dur_prediction_argsarch) `'attn'` with [use_allocation](#dur_prediction_argsuse_allocation) `true`), the word sums of its output already match the target exactly, so this term is constant and the coefficient has no effect.
+Coefficient of word duration loss when calculating joint duration loss. When the duration predictor is handed the frame budget of every word ([dur_prediction_args.arch](#dur_prediction_argsarch) `'attn'` with [use_allocation](#dur_prediction_argsuse_allocation) `true`), the word sums of its output already match the target exactly, so this term is identically zero and the coefficient has no effect. The trainer observes that and forces the coefficient to zero, so the value configured here only applies to a predictor that has to predict the absolute frame scale itself.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>

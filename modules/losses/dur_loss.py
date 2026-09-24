@@ -18,8 +18,10 @@ class DurationLoss(nn.Module):
     has to predict that scale by itself. When the model is handed the frame
     budget of every word instead (``use_allocation`` in the duration predictor),
     its output already carries the right word and sentence sums, so those two
-    terms become constant and only the phone and allocation terms carry
-    gradient.
+    terms are identically zero and only the phone and allocation terms carry
+    gradient. The trainer forces their coefficients to zero in that case rather
+    than leaving weights that cannot matter; see
+    :meth:`~training.variance_task.VarianceTask.build_losses_and_metrics`.
     """
 
     def __init__(self, offset, loss_type,
@@ -30,10 +32,11 @@ class DurationLoss(nn.Module):
             offset (float): Offset of the log-domain transform.
             loss_type (str): Loss type, either ``'mse'`` or ``'huber'``.
             lambda_pdur (float): Weight of the phoneme term.
-            lambda_wdur (float): Weight of the word term. Constant when the
-                duration predictor uses the allocation output.
-            lambda_sdur (float): Weight of the sentence term. Constant when the
-                duration predictor uses the allocation output.
+            lambda_wdur (float): Weight of the word term. Zeroed by the trainer
+                when the duration predictor is handed the frame budget of every
+                word, which makes the word sums exact by construction.
+            lambda_sdur (float): Weight of the sentence term. Zeroed by the
+                trainer in the same case as ``lambda_wdur``.
             lambda_alloc (float): Weight of the within-word allocation term.
                 Zero disables it.
         """

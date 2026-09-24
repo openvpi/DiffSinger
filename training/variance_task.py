@@ -172,12 +172,20 @@ class VarianceTask(BaseTask):
         """Build the loss modules and the validation metrics of every enabled head."""
         if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
+            # A duration predictor that is handed the frame budget of every word
+            # reproduces the word and sentence sums of its target exactly, so the
+            # two terms below are identically zero: their coefficients cannot carry
+            # any information any more, and keeping them non-zero only hides dead
+            # knobs in the configuration. The model is asked rather than the
+            # configuration, because `use_allocation` is ignored by the
+            # convolutional architectures and the two must not drift apart.
+            word_budget_given = self.model.fs2.dur_needs_word_dur
             self.dur_loss = DurationLoss(
                 offset=dur_hparams['log_offset'],
                 loss_type=dur_hparams['loss_type'],
                 lambda_pdur=dur_hparams['lambda_pdur_loss'],
-                lambda_wdur=dur_hparams['lambda_wdur_loss'],
-                lambda_sdur=dur_hparams['lambda_sdur_loss'],
+                lambda_wdur=0. if word_budget_given else dur_hparams['lambda_wdur_loss'],
+                lambda_sdur=0. if word_budget_given else dur_hparams['lambda_sdur_loss'],
                 lambda_alloc=dur_hparams.get('lambda_alloc_loss', 0.0)
             )
             self.register_validation_loss('dur_loss')
