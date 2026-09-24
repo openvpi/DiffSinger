@@ -591,7 +591,7 @@ Dropout rate in duration predictor. Like [dropout](#dropout), modifying it does 
 
 ### dur_prediction_args.dur_ffn_act
 
-Activation of the feed-forward part of the `'attn'` duration predictor blocks. Ignored by the convolutional archs.
+Activation of the feed-forward part of the `'attn'` duration predictor blocks. Ignored by the convolutional architectures.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -604,7 +604,7 @@ Activation of the feed-forward part of the `'attn'` duration predictor blocks. I
 
 ### dur_prediction_args.dur_ffn_mult
 
-Expansion factor of the feed-forward part of the `'attn'` duration predictor blocks. Ignored by the convolutional archs.
+Expansion factor of the feed-forward part of the `'attn'` duration predictor blocks. Ignored by the convolutional architectures.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -616,7 +616,7 @@ Expansion factor of the feed-forward part of the `'attn'` duration predictor blo
 
 ### dur_prediction_args.dur_max_group_pos
 
-Clamp for the within-word position embeddings of the `'attn'` duration predictor, so that a long word saturates the embedding table instead of growing it. Ignored by the convolutional archs, and ignored when [dur_pos_in_group](#dur_prediction_argsdur_pos_in_group) is false.
+Clamp for the within-word position embeddings of the `'attn'` duration predictor, so that a long word saturates the embedding table instead of growing it. Ignored by the convolutional architectures, and ignored when [dur_pos_in_group](#dur_prediction_argsdur_pos_in_group) is false.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -629,7 +629,7 @@ Clamp for the within-word position embeddings of the `'attn'` duration predictor
 
 ### dur_prediction_args.dur_num_blocks
 
-Number of pre-norm sliding-window attention blocks of the `'attn'` duration predictor. Ignored by the convolutional archs. Setting it to `0` feeds the input projection straight into the output projection.
+Number of pre-norm sliding-window attention blocks of the `'attn'` duration predictor. Ignored by the convolutional architectures. Setting it to `0` feeds the input projection straight into the output projection.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -642,7 +642,7 @@ Number of pre-norm sliding-window attention blocks of the `'attn'` duration pred
 
 ### dur_prediction_args.dur_num_heads
 
-Number of attention heads of the `'attn'` duration predictor. Ignored by the convolutional archs.
+Number of attention heads of the `'attn'` duration predictor. Ignored by the convolutional architectures.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -655,7 +655,7 @@ Number of attention heads of the `'attn'` duration predictor. Ignored by the con
 
 ### dur_prediction_args.dur_pos_in_group
 
-Whether the `'attn'` duration predictor adds two embeddings for the position of a phoneme inside its word, counted from the start and from the end of the word. Both are derived from the word structure, so enabling this makes the exported `dur` model declare a `word_div` input. Ignored by the convolutional archs.
+Whether the `'attn'` duration predictor adds two embeddings for the position of a phoneme inside its word, counted from the start and from the end of the word. Both are derived from the word structure, so enabling this makes the exported `dur` model declare a `word_div` input. Ignored by the convolutional architectures.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -667,7 +667,7 @@ Whether the `'attn'` duration predictor adds two embeddings for the position of 
 
 ### dur_prediction_args.dur_radius
 
-Radius, in phonemes, of the sliding window each query attends to inside the `'attn'` duration predictor blocks; a radius of `r` gives a window of `2 * r + 1` items. Ignored by the convolutional archs.
+Radius, in phonemes, of the sliding window each query attends to inside the `'attn'` duration predictor blocks; a radius of `r` gives a window of `2 * r + 1` items. Ignored by the convolutional architectures.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -692,7 +692,7 @@ Dimensions of hidden layers in duration predictor.
 
 ### dur_prediction_args.kernel_size
 
-Kernel size of convolution layers of duration predictor. Used by the convolutional archs only, ignored when [dur_prediction_args.arch](#dur_prediction_argsarch) is `'attn'`.
+Kernel size of convolution layers of duration predictor. Used by the convolutional architectures only, ignored when [dur_prediction_args.arch](#dur_prediction_argsarch) is `'attn'`.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -704,7 +704,7 @@ Kernel size of convolution layers of duration predictor. Used by the convolution
 
 ### dur_prediction_args.lambda_alloc_loss
 
-Coefficient of the word allocation loss when calculating joint duration loss. The loss turns the phonemes of a word into a distribution over that word's frame budget and compares it with the target distribution with a cross entropy, so it only measures how a budget is split and is scale invariant inside a word. It is meaningful on its own only when the absolute frame scale is pinned somewhere: with [arch](#dur_prediction_argsarch) set to `'attn'` and [use_allocation](#dur_prediction_argsuse_allocation) `true`, the model output already carries the frame budget of every word, so the word and sentence terms are constant and this term and the phoneme term are the ones that train; with the convolutional archs or `use_allocation` `false`, the phoneme, word and sentence terms are the ones that set the scale, and a non-zero value here additionally shapes how each budget is split.
+Coefficient of the word allocation loss when calculating joint duration loss. The loss turns the phonemes of a word into a distribution over that word's frame budget and compares it with the target distribution with a cross entropy, so it only measures how a budget is split and is scale invariant inside a word. It is meaningful on its own only when the absolute frame scale is pinned somewhere: with [arch](#dur_prediction_argsarch) set to `'attn'` and [use_allocation](#dur_prediction_argsuse_allocation) `true`, the model output already carries the frame budget of every word, so the word and sentence terms are constant and this term and the phoneme term are the ones that train; with the convolutional architectures or `use_allocation` `false`, the phoneme, word and sentence terms are the ones that set the scale, and a non-zero value here additionally shapes how each budget is split.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -781,7 +781,7 @@ Underlying loss type of duration loss.
 
 ### dur_prediction_args.num_layers
 
-Number of duration predictor layers. Used by the convolutional archs only, ignored when [dur_prediction_args.arch](#dur_prediction_argsarch) is `'attn'`, which is shaped by the `dur_prediction_args.dur_*` keys instead.
+Number of duration predictor layers. Used by the convolutional architectures only, ignored when [dur_prediction_args.arch](#dur_prediction_argsarch) is `'attn'`, which is shaped by the `dur_prediction_args.dur_*` keys instead.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -793,7 +793,7 @@ Number of duration predictor layers. Used by the convolutional archs only, ignor
 
 ### dur_prediction_args.use_allocation
 
-Whether the duration predictor predicts how each word (a note or syllable) splits its frame budget, instead of predicting absolute phoneme durations. The phonemes of a word are turned into a distribution over that word's budget, and inference returns integer frame counts that sum to the budget exactly. Training takes the budget from the ground-truth word sums of `ph2word`; inference and export take it from `word_dur`, which must be constant inside a word. Enabling this changes the inputs of the exported `dur` model, which gains `word_div` and `word_dur`, so every consumer of the model must be able to provide them. It is ignored by the convolutional archs, which never declare those inputs.
+Whether the duration predictor predicts how each word (a note or syllable) splits its frame budget, instead of predicting absolute phoneme durations. The phonemes of a word are turned into a distribution over that word's budget, and inference returns integer frame counts that sum to the budget exactly. Training takes the budget by summing the ground-truth phoneme durations grouped by the word index in `ph2word`; inference and export take it from `word_dur`, which must be constant inside a word. Enabling this changes the inputs of the exported `dur` model, which gains `word_div` and `word_dur`, so every consumer of the model must be able to provide them. It is ignored by the convolutional architectures, which never declare those inputs.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>

@@ -211,6 +211,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
     def forward_dur_predictor(
             self, encoder_out, x_masks, ph_midi, word_div=None, word_dur=None, spk_embed=None
     ):
+        """Predict the duration of every phoneme; see `FastSpeech2VarianceONNX`."""
         return self.fs2.forward_dur_predictor(
             encoder_out, x_masks, ph_midi,
             word_div=word_div, word_dur=word_dur, spk_embed=spk_embed

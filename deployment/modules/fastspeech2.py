@@ -198,6 +198,22 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         return self.encoder(txt_embed, extra_embed, x_masks), x_masks
 
     def forward_dur_predictor(self, encoder_out, x_masks, ph_midi, word_div=None, word_dur=None, spk_embed=None):
+        """Predict the duration of every phoneme.
+
+        Args:
+            encoder_out (Tensor): Output of the linguistic encoder (B, Tmax, C).
+            x_masks (BoolTensor): Mask of the padded positions (B, Tmax).
+            ph_midi (LongTensor): MIDI pitch of every phoneme (B, Tmax).
+            word_div (LongTensor, optional): Number of phonemes per word (B, T_w).
+                Required when the predictor consumes ``ph2word``, i.e. when it uses
+                the within-word positions or the allocation output.
+            word_dur (LongTensor, optional): Frame budget of every word (B, T_w).
+                Required when the predictor uses the allocation output.
+            spk_embed (Tensor, optional): Speaker embedding (B, 1, C).
+
+        Returns:
+            Tensor: Predicted duration of every phoneme (B, Tmax).
+        """
         midi_embed = self.midi_embed(ph_midi)
         dur_cond = encoder_out + midi_embed
         if hparams['use_spk_id'] and spk_embed is not None:

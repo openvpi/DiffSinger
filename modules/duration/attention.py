@@ -60,6 +60,14 @@ class SlidingWindowAttention(nn.Module):
     """
 
     def __init__(self, hidden_size, num_heads=4, radius=8, dropout=0.0):
+        """Initialize the module.
+
+        Args:
+            hidden_size (int): Number of channels of the input and output.
+            num_heads (int): Number of attention heads; must divide ``hidden_size``.
+            radius (int): Number of neighbours on each side that a position attends to.
+            dropout (float): Dropout rate.
+        """
         super().__init__()
         if hidden_size % num_heads != 0:
             raise ValueError(
@@ -134,6 +142,16 @@ class SlidingWindowBlock(nn.Module):
     """
 
     def __init__(self, hidden_size, num_heads=4, radius=8, ffn_mult=4, ffn_act="gelu", dropout=0.0):
+        """Initialize the module.
+
+        Args:
+            hidden_size (int): Number of channels of the input and output.
+            num_heads (int): Number of attention heads of the attention part.
+            radius (int): Number of neighbours on each side that a position attends to.
+            ffn_mult (int): Expansion factor of the feed-forward part.
+            ffn_act (str): Activation of the feed-forward part, one of ``_ACTIVATIONS``.
+            dropout (float): Dropout rate.
+        """
         super().__init__()
         if ffn_act not in _ACTIVATIONS:
             raise ValueError(
@@ -148,6 +166,15 @@ class SlidingWindowBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, non_pad_mask):
+        """Calculate forward propagation.
+
+        Args:
+            x (Tensor): Input tensor (B, T, C).
+            non_pad_mask (BoolTensor): Mask of the non-padded positions (B, T).
+
+        Returns:
+            Tensor: Output tensor (B, T, C); padded positions are zeroed.
+        """
         mask = non_pad_mask[:, :, None]
         x = (x + self.dropout(self.attn(self.norm_attn(x), non_pad_mask))) * mask
         x = (x + self.dropout(self.ffn_2(_ACTIVATIONS[self.ffn_act](self.ffn_1(self.norm_ffn(x)))))) * mask

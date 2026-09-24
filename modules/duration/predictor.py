@@ -60,6 +60,7 @@ class DurationPredictorV2(nn.Module):
     def __init__(self, in_dims, hidden_size, num_blocks=4, num_heads=4, radius=8,
                  ffn_mult=4, ffn_act='gelu', dropout=0.0, use_pos_embed=True,
                  max_pos=8, use_allocation=True, offset=1.0, loss_type='mse'):
+        """Initialize the module; the class docstring documents every argument."""
         super().__init__()
         if num_blocks < 0:
             raise ValueError(f"num_blocks must be non-negative, got {num_blocks}")
@@ -128,6 +129,14 @@ class DurationPredictorV2(nn.Module):
         )
 
     def out2dur(self, xs):
+        """Convert the log-domain output of the stack into a duration.
+
+        Args:
+            xs (Tensor): Stack output (B, Tmax, 1), in log domain.
+
+        Returns:
+            Tensor: Duration of every phoneme (B, Tmax).
+        """
         if self.loss_type in ['mse', 'huber']:
             # NOTE: calculate loss in log domain
             dur = xs.squeeze(-1).exp() - self.offset  # (B, Tmax)

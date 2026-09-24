@@ -24,6 +24,19 @@ class DurationLoss(nn.Module):
 
     def __init__(self, offset, loss_type,
                  lambda_pdur=0.6, lambda_wdur=0.3, lambda_sdur=0.1, lambda_alloc=0.0):
+        """Initialize the module.
+
+        Args:
+            offset (float): Offset of the log-domain transform.
+            loss_type (str): Loss type, either ``'mse'`` or ``'huber'``.
+            lambda_pdur (float): Weight of the phoneme term.
+            lambda_wdur (float): Weight of the word term. Constant when the
+                duration predictor uses the allocation output.
+            lambda_sdur (float): Weight of the sentence term. Constant when the
+                duration predictor uses the allocation output.
+            lambda_alloc (float): Weight of the within-word allocation term.
+                Zero disables it.
+        """
         super().__init__()
         self.loss_type = loss_type
         if self.loss_type == 'mse':
@@ -43,6 +56,17 @@ class DurationLoss(nn.Module):
         return torch.log(any_dur + self.offset)
 
     def forward(self, dur_pred: Tensor, dur_gt: Tensor, ph2word: Tensor) -> Tensor:
+        """Calculate the duration loss.
+
+        Args:
+            dur_pred (Tensor): Predicted durations (B, Tmax).
+            dur_gt (Tensor): Ground-truth durations (B, Tmax), in the same unit.
+            ph2word (Tensor): Word index of every phoneme (B, Tmax), 1-based,
+                0 for padding.
+
+        Returns:
+            Tensor: Scalar loss.
+        """
         dur_gt = dur_gt.to(dtype=dur_pred.dtype)
 
         # pdur_loss
@@ -53,8 +77,14 @@ class DurationLoss(nn.Module):
         # allocation loss
         alloc_loss = 0.
         if self.lambda_alloc > 0.:
-            prob_pred = word_distribution(dur_pred, ph2word)
-            prob_gt = word_distribution(dur_gt, ph2word)
+            # The distribution is normalized by a clamp on a small constant, so it
+            # has to be computed in float32: under true fp16 the constant `_EPS`
+            # itself underflows to zero, the clamp becomes a no-op and a word whose
+            # phonemes all have zero duration divides by zero. Both operands are
+            # cast rather than relying on autocast, which leaves `mul`/`div` at the
+            # input dtype.
+            prob_pred = word_distribution(dur_pred.float(), ph2word)
+            prob_gt = word_distribution(dur_gt.float(), ph2word)
             token_loss = -(prob_gt * prob_pred.clamp_min(1e-8).log()) * (ph2word > 0)
             n_tokens = (ph2word > 0).sum().clamp_min(1)
             alloc_loss = self.lambda_alloc * token_loss.sum() / n_tokens

@@ -16,6 +16,11 @@ from utils.phoneme_utils import PAD_INDEX
 
 class FastSpeech2Variance(nn.Module):
     def __init__(self, vocab_size):
+        """Initialize the module.
+
+        Args:
+            vocab_size (int): Number of phoneme tokens in the dictionary.
+        """
         super().__init__()
         self.predict_dur = hparams['predict_dur']
         self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
