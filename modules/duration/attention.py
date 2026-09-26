@@ -1,29 +1,19 @@
 """Sliding-window self-attention blocks used by the duration predictor.
 
-Motivation
-----------
-The classic convolutional duration predictor is a stack of ``Conv1d`` layers.
-A convolution kernel is a 3-D parameter, and optimizers that act on the *matrix*
-structure of a parameter see only the last two dimensions
-(``[in_channels, kernel_size]``) of such a kernel. That has two consequences:
-
-* a ``1x1`` kernel degenerates into a scalar rescaling of the gradient, so the
-  orthogonalization such optimizers perform has no effect at all, while the
-  step-size rule still scales with ``sqrt(in_channels)``;
-* a larger kernel exposes only ``kernel_size`` right-singular directions.
-
-Both effects make the effective step size and update direction differ by an
-order of magnitude between layers of the very same stack, which shows up as a
-module that does not train.
+The classic convolutional duration predictor is a stack of ``Conv1d`` layers. A
+convolution kernel is a 3-D parameter, and optimizers that act on the *matrix*
+structure of a parameter see only its last two dimensions, so a ``1x1`` kernel
+degenerates into a scalar rescaling of the gradient while a larger one exposes
+only ``kernel_size`` right-singular directions. The effective step size then
+differs by an order of magnitude between layers of the very same stack.
 
 The blocks here therefore keep every learned parameter a 2-D matrix (the
 attention and feed-forward projections) or a 1-D gain (the normalization weights
-and the relative bias). Norm placement is pre-norm, so the residual stream is
-never rescaled and the effective step size is not coupled to a per-block
-normalization.
+and the relative bias), and use pre-norm placement so that the residual stream is
+never rescaled.
 
-Every operation is vectorized (no per-position Python loops) and keeps the
-sequence length dynamic, so the module stays export-safe.
+Every operation is vectorized and keeps the sequence length dynamic, so the
+module stays export-safe.
 """
 
 import math
@@ -49,13 +39,10 @@ class SlidingWindowAttention(nn.Module):
     """Multi-head self-attention restricted to a local window.
 
     Every query attends to the ``2 * radius + 1`` items centered on itself,
-    clipped at the sequence ends. A learned relative bias with one entry per
-    window offset is added to the attention scores, in the same spirit as the
-    relative position bias of T5. The window is gathered with an integer index,
-    so the module needs no per-position control flow and supports a dynamic
-    sequence length.
-
-    The cost is ``O(T * (2 * radius + 1))`` instead of ``O(T ** 2)``, which
+    clipped at the sequence ends, plus a learned relative bias with one entry per
+    window offset. The window is gathered with an integer index, so the module
+    needs no per-position control flow and supports a dynamic sequence length.
+    Its cost is ``O(T * (2 * radius + 1))`` instead of ``O(T ** 2)``, which
     matters for the exported graph because its sequence length is unbounded.
     """
 
@@ -84,10 +71,10 @@ class SlidingWindowAttention(nn.Module):
         self.qkv = nn.Linear(hidden_size, 3 * hidden_size, bias=False)
         self.out_proj = nn.Linear(hidden_size, hidden_size, bias=False)
         self.dropout = nn.Dropout(dropout)
-        # Stored flat on purpose: a 1-D parameter is not a hidden matrix, so it
-        # follows the same optimizer rule as the other 1-D parameters. Entry
-        # ``k`` of every head weights the key at offset ``k - radius`` from the
-        # query, i.e. the table runs from the leftmost to the rightmost neighbor.
+        # Stored flat on purpose: a 1-D parameter follows the same optimizer rule
+        # as the other 1-D parameters instead of being seen as a hidden matrix.
+        # Entry ``k`` of every head weights the key at offset ``k - radius`` from
+        # the query, so the table runs from the leftmost to the rightmost neighbor.
         self.relative_bias = nn.Parameter(torch.zeros(num_heads * self.window_size))
 
     def forward(self, x, non_pad_mask):
@@ -102,8 +89,9 @@ class SlidingWindowAttention(nn.Module):
         qkv = qkv.permute(2, 0, 3, 1, 4)  # [3, B, H, T, Dh]
         query, key, value = qkv[0], qkv[1], qkv[2]
 
-        # Gather the neighbors of every query. Positions outside the sequence are
-        # padded on both sides and masked below, so no bounds check is needed.
+        # The neighbors of every query are gathered from a key/value padded on
+        # both sides, so out-of-sequence entries are masked below rather than
+        # bounds-checked. Positions outside the window are equally out of range.
         window_offset = torch.arange(self.window_size, device=x.device)[None, :]
         window_index = torch.arange(frames, device=x.device)[:, None] + window_offset
         window_index = window_index.reshape(-1)  # [T * W], row-major in (query, offset)
@@ -118,10 +106,8 @@ class SlidingWindowAttention(nn.Module):
         score = torch.matmul(query.unsqueeze(3), key_window.transpose(-1, -2)).squeeze(3) * self.scale
 
         bias_table = self.relative_bias.view(self.num_heads, self.window_size)
-        score = score + bias_table[None, :, None, :]  # broadcast over batch and query
+        score = score + bias_table[None, :, None, :]  # [H, W] => [B, H, T, W]
 
-        # Positions outside the sequence come from the padded keys/values, whose
-        # gathered mask entries are False, so no bounds check is needed here.
         window_mask = torch.index_select(
             F.pad(non_pad_mask, [radius, radius]), 1, window_index
         ).reshape(batch, frames, self.window_size)

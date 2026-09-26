@@ -20,24 +20,10 @@ def _dur_trace_args(encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed
     """Assemble the positional arguments the duration predictor is traced with.
 
     ``forward_dur_predictor`` declares ``word_div`` and ``word_dur`` before
-    ``spk_embed``, so a word input the model does not consume still has to
-    occupy its slot. Splicing the arguments in conditionally would let the
-    speaker tensor bind to a word input instead, which silently drops speaker
-    conditioning from the exported graph.
-
-    Args:
-        encoder_out (Tensor): Output of the linguistic encoder (1, T, C).
-        x_masks (BoolTensor): Padding mask (1, T).
-        ph_midi (LongTensor): MIDI pitch of every phoneme (1, T).
-        word_div (LongTensor): Number of phonemes per word (1, T_w).
-        word_dur (LongTensor): Frame budget of every word (1, T_w).
-        spk_embed (Tensor, optional): Speaker embedding (1, 1, C), or ``None``
-            when the exported model does not take speaker conditioning.
-        needs_word_div (bool): Whether the predictor consumes ``word_div``.
-        needs_word_dur (bool): Whether the predictor consumes ``word_dur``.
-
-    Returns:
-        tuple: Positional arguments for the traced forward.
+    ``spk_embed``, so a word input the model does not consume still has to occupy
+    its slot: splicing the arguments in conditionally would let the speaker tensor
+    bind to a word input instead, which silently drops speaker conditioning from
+    the exported graph.
     """
     spk_is_on = spk_embed is not None
     args = (encoder_out, x_masks, ph_midi)
@@ -281,9 +267,8 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             print(f'Exporting {self.dur_predictor_class_name}...')
-            # The duration stack only declares the word-level inputs it actually
-            # consumes, so that models of the convolutional architectures keep
-            # the original signature.
+            # Only the word-level inputs the stack consumes are declared, so the
+            # convolutional architectures keep their original signature.
             needs_word_div = self.model.fs2.dur_needs_word_div
             needs_word_dur = self.model.fs2.dur_needs_word_dur
             spk_embed = torch.rand(
