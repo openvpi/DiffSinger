@@ -2321,6 +2321,24 @@ Minimum voicing value in dB used for normalization to [-1, 1]. Note that with [d
 <tr><td align="center"><b>default</b></td><td>-96.0</td>
 </tbody></table>
 
+### voicing_domain
+
+Domain of the extracted voicing curve and of the RMS energy used to compute it. The following values are currently available:
+
+- `'db'`: the raw RMS of the harmonic part converted to decibels.
+- `'mulaw'`: mu-law compression of the raw RMS values with `mu = 255`, rescaled to a `[-96, 0]` range. This keeps the values compatible with the dB-like range expected by the rest of the pipeline, while allocating more of the available range to low-energy frames, which gives finer resolution on unvoiced and weakly voiced segments.
+
+The value is read when extracting voicing during preprocessing, and by the variance parameter adaptor that builds the normalization range of the voicing branch. It must therefore stay consistent between the binarized dataset and the training/inference configuration, and switching it requires re-running binarization and training from scratch. When it is `'mulaw'`, the upper normalization bound of the voicing branch is clamped to `0` regardless of [voicing_db_max](#voicing_db_max).
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>preprocessing, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>str</td>
+<tr><td align="center"><b>default</b></td><td>db</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'db' or 'mulaw'.</td>
+</tbody></table>
+
 ### voicing_smooth_width
 
 Length of sinusoidal smoothing convolution kernel (in seconds) on the extracted voicing curve.
