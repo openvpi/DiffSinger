@@ -11,17 +11,12 @@ class DurationLoss(nn.Module):
     word duration loss and sentence duration loss.
 
     The allocation term treats the phones of a word (a note or syllable) as a
-    distribution over the frame budget of that word and compares it with the
-    target distribution with a cross entropy. It is scale invariant inside a
-    word, so the word and sentence terms are the ones that keep the absolute
-    frame scale meaningful, and they should stay non-zero as long as the model
-    has to predict that scale by itself. When the model is handed the frame
-    budget of every word instead (``use_allocation`` in the duration predictor),
-    its output already carries the right word and sentence sums, so those two
-    terms are identically zero and only the phone and allocation terms carry
-    gradient. The trainer forces their coefficients to zero in that case rather
-    than leaving weights that cannot matter; see
-    :meth:`~training.variance_task.VarianceTask.build_losses_and_metrics`.
+    distribution over the frame budget of that word and compares it with a cross
+    entropy. It is scale invariant inside a word, so the word and sentence terms
+    are what keep the absolute frame scale meaningful. When the predictor is
+    handed that budget it already reproduces both sums, so those two terms are
+    identically zero and :func:`build_duration_loss` turns them off instead of
+    leaving weights that cannot matter.
     """
 
     def __init__(self, offset, loss_type,
@@ -32,11 +27,8 @@ class DurationLoss(nn.Module):
             offset (float): Offset of the log-domain transform.
             loss_type (str): Loss type, either ``'mse'`` or ``'huber'``.
             lambda_pdur (float): Weight of the phoneme term.
-            lambda_wdur (float): Weight of the word term. Zeroed by the trainer
-                when the duration predictor is handed the frame budget of every
-                word, which makes the word sums exact by construction.
-            lambda_sdur (float): Weight of the sentence term. Zeroed by the
-                trainer in the same case as ``lambda_wdur``.
+            lambda_wdur (float): Weight of the word term.
+            lambda_sdur (float): Weight of the sentence term.
             lambda_alloc (float): Weight of the within-word allocation term.
                 Zero disables it.
         """
@@ -80,12 +72,9 @@ class DurationLoss(nn.Module):
         # allocation loss
         alloc_loss = 0.
         if self.lambda_alloc > 0.:
-            # The distribution is normalized by a clamp on a small constant, so it
-            # has to be computed in float32: under true fp16 the constant `_EPS`
-            # itself underflows to zero, the clamp becomes a no-op and a word whose
-            # phonemes all have zero duration divides by zero. Both operands are
-            # cast rather than relying on autocast, which leaves `mul`/`div` at the
-            # input dtype.
+            # Cast in float32 because the normalization clamps on ``_EPS``: under
+            # true fp16 that constant underflows to zero, the clamp turns into a
+            # no-op and a word without a positive duration divides by zero.
             prob_pred = word_distribution(dur_pred.float(), ph2word)
             prob_gt = word_distribution(dur_gt.float(), ph2word)
             token_loss = -(prob_gt * prob_pred.clamp_min(1e-8).log()) * (ph2word > 0)
@@ -111,3 +100,37 @@ class DurationLoss(nn.Module):
         dur_loss = alloc_loss + pdur_loss + wdur_loss + sdur_loss
 
         return dur_loss
+
+
+def build_duration_loss(dur_hparams: dict, word_budget_given: bool) -> DurationLoss:
+    """Build the duration loss of a flat ``dur_prediction_args`` block.
+
+    Kept in one place so that the coefficients cannot drift apart from the
+    trainer that applies them:
+
+    * The word and sentence terms are switched off when the predictor is handed
+      the frame budget of every word, because it then reproduces both sums by
+      construction and the coefficients could not matter. The configured values
+      keep applying to a predictor that predicts the absolute frame scale itself.
+    * The allocation term is on exactly when the predictor allocates, which is
+      the shipped recipe, and off otherwise, which leaves a configuration written
+      before the term existed with the loss it had.
+
+    Args:
+        dur_hparams (dict): The ``dur_prediction_args`` block of the configuration.
+        word_budget_given (bool): Whether the duration predictor consumes the
+            frame budget of every word. Read it from the model
+            (``dur_needs_word_dur``) rather than from the configuration: the
+            allocation setting is ignored by the convolutional architectures.
+
+    Returns:
+        DurationLoss: The loss module to train with.
+    """
+    return DurationLoss(
+        offset=dur_hparams['log_offset'],
+        loss_type=dur_hparams['loss_type'],
+        lambda_pdur=dur_hparams['lambda_pdur_loss'],
+        lambda_wdur=0. if word_budget_given else dur_hparams['lambda_wdur_loss'],
+        lambda_sdur=0. if word_budget_given else dur_hparams['lambda_sdur_loss'],
+        lambda_alloc=1. if word_budget_given else 0.,
+    )

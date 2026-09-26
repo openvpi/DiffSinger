@@ -223,15 +223,15 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         if self.dur_needs_word_div:
             if word_div is None:
                 raise ValueError(
-                    'this duration predictor splits the frame budget of every word, so the '
-                    'exported graph declares a word_div input and its consumers must provide it'
+                    'this duration predictor consumes word_div, so the exported graph '
+                    'declares it as an input and its consumers must provide it'
                 )
             ph2word = self.lr(word_div)  # [1, T_ph], 1-based, 0 for padding
         if self.dur_needs_word_dur:
             if word_dur is None:
                 raise ValueError(
-                    'the allocation output needs the frame budget of every word, so the '
-                    'exported graph declares a word_dur input and its consumers must provide it'
+                    'this duration predictor consumes word_dur, so the exported graph '
+                    'declares it as an input and its consumers must provide it'
                 )
             word_budget = word_dur
         if ph2word is None and word_budget is None:

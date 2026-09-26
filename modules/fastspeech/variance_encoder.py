@@ -13,6 +13,16 @@ from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
+# The duration predictor architectures. Every one of them is built from the same
+# `dur_prediction_args` block and declares, through `needs_word_div` and
+# `needs_word_dur`, which word-level inputs it consumes, so nothing else in the
+# code base has to branch on the architecture.
+DURATION_PREDICTOR_ARCHS = {
+    'fs2': DurationPredictor,
+    'resnet': DurationPredictor,
+    'attn': DurationPredictorV2,
+}
+
 
 class FastSpeech2Variance(nn.Module):
     def __init__(self, vocab_size):
@@ -48,37 +58,22 @@ class FastSpeech2Variance(nn.Module):
         dur_hparams = hparams['dur_prediction_args']
         if self.predict_dur:
             self.midi_embed = Embedding(128, hparams['hidden_size'])
-            if dur_hparams['arch'] == 'attn':
-                # Attention-based predictor. It consumes the word structure of the
-                # score when it predicts within-word positions or splits the frame
-                # budget of a word; the exported graph then declares the matching
-                # inputs, while the convolutional predictors keep their signature.
-                self.dur_predictor = DurationPredictorV2.from_hparams(
-                    in_dims=hparams['hidden_size'],
-                    dur_hparams=dur_hparams
-                )
-                self.dur_needs_word_div = self.dur_predictor.needs_word_div
-                self.dur_needs_word_dur = self.dur_predictor.use_allocation
-            else:
-                self.dur_predictor = DurationPredictor(
-                    in_dims=hparams['hidden_size'],
-                    n_chans=dur_hparams['hidden_size'],
-                    n_layers=dur_hparams['num_layers'],
-                    dropout_rate=dur_hparams['dropout'],
-                    kernel_size=dur_hparams['kernel_size'],
-                    offset=dur_hparams['log_offset'],
-                    dur_loss_type=dur_hparams['loss_type'],
-                    arch=dur_hparams['arch']
-                )
-                self.dur_needs_word_div = False
-                self.dur_needs_word_dur = False
+            arch = dur_hparams['arch']
+            if arch not in DURATION_PREDICTOR_ARCHS:
+                raise NotImplementedError(f"unsupported duration predictor architecture: {arch}")
+            self.dur_predictor = DURATION_PREDICTOR_ARCHS[arch].from_hparams(
+                in_dims=hparams['hidden_size'],
+                dur_hparams=dur_hparams
+            )
+            self.dur_needs_word_div = self.dur_predictor.needs_word_div
+            self.dur_needs_word_dur = self.dur_predictor.needs_word_dur
 
     def dur_word_budget(self, ph_dur, ph2word, word_dur, infer):
-        """Frame budget of every word, in the layout the duration stack expects.
+        """Word frame budget the duration predictor expects, ``None`` when it takes none.
 
         Built in one place so that it is constant inside a word by construction:
         the ground-truth word sums while training, the word durations of the score
-        when inferring. Returns ``None`` when the predictor does not consume it.
+        when inferring.
         """
         if not self.dur_needs_word_dur:
             return None
