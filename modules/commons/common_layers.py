@@ -244,57 +244,36 @@ def default_conv_weight_init(weight: torch.Tensor) -> None:
 
 
 class NHWCConv1d(AdamWConv1d):
-    """Conv1d that computes over channels-last data.
+    """Conv1d with a channels-last training fast path.
 
-    Takes [B, C, T] input like a regular Conv1d. When the input is a transpose view
-    of [B, T, C]-ordered data (the layout LayerNorm/Linear naturally produce), the
-    convolution runs as channels-last Conv2d over zero-copy views and the output is
-    returned as a [B, C, T] transpose view backed by [B, T, C] order, so surrounding
-    Transposes and Linears need no contiguity copies; contiguous [B, C, T] input is
-    reordered once instead. Long training sequences fall back to the plain Conv1d
-    computation (cuDNN depthwise backward regresses on them); graph export always
-    uses the channels-last form (ORT's CPU kernel for 1D depthwise Conv is far
-    slower than the 2D one, DirectML is indifferent).
+    Takes [B, C, T] input like a regular Conv1d and is a drop-in replacement for it:
+    evaluation, inference and graph export always run the plain Conv1d computation, so
+    exported graphs are unchanged. While training, short sequences whose input is a
+    transpose view of [B, T, C]-ordered data (the layout LayerNorm/Linear naturally
+    produce) are computed as channels-last Conv2d over zero-copy views, avoiding the
+    contiguity copies Conv1d makes on transposed input. Sequences longer than
+    _NHWC_MAX_T frames also take the plain path (cuDNN depthwise backward regresses
+    on them).
 
     Being an AdamWConv1d subclass, the weight is routed to AdamW instead of Muon.
     """
 
-    def __init__(self, *args, init_method=None, **kwargs):
-        super().__init__(*args, init_method=init_method, **kwargs)
-        # hold the weight as (C, 1, 1, K) so the channels-last Conv2d consumes the
-        # parameter directly (no per-forward view, and exported graphs reference 4D
-        # initializers); _load_from_state_dict reshapes legacy (C, 1, K) weights on
-        # load, so existing checkpoints keep working (checkpoints saved by this class
-        # store the 4D shape)
-        self.weight = nn.Parameter(self.weight.detach().clone().unsqueeze(1))
-    def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
-        key = prefix + 'weight'
-        w = state_dict.get(key)
-        if w is not None and w.dim() == 3:
-            state_dict[key] = w.unsqueeze(1)
-        return super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
-
     def forward(self, x):
-        if ((self.training and x.shape[-1] > _NHWC_MAX_T)
-                or tuple(self.dilation) != (1,)):
-            # long training sequences (cuDNN depthwise backward regresses on them) or
-            # exotic dilation: plain Conv1d computation over NCHW-contiguous data
-            x4 = x.unsqueeze(2).contiguous()
-            h = F.conv2d(x4, self.weight, self.bias, stride=(1, self.stride[0]),
-                         padding=(0, self.padding[0]), dilation=(1, self.dilation[0]),
+        if (self.training and x.shape[-1] <= _NHWC_MAX_T
+                and tuple(self.dilation) == (1,)):
+            n, c, t = x.shape
+            x4 = x.unsqueeze(2)
+            s = x4.stride()
+            if not ((n == 1 or s[0] == c * t)
+                    and (c == 1 or s[1] == 1) and (t == 1 or s[3] == c)):
+                # contiguous [B, C, T] input: reorder to [B, T, C] data order once
+                x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
+            h = F.conv2d(x4, self.weight.unsqueeze(1), self.bias,
+                         stride=(1, self.stride[0]), padding=(0, self.padding[0]),
                          groups=self.groups)
+            # the height dim is always 1 (input height 1, kernel (1, K)); drop it
             return h.select(2, 0)
-        x4 = x.unsqueeze(2)
-        c, t = x.shape[1], x.shape[2]
-        s = x4.stride()
-        if not ((x.shape[0] == 1 or s[0] == c * t)
-                and (c == 1 or s[1] == 1) and (t == 1 or s[3] == c)):
-            # contiguous [B, C, T] input: reorder to [B, T, C] data order once
-            x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
-        h = F.conv2d(x4, self.weight, self.bias, stride=(1, self.stride[0]),
-                     padding=(0, self.padding[0]), groups=self.groups)
-        # the height dim is always 1 (input height 1, kernel (1, K)); drop it
-        return h.select(2, 0)
+        return super().forward(x)
 
 
 class KaimingNormalConv1d(torch.nn.Conv1d):
