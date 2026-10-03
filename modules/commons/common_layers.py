@@ -11,6 +11,16 @@ from torch.nn import LayerNorm, ReLU, GELU, SiLU
 import utils
 
 
+def in_export_or_trace() -> bool:
+    """True while the module graph is being captured by torch.jit.trace or ONNX export.
+
+    Exporters run torch.jit.trace before torch.onnx.export, and ONNX graphs must match
+    the original eager op sequence, so layout-optimized forward branches must check
+    this and take the original path whenever it is True.
+    """
+    return torch.jit.is_tracing() or torch.onnx.is_in_onnx_export()
+
+
 class NormalInitEmbedding(torch.nn.Embedding):
     def __init__(
             self,
@@ -220,6 +230,15 @@ class AdamWConv1d(torch.nn.Conv1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         nn.init.kaiming_normal_(self.weight)
+
+
+class AdamWDWConv1d(torch.nn.Conv1d):
+    """Depthwise Conv1d routed to AdamW instead of Muon (see modules.optimizer.muon).
+
+    Marker subclass only: no init override, so construction matches plain nn.Conv1d
+    and state_dict keys are unchanged.
+    """
+    pass
 
 
 class KaimingNormalConv1d(torch.nn.Conv1d):

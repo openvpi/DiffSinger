@@ -7,7 +7,7 @@ from torch.nn import Parameter
 from typing import List
 from .chained_optimizer import ChainedOptimizer, OptimizerSpec
 
-from modules.commons.common_layers import AdamWLinear, AdamWConv1d
+from modules.commons.common_layers import AdamWLinear, AdamWConv1d, AdamWDWConv1d
 
 
 def zeropower_via_newtonschulz5(G: Tensor, steps: int) -> Tensor:
@@ -167,7 +167,7 @@ def get_params_for_muon(model) -> List[Parameter]:
     Returns:
         A list of parameters that should be optimized with muon.
     """
-    excluded_module_classes = (nn.Embedding, AdamWLinear, AdamWConv1d)
+    excluded_module_classes = (nn.Embedding, AdamWLinear, AdamWConv1d, AdamWDWConv1d)
     muon_params = []
     # BFS through all submodules and exclude parameters from certain module types
     queue = collections.deque([model])

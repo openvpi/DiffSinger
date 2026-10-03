@@ -3,10 +3,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import (
-    SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, Transpose, AdamWLinear
+    SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, Transpose, AdamWLinear, AdamWDWConv1d
 )
 from modules.commons.common_layers import MixedPrecisionLayerNorm as LayerNorm
+from modules.commons.common_layers import in_export_or_trace
 from utils.hparams import hparams
+
+# Above this many frames the channels-last depthwise-conv path is slower than Conv1d
+# in training (cuDNN depthwise backward regresses on long sequences). Export always
+# uses the channels-last path: ORT's CPU kernel for 1D depthwise Conv is far slower
+# than the 2D one, and DirectML is indifferent.
+_NHWC_MAX_T = 4096
 
 
 class LYNXNet2Block(nn.Module):
@@ -25,10 +32,11 @@ class LYNXNet2Block(nn.Module):
             _dropout = nn.Dropout(dropout)
         else:
             _dropout = nn.Identity()
+        _dwconv = AdamWDWConv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size // 2, groups=dim)
         self.net = nn.Sequential(
             LayerNorm(dim),
             Transpose((1, 2)),
-            nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size // 2, groups=dim),
+            _dwconv,
             Transpose((1, 2)),
             nn.Linear(dim, inner_dim * 2),
             _glu,
@@ -39,7 +47,27 @@ class LYNXNet2Block(nn.Module):
         )
 
     def forward(self, x):
+        # in_export_or_trace() short-circuits the shape check during graph capture, so
+        # the exported graph always takes the channels-last path without shape guards.
+        if in_export_or_trace() or x.shape[1] <= _NHWC_MAX_T:
+            return x + self._forward_nhwc(x)
         return x + self.net(x)
+
+    def _forward_nhwc(self, x):
+        # Same math as self.net, but keeps [B, T, C] layout end to end: the depthwise
+        # conv runs as channels-last Conv2d over zero-copy views, avoiding the two
+        # transposes and the contiguity copies Conv1d makes on transposed input.
+        net = self.net
+        h = net[0](x)
+        dw = net[2]
+        w = dw.weight.view(dw.weight.size(0), 1, 1, dw.weight.size(2))
+        w = w.contiguous(memory_format=torch.channels_last)
+        h = F.conv2d(h.permute(0, 2, 1).unsqueeze(2), w, dw.bias,
+                     padding=(0, dw.padding[0]), groups=dw.groups)
+        h = h.squeeze(2).permute(0, 2, 1)
+        for i in range(4, 10):
+            h = net[i](h)
+        return h
 
 
 class LYNXNet2(nn.Module):
