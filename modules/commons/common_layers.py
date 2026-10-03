@@ -255,8 +255,20 @@ class NHWCConv1d(AdamWConv1d):
     _NHWC_MAX_T frames also take the plain path (cuDNN depthwise backward regresses
     on them).
 
+    Only numeric padding and padding_mode='zeros' are supported, since the fast path
+    maps the Conv1d kernel onto the Conv2d width dim.
+
     Being an AdamWConv1d subclass, the weight is routed to AdamW instead of Muon.
     """
+
+    def __init__(self, *args, init_method=None, **kwargs):
+        super().__init__(*args, init_method=init_method, **kwargs)
+        if isinstance(self.padding, str):
+            raise ValueError('NHWCConv1d does not support string padding; use an integer')
+        if self.padding_mode != 'zeros':
+            raise ValueError(
+                f"NHWCConv1d only supports padding_mode='zeros', got {self.padding_mode!r}"
+            )
 
     def forward(self, x):
         if (self.training and x.shape[-1] <= _NHWC_MAX_T
@@ -268,7 +280,10 @@ class NHWCConv1d(AdamWConv1d):
                     and (c == 1 or s[1] == 1) and (t == 1 or s[3] == c)):
                 # contiguous [B, C, T] input: reorder to [B, T, C] data order once
                 x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
-            h = F.conv2d(x4, self.weight.unsqueeze(1), self.bias,
+            # conv2d weight is (C_out, C_in / groups, 1, K): the kernel spans T (the W
+            # dim), so the height dim is inserted at index 2 (index 1 would put the
+            # input-channel dim into the height position for groups < C_in)
+            h = F.conv2d(x4, self.weight.unsqueeze(2), self.bias,
                          stride=(1, self.stride[0]), padding=(0, self.padding[0]),
                          groups=self.groups)
             # the height dim is always 1 (input height 1, kernel (1, K)); drop it
