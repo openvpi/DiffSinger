@@ -65,7 +65,7 @@ class LYNXNet2Block(nn.Module):
         h = F.conv2d(h.permute(0, 2, 1).unsqueeze(2), w, dw.bias,
                      padding=(0, dw.padding[0]), groups=dw.groups)
         h = h.squeeze(2).permute(0, 2, 1)
-        for i in range(4, 10):
+        for i in range(4, len(net)):
             h = net[i](h)
         return h
 
