@@ -265,7 +265,7 @@ class NHWCConv1d(AdamWConv1d):
     """
 
     def forward(self, x):
-        if (not (in_export_or_trace() or x.shape[-1] <= _NHWC_MAX_T)
+        if (self.training and not (in_export_or_trace() or x.shape[-1] <= _NHWC_MAX_T)
                 or tuple(self.dilation) != (1,)):
             return super().forward(x)
         x4 = x.unsqueeze(2)
@@ -273,7 +273,8 @@ class NHWCConv1d(AdamWConv1d):
             x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
         w = self.weight.view(self.weight.size(0), self.weight.size(1), 1, self.weight.size(2))
         w = w.contiguous(memory_format=torch.channels_last)
-        h = F.conv2d(x4, w, self.bias, padding=(0, self.padding[0]), groups=self.groups)
+        h = F.conv2d(x4, w, self.bias, stride=(1, self.stride[0]),
+                     padding=(0, self.padding[0]), groups=self.groups)
         return h.squeeze(2)
 
 
