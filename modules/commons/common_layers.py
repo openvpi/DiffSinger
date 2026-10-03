@@ -12,13 +12,15 @@ import utils
 
 
 def in_export_or_trace() -> bool:
-    """True while the module graph is being captured by torch.jit.trace or ONNX export.
-
-    Exporters run torch.jit.trace before torch.onnx.export, and ONNX graphs must match
-    the original eager op sequence, so layout-optimized forward branches must check
-    this and take the original path whenever it is True.
-    """
+    """True while the module graph is being captured by torch.jit.trace or ONNX export."""
     return torch.jit.is_tracing() or torch.onnx.is_in_onnx_export()
+
+
+# Above this many frames the channels-last depthwise-conv path is slower than Conv1d
+# in training (cuDNN depthwise backward regresses on long sequences). Graph export
+# always uses the channels-last path: ORT's CPU kernel for 1D depthwise Conv is far
+# slower than the 2D one, and DirectML is indifferent.
+_NHWC_MAX_T = 4096
 
 
 class NormalInitEmbedding(torch.nn.Embedding):
@@ -227,18 +229,52 @@ class SoftSignGLU(nn.Module):
 
 
 class AdamWConv1d(torch.nn.Conv1d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
+    """Conv1d routed to AdamW instead of Muon (see modules.optimizer.muon).
 
-
-class AdamWDWConv1d(torch.nn.Conv1d):
-    """Depthwise Conv1d routed to AdamW instead of Muon (see modules.optimizer.muon).
-
-    Marker subclass only: no init override, so construction matches plain nn.Conv1d
-    and state_dict keys are unchanged.
+    ``init_method`` overrides the default kaiming-normal weight init with any
+    callable taking the weight parameter.
     """
-    pass
+
+    def __init__(self, *args, init_method=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if init_method is None:
+            nn.init.kaiming_normal_(self.weight)
+        else:
+            init_method(self.weight)
+
+
+def default_conv_weight_init(weight: torch.Tensor) -> None:
+    """Weight init used by plain torch.nn.Conv (kaiming uniform with a=sqrt(5))."""
+    nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
+
+
+class NHWCConv1d(AdamWConv1d):
+    """Conv1d that computes over channels-last data.
+
+    Takes [B, C, T] input like a regular Conv1d. When the input is a transpose view
+    of [B, T, C]-ordered data (the layout LayerNorm/Linear naturally produce), the
+    convolution runs as channels-last Conv2d over zero-copy views and the output is
+    returned as a [B, C, T] transpose view backed by [B, T, C] order, so surrounding
+    Transposes and Linears need no contiguity copies; contiguous [B, C, T] input is
+    reordered once instead. Long training sequences fall back to the plain Conv1d
+    computation (cuDNN depthwise backward regresses on them); graph export always
+    uses the channels-last form (ORT's CPU kernel for 1D depthwise Conv is far
+    slower than the 2D one, DirectML is indifferent).
+
+    Being an AdamWConv1d subclass, the weight is routed to AdamW instead of Muon.
+    """
+
+    def forward(self, x):
+        if (not (in_export_or_trace() or x.shape[-1] <= _NHWC_MAX_T)
+                or tuple(self.dilation) != (1,)):
+            return super().forward(x)
+        x4 = x.unsqueeze(2)
+        if not x4.is_contiguous(memory_format=torch.channels_last):
+            x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
+        w = self.weight.view(self.weight.size(0), self.weight.size(1), 1, self.weight.size(2))
+        w = w.contiguous(memory_format=torch.channels_last)
+        h = F.conv2d(x4, w, self.bias, padding=(0, self.padding[0]), groups=self.groups)
+        return h.squeeze(2)
 
 
 class KaimingNormalConv1d(torch.nn.Conv1d):

@@ -6,7 +6,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.commons.common_layers import SinusoidalPosEmb, SwiGLU, Transpose, AdamWConv1d, AdamWDWConv1d
+from modules.commons.common_layers import (
+    SinusoidalPosEmb, SwiGLU, Transpose, AdamWConv1d, default_conv_weight_init
+)
 from modules.commons.common_layers import KaimingNormalConv1d as Conv1d
 from modules.commons.common_layers import MixedPrecisionLayerNorm as LayerNorm
 from utils.hparams import hparams
@@ -35,7 +37,8 @@ class LYNXConvModule(nn.Module):
             _dropout = nn.Dropout(dropout)
         else:
             _dropout = nn.Identity()
-        _dwconv = AdamWDWConv1d(inner_dim, inner_dim, kernel_size=kernel_size, padding=padding[0], groups=inner_dim)
+        _dwconv = AdamWConv1d(inner_dim, inner_dim, kernel_size=kernel_size, padding=padding[0],
+                              groups=inner_dim, init_method=default_conv_weight_init)
         self.net = nn.Sequential(
             LayerNorm(dim),
             Transpose((1, 2)),
