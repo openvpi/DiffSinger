@@ -11,11 +11,6 @@ from torch.nn import LayerNorm, ReLU, GELU, SiLU
 import utils
 
 
-def in_export_or_trace() -> bool:
-    """True while the module graph is being captured by torch.jit.trace or ONNX export."""
-    return torch.jit.is_tracing() or torch.onnx.is_in_onnx_export()
-
-
 # Above this many frames the channels-last depthwise-conv path is slower than Conv1d
 # in training (cuDNN depthwise backward regresses on long sequences). Graph export
 # always uses the channels-last path: ORT's CPU kernel for 1D depthwise Conv is far
@@ -265,17 +260,20 @@ class NHWCConv1d(AdamWConv1d):
     """
 
     def forward(self, x):
-        if (self.training and not (in_export_or_trace() or x.shape[-1] <= _NHWC_MAX_T)
+        if ((self.training and x.shape[-1] > _NHWC_MAX_T)
                 or tuple(self.dilation) != (1,)):
             return super().forward(x)
         x4 = x.unsqueeze(2)
-        if not x4.is_contiguous(memory_format=torch.channels_last):
+        c, t = x.shape[1], x.shape[2]
+        s = x4.stride()
+        if not ((x.shape[0] == 1 or s[0] == c * t)
+                and (c == 1 or s[1] == 1) and (t == 1 or s[3] == c)):
+            # contiguous [B, C, T] input: reorder to [B, T, C] data order once
             x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
-        w = self.weight.view(self.weight.size(0), self.weight.size(1), 1, self.weight.size(2))
-        w = w.contiguous(memory_format=torch.channels_last)
-        h = F.conv2d(x4, w, self.bias, stride=(1, self.stride[0]),
+        h = F.conv2d(x4, self.weight.unsqueeze(1), self.bias, stride=(1, self.stride[0]),
                      padding=(0, self.padding[0]), groups=self.groups)
-        return h.squeeze(2)
+        # the height dim is always 1 (input height 1, kernel (1, K)); drop it
+        return h.select(2, 0)
 
 
 class KaimingNormalConv1d(torch.nn.Conv1d):
