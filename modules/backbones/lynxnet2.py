@@ -3,7 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from modules.commons.common_layers import (
-    SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, Transpose, AdamWLinear
+    SinusoidalPosEmb, SwiGLU, ATanGLU, SoftSignGLU, Transpose, AdamWLinear,
+    NHWCConv1d, default_conv_weight_init
 )
 from modules.commons.common_layers import MixedPrecisionLayerNorm as LayerNorm
 from utils.hparams import hparams
@@ -25,10 +26,12 @@ class LYNXNet2Block(nn.Module):
             _dropout = nn.Dropout(dropout)
         else:
             _dropout = nn.Identity()
+        _dwconv = NHWCConv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size // 2,
+                             groups=dim, init_method=default_conv_weight_init)
         self.net = nn.Sequential(
             LayerNorm(dim),
             Transpose((1, 2)),
-            nn.Conv1d(dim, dim, kernel_size=kernel_size, padding=kernel_size // 2, groups=dim),
+            _dwconv,
             Transpose((1, 2)),
             nn.Linear(dim, inner_dim * 2),
             _glu,

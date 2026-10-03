@@ -11,6 +11,13 @@ from torch.nn import LayerNorm, ReLU, GELU, SiLU
 import utils
 
 
+# Above this many frames the channels-last depthwise-conv path is slower than Conv1d
+# in training (cuDNN depthwise backward regresses on long sequences). Graph export
+# always uses the channels-last path: ORT's CPU kernel for 1D depthwise Conv is far
+# slower than the 2D one, and DirectML is indifferent.
+_NHWC_MAX_T = 4096
+
+
 class NormalInitEmbedding(torch.nn.Embedding):
     def __init__(
             self,
@@ -217,9 +224,71 @@ class SoftSignGLU(nn.Module):
 
 
 class AdamWConv1d(torch.nn.Conv1d):
-    def __init__(self, *args, **kwargs):
+    """Conv1d routed to AdamW instead of Muon (see modules.optimizer.muon).
+
+    ``init_method`` overrides the default kaiming-normal weight init with any
+    callable taking the weight parameter.
+    """
+
+    def __init__(self, *args, init_method=None, **kwargs):
         super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
+        if init_method is None:
+            nn.init.kaiming_normal_(self.weight)
+        else:
+            init_method(self.weight)
+
+
+def default_conv_weight_init(weight: torch.Tensor) -> None:
+    """Weight init used by plain torch.nn.Conv (kaiming uniform with a=sqrt(5))."""
+    nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
+
+
+class NHWCConv1d(AdamWConv1d):
+    """Conv1d with a channels-last training fast path.
+
+    Takes [B, C, T] input like a regular Conv1d and is a drop-in replacement for it:
+    evaluation, inference and graph export always run the plain Conv1d computation, so
+    exported graphs are unchanged. While training, short sequences whose input is a
+    transpose view of [B, T, C]-ordered data (the layout LayerNorm/Linear naturally
+    produce) are computed as channels-last Conv2d over zero-copy views, avoiding the
+    contiguity copies Conv1d makes on transposed input. Sequences longer than
+    _NHWC_MAX_T frames also take the plain path (cuDNN depthwise backward regresses
+    on them).
+
+    Only numeric padding and padding_mode='zeros' are supported, since the fast path
+    maps the Conv1d kernel onto the Conv2d width dim.
+
+    Being an AdamWConv1d subclass, the weight is routed to AdamW instead of Muon.
+    """
+
+    def __init__(self, *args, init_method=None, **kwargs):
+        super().__init__(*args, init_method=init_method, **kwargs)
+        if isinstance(self.padding, str):
+            raise ValueError('NHWCConv1d does not support string padding; use an integer')
+        if self.padding_mode != 'zeros':
+            raise ValueError(
+                f"NHWCConv1d only supports padding_mode='zeros', got {self.padding_mode!r}"
+            )
+
+    def forward(self, x):
+        if (self.training and x.shape[-1] <= _NHWC_MAX_T
+                and tuple(self.dilation) == (1,)):
+            n, c, t = x.shape
+            x4 = x.unsqueeze(2)
+            s = x4.stride()
+            if not ((n == 1 or s[0] == c * t)
+                    and (c == 1 or s[1] == 1) and (t == 1 or s[3] == c)):
+                # contiguous [B, C, T] input: reorder to [B, T, C] data order once
+                x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
+            # conv2d weight is (C_out, C_in / groups, 1, K): the kernel spans T (the W
+            # dim), so the height dim is inserted at index 2 (index 1 would put the
+            # input-channel dim into the height position for groups < C_in)
+            h = F.conv2d(x4, self.weight.unsqueeze(2), self.bias,
+                         stride=(1, self.stride[0]), padding=(0, self.padding[0]),
+                         groups=self.groups)
+            # the height dim is always 1 (input height 1, kernel (1, K)); drop it
+            return h.select(2, 0)
+        return super().forward(x)
 
 
 class KaimingNormalConv1d(torch.nn.Conv1d):
