@@ -120,8 +120,9 @@ def build_duration_loss(dur_hparams: dict, word_budget_given: bool) -> DurationL
         dur_hparams (dict): The ``dur_prediction_args`` block of the configuration.
         word_budget_given (bool): Whether the duration predictor consumes the
             frame budget of every word. Read it from the model
-            (``dur_needs_word_dur``) rather than from the configuration: the
-            allocation setting is ignored by the convolutional architectures.
+            (``dur_arch == 'attn'``) rather than from the configuration: the
+            attention predictor consumes it while the convolutional architectures
+            predict absolute durations themselves.
 
     Returns:
         DurationLoss: The loss module to train with.

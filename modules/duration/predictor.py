@@ -67,10 +67,6 @@ class DurationPredictorV2(nn.Module):
         self.max_pos = radius
         self.offset = offset
         self.loss_type = loss_type
-        # Declared here so that consumers never have to know which architecture
-        # they are holding.
-        self.needs_word_div = use_allocation or use_pos_embed
-        self.needs_word_dur = use_allocation
         self.in_proj = nn.Linear(in_dims, hidden_size)
         self.blocks = nn.ModuleList(
             SlidingWindowBlock(
