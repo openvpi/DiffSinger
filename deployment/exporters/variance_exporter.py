@@ -189,6 +189,10 @@ class DiffSingerVarianceExporter(BaseExporter):
         # functionalities
         if self.model.predict_dur:
             dsconfig['dur'] = f'{model_name}.dur.onnx'
+            # "rel" = group-aware (consumes word_div/word_dur); "abs" = legacy absolute durations
+            dsconfig['dur_type'] = 'rel' \
+                if (self.model.fs2.dur_needs_word_div or self.model.fs2.dur_needs_word_dur) \
+                else 'abs'
         if self.model.predict_pitch:
             dsconfig['pitch'] = f'{model_name}.pitch.onnx'
             dsconfig['use_expr'] = self.expose_expr
