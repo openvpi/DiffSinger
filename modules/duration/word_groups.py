@@ -1,11 +1,9 @@
-"""Helpers for the note/syllable groups used by duration prediction.
+"""Word-level helpers for duration prediction.
 
-A word is the unit whose total duration is fixed by the score: the phonemes it
-contains share one frame budget, and the duration predictor only decides how that
-budget is split among them. Training marks the words with ``ph2word`` (index 0
-means padding), while the exported graph derives them from ``word_div`` with the
-length regulator. All helpers use only export-safe tensor operations, so the same
-code path serves training, validation and the exported graph.
+A word's total duration is fixed by the score; its phonemes share one frame
+budget and the predictor only splits it. Training marks words with ``ph2word``
+(index 0 = padding); the exported graph rebuilds them from ``word_div``. All
+helpers use export-safe ops so the same path serves training, validation and ONNX.
 """
 
 import torch
@@ -124,39 +122,32 @@ def word_budget(durations: Tensor, word_ids: Tensor, num_words=None) -> Tensor:
 
 
 def allocate_word_frames(prob: Tensor, budget: Tensor, word_ids: Tensor, x_masks: Tensor = None) -> Tensor:
-    """Turn within-word shares and per-item budgets into frame counts.
+    """Turn within-word shares and per-item budgets into exact integer frame counts.
 
-    The cumulative share is scaled by the budget, rounded with ties away from zero
-    and then differenced. Because the shares of a word sum to one, the boundary at
-    the end of a word equals that word's budget, so the counts of every word sum to
-    its budget without any repair step. That last boundary is pinned to the
-    cumulative budget of the word rather than rounded, which makes the sum exact by
-    construction instead of by floating-point luck.
+    The cumulative share is scaled by the budget and rounded (ties away from
+    zero); because the shares of a word sum to one, the boundary at a word's end
+    equals its budget, so each word's counts sum to its budget. The last boundary
+    of every word is pinned to the cumulative budget rather than rounded, making the
+    sum exact by construction.
 
     :param prob: [B, T] within-word shares
-    :param budget: [B, T] frame budget of the word each item belongs to; it must be
-        constant inside a word, so build it with :func:`word_budget` or by gathering
-        the per-word budget with the word ids
-    :param word_ids: [B, T] word index per item, 1-based, 0 for padding
+    :param budget: [B, T] frame budget per item; constant inside a word
+    :param word_ids: [B, T] word index, 1-based, 0 for padding
     :param x_masks: [B, T] bool mask, True for padded items
     :return: [B, T] frame counts
     """
-    # The counts have to be exact integers, so the accumulation is done in float32
-    # whatever precision the shares arrive in.
+    # Exact integer counts, so accumulate in float32.
     prob = prob.float()
     budget = budget.to(torch.float32)
 
     cumulative = (prob.clamp_min(0.) * budget).cumsum(dim=1)
     boundary = (cumulative + 0.5).floor()
 
-    # A word ends where its index changes; the trailing zero is ``word_ids[:, 1:]``
-    # shifted left, so the last item of the sequence closes its own word.
+    # A word ends where its index changes; pad the tail so the last item closes its word.
     next_ids = F.pad(word_ids[:, 1:], [0, 1])
     word_end = (word_ids != next_ids) & (word_ids > 0)  # [B, T]
 
-    # A phoneme inherits the budget of its own word, so summing it over the word
-    # ends restores the cumulative budget word by word, without reading any
-    # per-word tensor back.
+    # Sum end budgets over words to recover the cumulative budget without a per-word tensor.
     end_budget = torch.where(word_end, budget, torch.zeros_like(budget))
     word_cumulative = end_budget.cumsum(dim=1)  # [B, T]
     boundary = torch.where(word_end, word_cumulative, boundary)

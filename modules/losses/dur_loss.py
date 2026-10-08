@@ -7,16 +7,13 @@ from modules.duration.word_groups import word_distribution
 
 class DurationLoss(nn.Module):
     """
-    Loss module as combination of phone duration loss, word allocation loss,
-    word duration loss and sentence duration loss.
+    Combines phoneme, word-allocation, word and sentence duration losses.
 
-    The allocation term treats the phones of a word (a note or syllable) as a
-    distribution over the frame budget of that word and compares it with a cross
-    entropy. It is scale invariant inside a word, so the word and sentence terms
-    are what keep the absolute frame scale meaningful. When the predictor is
-    handed that budget it already reproduces both sums, so those two terms are
-    identically zero and :func:`build_duration_loss` turns them off instead of
-    leaving weights that cannot matter.
+    The allocation term models each word's phonemes as a distribution over that
+    word's frame budget and trains it with a cross entropy; it is scale invariant
+    inside a word, so the word and sentence terms keep the absolute frame scale
+    meaningful. When the predictor is given the budget it already reproduces both
+    sums, so those terms are zero and :func:`build_duration_loss` disables them.
     """
 
     def __init__(self, offset, loss_type,
@@ -72,9 +69,8 @@ class DurationLoss(nn.Module):
         # allocation loss
         alloc_loss = 0.
         if self.lambda_alloc > 0.:
-            # Cast in float32 because the normalization clamps on ``_EPS``: under
-            # true fp16 that constant underflows to zero, the clamp turns into a
-            # no-op and a word without a positive duration divides by zero.
+            # float32: under fp16 ``_EPS`` underflows, the clamp no-ops and a
+            # zero-duration word divides by zero.
             prob_pred = word_distribution(dur_pred.float(), ph2word)
             prob_gt = word_distribution(dur_gt.float(), ph2word)
             token_loss = -(prob_gt * prob_pred.clamp_min(1e-8).log()) * (ph2word > 0)
@@ -103,29 +99,25 @@ class DurationLoss(nn.Module):
 
 
 def build_duration_loss(dur_hparams: dict, word_budget_given: bool) -> DurationLoss:
-    """Build the duration loss of a flat ``dur_prediction_args`` block.
+    """Build the duration loss from a flat ``dur_prediction_args`` block.
 
-    Kept in one place so that the coefficients cannot drift apart from the
-    trainer that applies them:
+    Coefficients live here so they cannot drift from the trainer that applies
+    them:
 
-    * The word and sentence terms are switched off when the predictor is handed
-      the frame budget of every word, because it then reproduces both sums by
-      construction and the coefficients could not matter. The configured values
-      keep applying to a predictor that predicts the absolute frame scale itself.
-    * The allocation term is on exactly when the predictor allocates, which is
-      the shipped recipe, and off otherwise, which leaves a configuration written
-      before the term existed with the loss it had.
+    * The word and sentence terms are switched off when the predictor is given
+      the frame budget of every word (it then reproduces both sums by
+      construction, so the weights cannot matter); the configured values still
+      apply to a predictor that predicts absolute durations itself.
+    * The allocation term is enabled exactly when the predictor allocates.
 
     Args:
-        dur_hparams (dict): The ``dur_prediction_args`` block of the configuration.
-        word_budget_given (bool): Whether the duration predictor consumes the
-            frame budget of every word. Read it from the model
-            (``dur_arch == 'attn'``) rather than from the configuration: the
-            attention predictor consumes it while the convolutional architectures
-            predict absolute durations themselves.
+        dur_hparams: The ``dur_prediction_args`` block.
+        word_budget_given: Whether the duration predictor consumes the per-word
+            frame budget (true for ``arch == 'attn'``, false for the
+            convolutional architectures that predict absolute durations).
 
     Returns:
-        DurationLoss: The loss module to train with.
+        The loss module to train with.
     """
     return DurationLoss(
         offset=dur_hparams['log_offset'],

@@ -29,23 +29,20 @@ class DurationPredictorV2(nn.Module):
     """Sliding-window attention duration predictor with an optional word allocator.
 
     Args:
-        in_dims (int): Input dimension, i.e. the width of the conditioning.
-        hidden_size (int): Internal width of the attention stack.
-        num_blocks (int, optional): Number of pre-norm attention blocks.
-        num_heads (int, optional): Number of attention heads.
-        radius (int, optional): Attention window radius in items.
-        ffn_mult (int, optional): Feed-forward expansion factor.
-        ffn_act (str, optional): Feed-forward activation.
-        dropout (float, optional): Dropout rate of the blocks.
-        use_pos_embed (bool, optional): Add the forward/reverse within-word
-            position embeddings (requires ``ph2word`` at every call site). The
-            embeddings saturate at ``radius``, the reach of the attention.
-        use_allocation (bool, optional): Split the frame budget of every word
-            instead of predicting absolute durations.
-        offset (float, optional): Offset of the log-domain output, used when
-            ``use_allocation`` is off.
-        loss_type (str, optional): Underlying loss type, used when
-            ``use_allocation`` is off.
+        in_dims: Width of the conditioning.
+        hidden_size: Internal width of the attention stack.
+        num_blocks: Number of pre-norm attention blocks.
+        num_heads: Number of attention heads.
+        radius: Attention window radius, in items.
+        ffn_mult: Feed-forward expansion factor.
+        ffn_act: Feed-forward activation.
+        dropout: Dropout rate of the blocks.
+        use_pos_embed: Add within-word position embeddings (needs ``ph2word`` at
+            every call site); they saturate at ``radius``.
+        use_allocation: Split each word's frame budget instead of predicting
+            absolute durations.
+        offset: Log-domain output offset, used when ``use_allocation`` is off.
+        loss_type: Underlying loss type, used when ``use_allocation`` is off.
     """
 
     def __init__(self, in_dims, hidden_size, num_blocks=4, num_heads=4, radius=8,
@@ -90,16 +87,14 @@ class DurationPredictorV2(nn.Module):
     def from_hparams(cls, in_dims, dur_hparams: dict) -> 'DurationPredictorV2':
         """Build from the flat ``dur_prediction_args`` configuration block.
 
-        Only the stack shape is read from the configuration: naming ``arch:
-        'attn'`` is what selects the allocation output and the within-word
-        positions, so neither of them is a separate key.
+        Only the stack shape is read from the configuration.
 
         Args:
-            in_dims (int): Input dimension, i.e. the width of the conditioning.
-            dur_hparams (dict): The ``dur_prediction_args`` block of the configuration.
+            in_dims: Width of the conditioning.
+            dur_hparams: The ``dur_prediction_args`` block of the configuration.
 
         Returns:
-            DurationPredictorV2: The configured module.
+            The configured module.
         """
         radius = dur_hparams.get('dur_radius', 8)
         return cls(
@@ -124,20 +119,20 @@ class DurationPredictorV2(nn.Module):
         return dur
 
     def forward(self, xs, x_masks=None, infer=True, ph2word=None, word_budget=None):
-        """Calculate forward propagation.
+        """Run the stack.
 
         Args:
-            xs (Tensor): Batch of input sequences (B, Tmax, idim).
-            x_masks (BoolTensor, optional): Batch of masks indicating padded part (B, Tmax).
-            infer (bool): Whether inference
-            ph2word (Tensor, optional): Word index per phoneme [B, Tmax], 0 for padding.
-                Required when the within-word positions or the allocation output are used.
-            word_budget (Tensor, optional): Frame budget of every word [B, T_w], read at
-                the word each phoneme belongs to. Required when the allocation output
-                is used.
+            xs: Input sequences (B, Tmax, idim).
+            x_masks: Padding mask (B, Tmax).
+            infer: Whether inference.
+            ph2word: Word index per phoneme [B, Tmax], 0 for padding; required
+                when within-word positions or the allocation output are used.
+            word_budget: Frame budget of every word [B, T_w]; required when the
+                allocation output is used.
+
         Returns:
-            Tensor: Predicted durations in the linear domain [B, Tmax]. With the allocation
-            output enabled these are the number of frames per phoneme, integer in inference.
+            Durations in the linear domain [B, Tmax]. With the allocation output
+            these are integer frame counts per phoneme at inference.
         """
         if x_masks is None:
             non_pad_mask = torch.ones(xs.shape[:2], dtype=torch.bool, device=xs.device)

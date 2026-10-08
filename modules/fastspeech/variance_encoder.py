@@ -13,11 +13,9 @@ from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
-# The duration predictor architectures. Every one of them is built from the same
-# `dur_prediction_args` block; the only one that consumes the word-level inputs
-# (word_div/word_dur) is the attention predictor selected by `arch: 'attn'`, so
-# the rest of the code base branches on `arch == 'attn'` instead of on per-input
-# flags.
+# The duration predictor architectures, all built from the same `dur_prediction_args`
+# block. The attention predictor (arch: 'attn') consumes the word-level inputs
+# (word_div/word_dur); the convolutional ones do not.
 DURATION_PREDICTOR_ARCHS = {
     'fs2': DurationPredictor,
     'resnet': DurationPredictor,
