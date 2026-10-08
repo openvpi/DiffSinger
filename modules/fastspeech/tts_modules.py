@@ -114,6 +114,20 @@ class DurationPredictor(torch.nn.Module):
             raise NotImplementedError()
         self.linear = AdamWLinear(n_chans, self.out_dims)
 
+    @classmethod
+    def from_hparams(cls, in_dims, dur_hparams):
+        """Build from the flat ``dur_prediction_args`` configuration block."""
+        return cls(
+            in_dims=in_dims,
+            n_chans=dur_hparams['hidden_size'],
+            n_layers=dur_hparams['num_layers'],
+            kernel_size=dur_hparams['kernel_size'],
+            dropout_rate=dur_hparams['dropout'],
+            offset=dur_hparams['log_offset'],
+            dur_loss_type=dur_hparams['loss_type'],
+            arch=dur_hparams['arch']
+        )
+
     def out2dur(self, xs):
         if self.loss_type in ['mse', 'huber']:
             # NOTE: calculate loss in log domain
