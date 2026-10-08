@@ -63,10 +63,6 @@ class DurationPredictor(torch.nn.Module):
         the outputs are calculated in log domain but in `inference`, those are calculated in linear domain.
     """
 
-    # This predictor reads the encoder output only: it has no notion of words.
-    needs_word_div = False
-    needs_word_dur = False
-
     def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
                  dropout_rate=0.1, offset=1.0, dur_loss_type='mse', arch='resnet'):
         """Initialize duration predictor module.

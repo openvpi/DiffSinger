@@ -172,10 +172,8 @@ class VarianceTask(BaseTask):
         """Build the loss modules and the validation metrics of every enabled head."""
         if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
-            # The coefficients are decided in one place; see the docstring of the
-            # builder for why the model is asked instead of the configuration.
             self.dur_loss = build_duration_loss(
-                dur_hparams, self.model.fs2.dur_needs_word_dur
+                dur_hparams, self.model.fs2.dur_arch == 'attn'
             )
             self.register_validation_loss('dur_loss')
             self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))

@@ -13,10 +13,9 @@ from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
-# The duration predictor architectures. Every one of them is built from the same
-# `dur_prediction_args` block and declares, through `needs_word_div` and
-# `needs_word_dur`, which word-level inputs it consumes, so nothing else in the
-# code base has to branch on the architecture.
+# The duration predictor architectures, all built from the same `dur_prediction_args`
+# block. The attention predictor (arch: 'attn') consumes the word-level inputs
+# (word_div/word_dur); the convolutional ones do not.
 DURATION_PREDICTOR_ARCHS = {
     'fs2': DurationPredictor,
     'resnet': DurationPredictor,
@@ -58,15 +57,13 @@ class FastSpeech2Variance(nn.Module):
         dur_hparams = hparams['dur_prediction_args']
         if self.predict_dur:
             self.midi_embed = Embedding(128, hparams['hidden_size'])
-            arch = dur_hparams['arch']
-            if arch not in DURATION_PREDICTOR_ARCHS:
-                raise NotImplementedError(f"unsupported duration predictor architecture: {arch}")
-            self.dur_predictor = DURATION_PREDICTOR_ARCHS[arch].from_hparams(
+            self.dur_arch = dur_hparams['arch']
+            if self.dur_arch not in DURATION_PREDICTOR_ARCHS:
+                raise NotImplementedError(f"unsupported duration predictor architecture: {self.dur_arch}")
+            self.dur_predictor = DURATION_PREDICTOR_ARCHS[self.dur_arch].from_hparams(
                 in_dims=hparams['hidden_size'],
                 dur_hparams=dur_hparams
             )
-            self.dur_needs_word_div = self.dur_predictor.needs_word_div
-            self.dur_needs_word_dur = self.dur_predictor.needs_word_dur
 
     def dur_word_budget(self, ph_dur, ph2word, word_dur, infer):
         """Word frame budget the duration predictor expects, ``None`` when it takes none.
@@ -75,7 +72,7 @@ class FastSpeech2Variance(nn.Module):
         the ground-truth word sums while training, the word durations of the score
         when inferring.
         """
-        if not self.dur_needs_word_dur:
+        if self.dur_arch != 'attn':
             return None
         if infer:
             return word_dur
@@ -126,7 +123,7 @@ class FastSpeech2Variance(nn.Module):
             dur_cond = encoder_out + midi_embed
             if spk_embed is not None:
                 dur_cond += spk_embed
-            if self.dur_needs_word_div:
+            if self.dur_arch == 'attn':
                 ph_dur_pred = self.dur_predictor(
                     dur_cond, x_masks=txt_tokens == PAD_INDEX, infer=infer,
                     ph2word=ph2word,

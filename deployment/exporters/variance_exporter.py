@@ -16,21 +16,22 @@ from utils.phoneme_utils import load_phoneme_dictionary
 
 
 def _dur_trace_args(encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed,
-                    needs_word_div, needs_word_dur):
+                    is_attn):
     """Assemble the positional arguments the duration predictor is traced with.
 
     ``forward_dur_predictor`` declares ``word_div`` and ``word_dur`` before
     ``spk_embed``, so a word input the model does not consume still has to occupy
     its slot: splicing the arguments in conditionally would let the speaker tensor
     bind to a word input instead, which silently drops speaker conditioning from
-    the exported graph.
+    the exported graph. The ``attn`` predictor consumes both word-level inputs;
+    the convolutional architectures consume neither.
     """
     spk_is_on = spk_embed is not None
     args = (encoder_out, x_masks, ph_midi)
-    if needs_word_div or needs_word_dur or spk_is_on:
-        args += (word_div if needs_word_div else None,)
-    if needs_word_dur or spk_is_on:
-        args += (word_dur if needs_word_dur else None,)
+    if is_attn or spk_is_on:
+        args += (word_div if is_attn else None,)
+    if is_attn or spk_is_on:
+        args += (word_dur if is_attn else None,)
     if spk_is_on:
         args += (spk_embed,)
     return args
@@ -189,6 +190,8 @@ class DiffSingerVarianceExporter(BaseExporter):
         # functionalities
         if self.model.predict_dur:
             dsconfig['dur'] = f'{model_name}.dur.onnx'
+            # "rel" = group-aware (attn, consumes word_div/word_dur); "abs" = legacy absolute durations
+            dsconfig['dur_type'] = 'rel' if self.model.fs2.dur_arch == 'attn' else 'abs'
         if self.model.predict_pitch:
             dsconfig['pitch'] = f'{model_name}.pitch.onnx'
             dsconfig['use_expr'] = self.expose_expr
@@ -269,15 +272,14 @@ class DiffSingerVarianceExporter(BaseExporter):
             print(f'Exporting {self.dur_predictor_class_name}...')
             # Only the word-level inputs the stack consumes are declared, so the
             # convolutional architectures keep their original signature.
-            needs_word_div = self.model.fs2.dur_needs_word_div
-            needs_word_dur = self.model.fs2.dur_needs_word_dur
+            is_attn = self.model.fs2.dur_arch == 'attn'
             spk_embed = torch.rand(
                 1, 5, hparams['hidden_size'],
                 dtype=torch.float32, device=self.device
             ) if input_spk_embed else None
             dur_inputs = _dur_trace_args(
                 encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed,
-                needs_word_div, needs_word_dur
+                is_attn
             )
             torch.onnx.export(
                 self.model.view_as_dur_predictor(),
@@ -287,8 +289,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'encoder_out',
                     'x_masks',
                     'ph_midi',
-                    *(['word_div'] if needs_word_div else []),
-                    *(['word_dur'] if needs_word_dur else []),
+                    *(['word_div'] if is_attn else []),
+                    *(['word_dur'] if is_attn else []),
                     *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
@@ -301,8 +303,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'ph_dur_pred': {
                         1: 'n_tokens'
                     },
-                    **({'word_div': {1: 'n_words'}} if needs_word_div else {}),
-                    **({'word_dur': {1: 'n_words'}} if needs_word_dur else {}),
+                    **({'word_div': {1: 'n_words'}} if is_attn else {}),
+                    **({'word_dur': {1: 'n_words'}} if is_attn else {}),
                     **({'spk_embed': {1: 'n_tokens'}} if input_spk_embed else {}),
                     **encoder_common_axes
                 },

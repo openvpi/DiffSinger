@@ -220,14 +220,14 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
             dur_cond += spk_embed
         ph2word = None
         word_budget = None
-        if self.dur_needs_word_div:
+        if self.dur_arch == 'attn':
             if word_div is None:
                 raise ValueError(
                     'this duration predictor consumes word_div, so the exported graph '
                     'declares it as an input and its consumers must provide it'
                 )
             ph2word = self.lr(word_div)  # [1, T_ph], 1-based, 0 for padding
-        if self.dur_needs_word_dur:
+        if self.dur_arch == 'attn':
             if word_dur is None:
                 raise ValueError(
                     'this duration predictor consumes word_dur, so the exported graph '
