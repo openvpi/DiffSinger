@@ -103,7 +103,10 @@ class SlidingWindowAttention(nn.Module):
             F.pad(value, [0, 0, radius, radius]), 2, window_index
         ).reshape(head_shape)
 
-        score = torch.matmul(query.unsqueeze(3), key_window.transpose(-1, -2)).squeeze(3) * self.scale
+        b, h, t, dh = query.shape
+        q = query.reshape(b * h, t, 1, dh)
+        k = key_window.reshape(b * h, t, -1, dh).transpose(-1, -2)
+        score = torch.matmul(q, k).reshape(b, h, t, -1) * self.scale
 
         bias_table = self.relative_bias.view(self.num_heads, self.window_size)
         score = score + bias_table[None, :, None, :]  # [H, W] => [B, H, T, W]
@@ -115,7 +118,9 @@ class SlidingWindowAttention(nn.Module):
         weight = F.softmax(score, dim=-1)
         weight = self.dropout(weight)
 
-        context = torch.matmul(weight.unsqueeze(3), value_window).squeeze(3)  # [B, H, T, Dh]
+        w = weight.reshape(b * h, t, 1, -1)
+        v = value_window.reshape(b * h, t, -1, dh)
+        context = torch.matmul(w, v).reshape(b, h, t, dh)  # [B, H, T, Dh]
         context = context.transpose(1, 2).reshape(batch, frames, channels)
         return self.out_proj(context) * non_pad_mask[:, :, None]
 
