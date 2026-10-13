@@ -12,9 +12,9 @@ import utils
 
 
 # Above this many frames the channels-last depthwise-conv path is slower than Conv1d
-# in training (cuDNN depthwise backward regresses on long sequences). Graph export
-# always uses the channels-last path: ORT's CPU kernel for 1D depthwise Conv is far
-# slower than the 2D one, and DirectML is indifferent.
+# in training (cuDNN depthwise backward regresses on long sequences). Evaluation,
+# inference and graph export always take the plain Conv1d path, so exported graphs
+# are unchanged.
 _NHWC_MAX_T = 4096
 
 
@@ -272,22 +272,17 @@ class NHWCConv1d(AdamWConv1d):
 
     def forward(self, x):
         if (self.training and x.shape[-1] <= _NHWC_MAX_T
-                and tuple(self.dilation) == (1,)):
-            n, c, t = x.shape
-            x4 = x.unsqueeze(2)
-            s = x4.stride()
-            if not ((n == 1 or s[0] == c * t)
-                    and (c == 1 or s[1] == 1) and (t == 1 or s[3] == c)):
-                # contiguous [B, C, T] input: reorder to [B, T, C] data order once
-                x4 = x.transpose(1, 2).contiguous().permute(0, 2, 1).unsqueeze(2)
-            # conv2d weight is (C_out, C_in / groups, 1, K): the kernel spans T (the W
-            # dim), so the height dim is inserted at index 2 (index 1 would put the
-            # input-channel dim into the height position for groups < C_in)
-            h = F.conv2d(x4, self.weight.unsqueeze(2), self.bias,
-                         stride=(1, self.stride[0]), padding=(0, self.padding[0]),
-                         groups=self.groups)
-            # the height dim is always 1 (input height 1, kernel (1, K)); drop it
-            return h.select(2, 0)
+                and self.dilation == (1,)):
+            x4 = x.unsqueeze(2).contiguous(memory_format=torch.channels_last)
+            y = F.conv2d(
+                x4,
+                self.weight.unsqueeze(2),
+                self.bias,
+                stride=(1, self.stride[0]),
+                padding=(0, self.padding[0]),
+                groups=self.groups,
+            )
+            return y.squeeze(2)
         return super().forward(x)
 
 
