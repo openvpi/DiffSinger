@@ -254,12 +254,13 @@ def default_conv_weight_init(weight: torch.Tensor) -> None:
 class NHWCConv1d(AdamWConv1d):
     """Conv1d with a channels-last training fast path.
 
-    Takes [B, C, T] input like a regular Conv1d and is a drop-in replacement for it:
-    evaluation, inference and graph export always run the plain Conv1d computation, so
-    exported graphs are unchanged. While training, a short sequence whose input is a
-    transpose view of [B, T, C]-ordered data (the layout LayerNorm/Linear naturally
-    produce) is computed as channels-last Conv2d over zero-copy views, avoiding the
-    contiguity copies Conv1d makes on transposed input.
+    Takes [B, C, T] input like a regular Conv1d and is a drop-in replacement for it,
+    including the unbatched [C, T] form Conv1d accepts: evaluation, inference and graph
+    export always run the plain Conv1d computation, so exported graphs are unchanged.
+    While training, a short sequence whose input is a transpose view of [B, T, C]-ordered
+    data (the layout LayerNorm/Linear naturally produce) is computed as channels-last
+    Conv2d over zero-copy views, avoiding the contiguity copies Conv1d makes on
+    transposed input.
 
     The fast path is only taken when it is actually faster than Conv1d, which needs all
     of the following. Anything else falls back to ``super().forward``:
@@ -299,8 +300,13 @@ class NHWCConv1d(AdamWConv1d):
         self._nhwc_padded_overhead = 2 * self.padding[0]
 
     def forward(self, x):
-        if (self.training and self._nhwc_eligible
+        if (self.training and self._nhwc_eligible and x.ndim in (2, 3)
                 and x.shape[-1] + self._nhwc_padded_overhead <= _NHWC_MAX_T):
+            # Conv1d also accepts unbatched [C, T]; conv2d needs the batch dim, so add it
+            # here and drop it again on the way out rather than losing the fast path.
+            unbatched = x.ndim == 2
+            if unbatched:
+                x = x.unsqueeze(0)
             x4 = x.unsqueeze(2).contiguous(memory_format=torch.channels_last)
             y = F.conv2d(
                 x4,
@@ -310,7 +316,8 @@ class NHWCConv1d(AdamWConv1d):
                 padding=(0, self.padding[0]),
                 groups=self.groups,
             )
-            return y.squeeze(2)
+            y = y.squeeze(2)
+            return y.squeeze(0) if unbatched else y
         return super().forward(x)
 
 
