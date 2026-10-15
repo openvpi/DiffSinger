@@ -3,7 +3,9 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from modules.commons.common_layers import AdamWConv1d, MixedPrecisionLayerNorm
+from modules.commons.common_layers import (
+    AdamWConv1d, MixedPrecisionLayerNorm, NHWCConv1d, default_conv_weight_init
+)
 
 
 class ConvNeXtBlock(nn.Module):
@@ -24,7 +26,8 @@ class ConvNeXtBlock(nn.Module):
 
     ):
         super().__init__()
-        self.dwconv = nn.Conv1d(dim, dim, kernel_size=7, padding=3, groups=dim)  # depthwise conv
+        self.dwconv = NHWCConv1d(dim, dim, kernel_size=7, padding=3, groups=dim,
+                                 init_method=default_conv_weight_init)  # depthwise conv
 
         self.norm = MixedPrecisionLayerNorm(dim, eps=1e-6)
         self.pwconv1 = nn.Linear(dim, intermediate_dim)  # pointwise/1x1 convs, implemented with linear layers

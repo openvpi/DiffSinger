@@ -11,6 +11,21 @@ from torch.nn import LayerNorm, ReLU, GELU, SiLU
 import utils
 
 
+# Length of the conv2d row the channels-last fast path maps the sequence onto,
+# counting the zero padding: T + 2 * padding. Above it the cuDNN depthwise backward
+# regresses and the plain Conv1d path wins, so training falls back there. The limit
+# is measured on the padded length rather than on T alone: cuDNN switches to a slower
+# kernel once the padded row crosses a device-specific boundary, and that boundary is
+# a property of the padded row, not of the sequence. Evaluation, inference and graph
+# export always take the plain Conv1d path, so exported graphs are unchanged.
+#
+# Where the boundary falls varies with the GPU, so this is a conservative default
+# rather than a universal constant: raising it recovers a narrow band of lengths on
+# which the fast path still wins, at the cost of dropping onto the regression for
+# anything longer.
+_NHWC_MAX_T = 4032
+
+
 class NormalInitEmbedding(torch.nn.Embedding):
     def __init__(
             self,
@@ -217,9 +232,93 @@ class SoftSignGLU(nn.Module):
 
 
 class AdamWConv1d(torch.nn.Conv1d):
-    def __init__(self, *args, **kwargs):
+    """Conv1d routed to AdamW instead of Muon (see modules.optimizer.muon).
+
+    ``init_method`` overrides the default kaiming-normal weight init with any
+    callable taking the weight parameter.
+    """
+
+    def __init__(self, *args, init_method=None, **kwargs):
         super().__init__(*args, **kwargs)
-        nn.init.kaiming_normal_(self.weight)
+        if init_method is None:
+            nn.init.kaiming_normal_(self.weight)
+        else:
+            init_method(self.weight)
+
+
+def default_conv_weight_init(weight: torch.Tensor) -> None:
+    """Weight init used by plain torch.nn.Conv (kaiming uniform with a=sqrt(5))."""
+    nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
+
+
+class NHWCConv1d(AdamWConv1d):
+    """Conv1d with a channels-last training fast path.
+
+    Takes [B, C, T] input like a regular Conv1d and is a drop-in replacement for it,
+    including the unbatched [C, T] form Conv1d accepts: evaluation, inference and graph
+    export always run the plain Conv1d computation, so exported graphs are unchanged.
+    While training, a short sequence whose input is a transpose view of [B, T, C]-ordered
+    data (the layout LayerNorm/Linear naturally produce) is computed as channels-last
+    Conv2d over zero-copy views, avoiding the contiguity copies Conv1d makes on
+    transposed input.
+
+    The fast path is only taken when it is actually faster than Conv1d, which needs all
+    of the following. Anything else falls back to ``super().forward``:
+
+    - ``dilation == (1,)``. A dilated Conv1d maps onto a strided conv2d, which cuDNN runs
+      several times slower than the equivalent 1D kernel.
+    - an odd ``kernel_size``. torch pads an even kernel symmetrically and the two paths
+      agree numerically, but cuDNN picks a slower kernel for the even width.
+    - ``T + 2 * padding <= _NHWC_MAX_T``. The cuDNN depthwise backward regresses once the
+      padded row grows past a device-specific boundary, so the limit is placed on the
+      padded length rather than on ``T``: the regression can begin while ``T`` is still
+      well inside what the sequence length alone would suggest.
+
+    The first two are static and are resolved once in ``__init__``; only the length test
+    is per call.
+
+    Only numeric padding and padding_mode='zeros' are supported, since the fast path
+    maps the Conv1d kernel onto the Conv2d width dim.
+
+    Being an AdamWConv1d subclass, the weight is routed to AdamW instead of Muon.
+    """
+
+    def __init__(self, *args, init_method=None, **kwargs):
+        super().__init__(*args, init_method=init_method, **kwargs)
+        if isinstance(self.padding, str):
+            raise ValueError('NHWCConv1d does not support string padding; use an integer')
+        if self.padding_mode != 'zeros':
+            raise ValueError(
+                f"NHWCConv1d only supports padding_mode='zeros', got {self.padding_mode!r}"
+            )
+        # Static half of the fast-path test: a dilated conv becomes a strided conv2d and
+        # an even kernel picks a slower cuDNN kernel, and neither is worth the copy.
+        self._nhwc_eligible = (
+                tuple(self.dilation) == (1,) and self.kernel_size[0] % 2 == 1
+        )
+        # Frames the sequence occupies once padded; the length test compares against this.
+        self._nhwc_padded_overhead = 2 * self.padding[0]
+
+    def forward(self, x):
+        if (self.training and self._nhwc_eligible and x.ndim in (2, 3)
+                and x.shape[-1] + self._nhwc_padded_overhead <= _NHWC_MAX_T):
+            # Conv1d also accepts unbatched [C, T]; conv2d needs the batch dim, so add it
+            # here and drop it again on the way out rather than losing the fast path.
+            unbatched = x.ndim == 2
+            if unbatched:
+                x = x.unsqueeze(0)
+            x4 = x.unsqueeze(2).contiguous(memory_format=torch.channels_last)
+            y = F.conv2d(
+                x4,
+                self.weight.unsqueeze(2),
+                self.bias,
+                stride=(1, self.stride[0]),
+                padding=(0, self.padding[0]),
+                groups=self.groups,
+            )
+            y = y.squeeze(2)
+            return y.squeeze(0) if unbatched else y
+        return super().forward(x)
 
 
 class KaimingNormalConv1d(torch.nn.Conv1d):
