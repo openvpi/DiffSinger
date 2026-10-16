@@ -1,0 +1,63 @@
+DiffSinger (OpenVPI maintained version)
+Copyright 2023 Team OpenVPI
+
+This product includes software developed as part of the DiffSinger project
+(https://github.com/openvpi/DiffSinger).
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------------------------
+Third-party components
+------------------------------------------------------------------------------
+
+Portions of this repository are derived from the third-party projects listed
+below. The corresponding sources are named in README.md under "Dependencies &
+Submodules". Where an upstream project distributes its own NOTICE or license
+text, the full text is preserved by the upstream repository and applies to the
+derived portions in this project.
+
+  RoPE - rotary positional embeddings for the transformer encoder
+  https://github.com/lucidrains/rotary-embedding-torch
+
+  Mix-LN - for cross-speaker and cross-lingual learning
+  https://www.isca-archive.org/interspeech_2024/hwang24_interspeech.pdf
+
+  HiFi-GAN - for waveform reconstruction
+  https://github.com/jik876/hifi-gan
+
+  NSF (Neural Source-Filter) - for waveform reconstruction
+  https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts
+
+  pc-ddsp - for waveform reconstruction
+  https://github.com/yxlllc/pc-ddsp
+
+  RMVPE - for pitch extraction
+  https://github.com/Dream-High/RMVPE
+
+  Vocal Remover - for harmonic-noise separation
+  https://github.com/tsurumeso/vocal-remover
+
+This project is a refactored version of the original DiffSinger implementation
+(https://github.com/MoonInTheRiver/DiffSinger) and cites the paper
+"DiffSinger: Singing Voice Synthesis via Shallow Diffusion Mechanism"
+(https://arxiv.org/abs/2105.02446).
+
+------------------------------------------------------------------------------
+Voice-cloning disclaimer
+------------------------------------------------------------------------------
+
+Any organization or individual is prohibited from using any functionalities
+included in this repository to generate someone's voice without his/her
+consent, including but not limited to government leaders, political figures,
+and celebrities. If you do not comply with this item, you could be in violation
+of copyright laws.
