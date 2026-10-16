@@ -8,7 +8,7 @@ import utils
 import utils.infer_utils
 from basics.base_dataset import BaseDataset
 from basics.base_task import BaseTask
-from modules.losses import DurationLoss, DiffusionLoss, RectifiedFlowLoss
+from modules.losses import build_duration_loss, DiffusionLoss, RectifiedFlowLoss
 from modules.metrics import (
     RawCurveAccuracy, RawCurveR2Score, RhythmCorrectness, PhonemeDurationAccuracy
 )
@@ -171,12 +171,8 @@ class VarianceTask(BaseTask):
     def build_losses_and_metrics(self):
         if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
-            self.dur_loss = DurationLoss(
-                offset=dur_hparams['log_offset'],
-                loss_type=dur_hparams['loss_type'],
-                lambda_pdur=dur_hparams['lambda_pdur_loss'],
-                lambda_wdur=dur_hparams['lambda_wdur_loss'],
-                lambda_sdur=dur_hparams['lambda_sdur_loss']
+            self.dur_loss = build_duration_loss(
+                dur_hparams, self.model.fs2.dur_arch == 'attn'
             )
             self.register_validation_loss('dur_loss')
             self.register_validation_metric('rhythm_corr', RhythmCorrectness(tolerance=0.05))

@@ -566,15 +566,21 @@ Arguments for phoneme duration prediction.
 
 ### dur_prediction_args.arch
 
-Architecture of duration predictor. `'fs2'` uses the original FastSpeech2 duration predictor with standard convolution layers. `'resnet'` uses a residual-style variant with additional layer normalization and residual connections, which may improve training stability.
+Architecture of duration predictor.
+
+- `'fs2'`: FastSpeech2 predictor with standard convolution layers.
+- `'resnet'`: Convolutional predictor with layer normalization and residual connections.
+- `'attn'`: Sliding-window attention predictor with within-word positions and duration allocation.
+
+For `'attn'`, the exported `dur` model requires `word_div` (phoneme counts per word) and `word_dur` (word durations in frames).
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>resnet</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2', 'resnet'.</td>
+<tr><td align="center"><b>default</b></td><td>attn</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2', 'resnet', 'attn'.</td>
 </tbody></table>
 
 ### dur_prediction_args.dropout
@@ -587,6 +593,57 @@ Dropout rate in duration predictor. Like [dropout](#dropout), modifying it does 
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
 <tr><td align="center"><b>default</b></td><td>0.1</td>
+</tbody></table>
+
+### dur_prediction_args.dur_ffn_mult
+
+Feed-forward expansion factor for the `'attn'` duration predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+</tbody></table>
+
+### dur_prediction_args.dur_num_blocks
+
+Number of attention blocks for the `'attn'` duration predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be at least 0.</td>
+</tbody></table>
+
+### dur_prediction_args.dur_num_heads
+
+Number of attention heads for the `'attn'` duration predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+<tr><td align="center"><b>constraints</b></td><td>Must divide [dur_prediction_args.hidden_size](#dur_prediction_argshidden_size).</td>
+</tbody></table>
+
+### dur_prediction_args.dur_radius
+
+Attention window radius in phonemes for the `'attn'` duration predictor. The window size is `2 * r + 1`; within-word position indices are clamped to `r`.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>8</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be at least 0.</td>
 </tbody></table>
 
 ### dur_prediction_args.hidden_size
@@ -603,7 +660,7 @@ Dimensions of hidden layers in duration predictor.
 
 ### dur_prediction_args.kernel_size
 
-Kernel size of convolution layers of duration predictor.
+Convolution kernel size for the `'fs2'` and `'resnet'` duration predictors.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -627,7 +684,7 @@ Coefficient of single-phoneme duration loss when calculating joint duration loss
 
 ### dur_prediction_args.lambda_sdur_loss
 
-Coefficient of sentence duration loss when calculating joint duration loss.
+Coefficient of sentence duration loss when calculating joint duration loss. Used by `'fs2'` and `'resnet'`.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -639,7 +696,7 @@ Coefficient of sentence duration loss when calculating joint duration loss.
 
 ### dur_prediction_args.lambda_wdur_loss
 
-Coefficient of word duration loss when calculating joint duration loss.
+Coefficient of word duration loss when calculating joint duration loss. Used by `'fs2'` and `'resnet'`.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -680,7 +737,7 @@ Underlying loss type of duration loss.
 
 ### dur_prediction_args.num_layers
 
-Number of duration predictor layers.
+Number of convolutional layers for the `'fs2'` and `'resnet'` duration predictors.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>

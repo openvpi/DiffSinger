@@ -15,6 +15,20 @@ from utils.hparams import hparams
 from utils.phoneme_utils import load_phoneme_dictionary
 
 
+def _dur_trace_args(encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed,
+                    is_attn):
+    """Preserve optional word-input slots before the positional speaker embedding."""
+    spk_is_on = spk_embed is not None
+    args = (encoder_out, x_masks, ph_midi)
+    if is_attn or spk_is_on:
+        args += (word_div if is_attn else None,)
+    if is_attn or spk_is_on:
+        args += (word_dur if is_attn else None,)
+    if spk_is_on:
+        args += (spk_embed,)
+    return args
+
+
 class DiffSingerVarianceExporter(BaseExporter):
     def __init__(
             self,
@@ -168,6 +182,7 @@ class DiffSingerVarianceExporter(BaseExporter):
         # functionalities
         if self.model.predict_dur:
             dsconfig['dur'] = f'{model_name}.dur.onnx'
+            dsconfig['dur_type'] = 'rel' if self.model.fs2.dur_arch == 'attn' else 'abs'
         if self.model.predict_pitch:
             dsconfig['pitch'] = f'{model_name}.pitch.onnx'
             dsconfig['use_expr'] = self.expose_expr
@@ -245,22 +260,25 @@ class DiffSingerVarianceExporter(BaseExporter):
             )
 
             print(f'Exporting {self.dur_predictor_class_name}...')
+            is_attn = self.model.fs2.dur_arch == 'attn'
+            spk_embed = torch.rand(
+                1, 5, hparams['hidden_size'],
+                dtype=torch.float32, device=self.device
+            ) if input_spk_embed else None
+            dur_inputs = _dur_trace_args(
+                encoder_out, x_masks, ph_midi, word_div, word_dur, spk_embed,
+                is_attn
+            )
             torch.onnx.export(
                 self.model.view_as_dur_predictor(),
-                (
-                    encoder_out,
-                    x_masks,
-                    ph_midi,
-                    *([torch.rand(
-                        1, 5, hparams['hidden_size'],
-                        dtype=torch.float32, device=self.device
-                    )] if input_spk_embed else [])
-                ),
+                dur_inputs,
                 self.dur_predictor_cache_path,
                 input_names=[
                     'encoder_out',
                     'x_masks',
                     'ph_midi',
+                    *(['word_div'] if is_attn else []),
+                    *(['word_dur'] if is_attn else []),
                     *(['spk_embed'] if input_spk_embed else [])
                 ],
                 output_names=[
@@ -273,6 +291,8 @@ class DiffSingerVarianceExporter(BaseExporter):
                     'ph_dur_pred': {
                         1: 'n_tokens'
                     },
+                    **({'word_div': {1: 'n_words'}} if is_attn else {}),
+                    **({'word_dur': {1: 'n_words'}} if is_attn else {}),
                     **({'spk_embed': {1: 'n_tokens'}} if input_spk_embed else {}),
                     **encoder_common_axes
                 },
