@@ -79,7 +79,7 @@ Check the areas your change could affect:
   from the eager path, breaks deployment for everyone.
 - **Inference provider compatibility.** Exported models are consumed through
   onnxruntime, on CPU and on DirectML (Windows). Check the exported model on
-  both the CPU execution provider and `DmlExecutionProvider`, with onnxruntime
+  both `CPUExecutionProvider` and `DmlExecutionProvider`, with onnxruntime
   pinned to 1.23.0. An op that falls back, a dtype that DML rejects, or a graph
   that only runs on one provider is a defect.
 - **Configuration schema compatibility.** Configs in `configs/` are read by
@@ -193,7 +193,7 @@ When reporting testing:
   when the change is reverted.
 - Run Ruff on the files you touched.
 - If the change touches anything that is exported to ONNX, run the export and
-  then load the result with onnxruntime on both the CPU execution provider and
+  then load the result with onnxruntime on both `CPUExecutionProvider` and
   `DmlExecutionProvider`, pinned to 1.23.0, and report the outcome of each.
 - Do not claim that a check was run if it was not.
 - A change that was never executed is not ready to be submitted.
@@ -209,11 +209,7 @@ When reporting testing:
   model. Changes to exported modules must be checked through it.
 - Checkpoints, datasets, and ONNX artifacts are not committed; see `.gitignore`.
 - onnxruntime is pinned to 1.23.0, matching the version used by OpenUtau. Test
-  exported models on both the CPU execution provider and
-  `DmlExecutionProvider`.
-- `deployment/benchmarks/` already runs inference through
-  `DmlExecutionProvider`, and is the reference for how exported input and output
-  names are used.
+  exported models on both `CPUExecutionProvider` and `DmlExecutionProvider`.
 - Read `README.md`, `docs/GettingStarted.md`, and
   `docs/ConfigurationSchemas.md` before making assumptions about how the
   project is used.
