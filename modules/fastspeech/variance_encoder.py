@@ -7,29 +7,21 @@ from modules.commons.common_layers import (
     XavierUniformInitLinear as Linear,
     AdamWLinear,
 )
-from modules.duration import DurationPredictorV2
+from modules.duration import DurationRatioPredictor
 from modules.duration.word_groups import word_budget
 from modules.fastspeech.tts_modules import FastSpeech2Encoder, DurationPredictor
 from utils.hparams import hparams
 from utils.phoneme_utils import PAD_INDEX
 
-# The duration predictor architectures, all built from the same `dur_prediction_args`
-# block. The attention predictor (arch: 'attn') consumes the word-level inputs
-# (word_div/word_dur); the convolutional ones do not.
 DURATION_PREDICTOR_ARCHS = {
     'fs2': DurationPredictor,
     'resnet': DurationPredictor,
-    'attn': DurationPredictorV2,
+    'attn': DurationRatioPredictor,
 }
 
 
 class FastSpeech2Variance(nn.Module):
     def __init__(self, vocab_size):
-        """Initialize the module.
-
-        Args:
-            vocab_size (int): Number of phoneme tokens in the dictionary.
-        """
         super().__init__()
         self.predict_dur = hparams['predict_dur']
         self.linguistic_mode = 'word' if hparams['predict_dur'] else 'phoneme'
@@ -66,12 +58,7 @@ class FastSpeech2Variance(nn.Module):
             )
 
     def dur_word_budget(self, ph_dur, ph2word, word_dur, infer):
-        """Word frame budget the duration predictor expects, ``None`` when it takes none.
-
-        Built in one place so that it is constant inside a word by construction:
-        the ground-truth word sums while training, the word durations of the score
-        when inferring.
-        """
+        """Use score durations for inference and summed phoneme durations for training."""
         if self.dur_arch != 'attn':
             return None
         if infer:

@@ -1,15 +1,4 @@
-"""Duration predictor built from sliding-window attention blocks.
-
-``x -> in_proj -> optional within-word positions -> N x pre-norm sliding-window
-blocks -> out_norm -> out_proj``, followed by the allocation tail: the phonemes
-of a word are turned into a distribution over that word's frame budget, and
-inference returns the integer frame counts of the split, which sum to the budget
-exactly. With ``use_allocation`` off the stack predicts absolute durations in
-the linear domain instead.
-
-The exported graph stays batch size 1 as in the other duration/variance graphs,
-but every operation is batch-generic, so training runs on batches.
-"""
+"""Duration predictor built from sliding-window attention blocks."""
 
 import torch
 import torch.nn as nn
@@ -22,33 +11,20 @@ from modules.duration.word_groups import (
     word_position_ids,
 )
 
-__all__ = ["DurationPredictorV2"]
+__all__ = ["DurationRatioPredictor"]
 
 
-class DurationPredictorV2(nn.Module):
-    """Sliding-window attention duration predictor with an optional word allocator.
+class DurationRatioPredictor(nn.Module):
+    """Predict phoneme durations with sliding-window attention.
 
-    Args:
-        in_dims: Width of the conditioning.
-        hidden_size: Internal width of the attention stack.
-        num_blocks: Number of pre-norm attention blocks.
-        num_heads: Number of attention heads.
-        radius: Attention window radius, in items.
-        ffn_mult: Feed-forward expansion factor.
-        ffn_act: Feed-forward activation.
-        dropout: Dropout rate of the blocks.
-        use_pos_embed: Add within-word position embeddings (needs ``ph2word`` at
-            every call site); they saturate at ``radius``.
-        use_allocation: Split each word's frame budget instead of predicting
-            absolute durations.
-        offset: Log-domain output offset, used when ``use_allocation`` is off.
-        loss_type: Underlying loss type, used when ``use_allocation`` is off.
+    ``use_pos_embed`` adds within-word positions, clamped to ``radius``.
+    ``use_allocation`` distributes each word's frame budget among its phonemes.
+    Otherwise, ``offset`` and ``loss_type`` control absolute duration prediction.
     """
 
     def __init__(self, in_dims, hidden_size, num_blocks=4, num_heads=4, radius=8,
                  ffn_mult=4, ffn_act='gelu', dropout=0.0, use_pos_embed=True,
                  use_allocation=True, offset=1.0, loss_type='mse'):
-        """Initialize the module; the class docstring documents every argument."""
         super().__init__()
         if num_blocks < 0:
             raise ValueError(f"num_blocks must be non-negative, got {num_blocks}")
@@ -72,9 +48,6 @@ class DurationPredictorV2(nn.Module):
             for _ in range(num_blocks)
         )
         self.out_norm = nn.LayerNorm(hidden_size)
-        # A plain nn.Linear on purpose: the output projection is a matrix and so
-        # belongs to the matrix parameter group like the rest of the stack,
-        # unlike the AdamWLinear used by the convolutional predictors.
         self.out_proj = nn.Linear(hidden_size, 1)
         if use_pos_embed:
             self.pos_embed = nn.Embedding(self.max_pos + 1, hidden_size)
@@ -84,18 +57,7 @@ class DurationPredictorV2(nn.Module):
             self.reverse_pos_embed = None
 
     @classmethod
-    def from_hparams(cls, in_dims, dur_hparams: dict) -> 'DurationPredictorV2':
-        """Build from the flat ``dur_prediction_args`` configuration block.
-
-        Only the stack shape is read from the configuration.
-
-        Args:
-            in_dims: Width of the conditioning.
-            dur_hparams: The ``dur_prediction_args`` block of the configuration.
-
-        Returns:
-            The configured module.
-        """
+    def from_hparams(cls, in_dims, dur_hparams: dict) -> 'DurationRatioPredictor':
         radius = dur_hparams.get('dur_radius', 8)
         return cls(
             in_dims=in_dims,
@@ -112,19 +74,18 @@ class DurationPredictorV2(nn.Module):
     def out2dur(self, xs):
         """Convert the log-domain stack output (B, Tmax, 1) into a duration (B, Tmax)."""
         if self.loss_type in ['mse', 'huber']:
-            # NOTE: calculate loss in log domain
             dur = xs.squeeze(-1).exp() - self.offset  # (B, Tmax)
         else:
             raise NotImplementedError(self.loss_type)
         return dur
 
     def forward(self, xs, x_masks=None, infer=True, ph2word=None, word_budget=None):
-        """Run the stack.
+        """Predict per-phoneme frame counts.
 
         Args:
             xs: Input sequences (B, Tmax, idim).
             x_masks: Padding mask (B, Tmax).
-            infer: Whether inference.
+            infer: Whether to run inference.
             ph2word: Word index per phoneme [B, Tmax], 0 for padding; required
                 when within-word positions or the allocation output are used.
             word_budget: Frame budget of every word [B, T_w]; required when the
@@ -162,21 +123,16 @@ class DurationPredictorV2(nn.Module):
         logits = logits * non_pad_mask
 
         if self.use_allocation:
-            # The allocation is discrete and the frame counts have to be exact, so
-            # it always runs in float32, also under mixed precision.
+            # Use float32 to limit rounding errors under mixed precision.
             logits = logits.float()
             prob = word_log_softmax(logits, members).exp() * non_pad_mask
-            # The budget arrives with one entry per word and must stay [B, T_w]:
-            # expanded per phoneme it would be indexed with its own length and
-            # collapse every word onto the budget of the first one.
             budget = word_budget.gather(1, ph2word.clamp(min=1) - 1)
             if infer:
                 dur_pred = allocate_word_frames(prob, budget, ph2word, x_masks=x_masks)
             else:
-                # differentiable allocation: the shares scaled by the frame budget
                 dur_pred = prob * budget
         else:
             dur_pred = self.out2dur(logits.unsqueeze(-1))
             if infer:
-                dur_pred = dur_pred.clamp(min=0.)  # avoid negative value
+                dur_pred = dur_pred.clamp(min=0.)
         return dur_pred

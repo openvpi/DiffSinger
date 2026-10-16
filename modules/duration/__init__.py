@@ -1,1 +1,1 @@
-from .predictor import DurationPredictorV2
+from .predictor import DurationRatioPredictor

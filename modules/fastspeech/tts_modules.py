@@ -116,7 +116,6 @@ class DurationPredictor(torch.nn.Module):
 
     @classmethod
     def from_hparams(cls, in_dims, dur_hparams):
-        """Build from the flat ``dur_prediction_args`` configuration block."""
         return cls(
             in_dims=in_dims,
             n_chans=dur_hparams['hidden_size'],

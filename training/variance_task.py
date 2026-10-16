@@ -169,7 +169,6 @@ class VarianceTask(BaseTask):
 
     # noinspection PyAttributeOutsideInit
     def build_losses_and_metrics(self):
-        """Build the loss modules and the validation metrics of every enabled head."""
         if self.predict_dur:
             dur_hparams = hparams['dur_prediction_args']
             self.dur_loss = build_duration_loss(

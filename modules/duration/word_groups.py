@@ -1,10 +1,4 @@
-"""Word-level helpers for duration prediction.
-
-A word's total duration is fixed by the score; its phonemes share one frame
-budget and the predictor only splits it. Training marks words with ``ph2word``
-(index 0 = padding); the exported graph rebuilds them from ``word_div``. All
-helpers use export-safe ops so the same path serves training, validation and ONNX.
-"""
+"""Word-level helpers for duration prediction."""
 
 import torch
 import torch.nn.functional as F
@@ -29,9 +23,7 @@ def word_membership(word_ids: Tensor, num_words=None, x_masks: Tensor = None) ->
     """One-hot membership mask of the words.
 
     :param word_ids: [B, T] word index per item, 1-based, 0 for padding
-    :param num_words: number of words; when omitted it is taken from the largest
-        index in ``word_ids``, which keeps the mask compatible with a dynamic
-        number of words
+    :param num_words: number of words; defaults to the largest word index
     :param x_masks: [B, T] bool mask, True for padded items
     :return: [B, T, W] bool mask
     """
@@ -53,8 +45,7 @@ def word_position_ids(mask: Tensor, max_position: int = None):
     """Positions of every item inside its word, counted forward and backward.
 
     :param mask: [B, T, W] membership mask
-    :param max_position: optional clamp, so long words saturate instead of
-        growing the embedding table
+    :param max_position: optional upper bound for position indices
     :return: (forward, reverse) [B, T] long tensors; padded items map to 0
     """
     numeric = mask.to(torch.int64)  # CumSum has no boolean kernel
@@ -104,15 +95,11 @@ def word_log_softmax(logits: Tensor, mask: Tensor) -> Tensor:
 
 
 def word_budget(durations: Tensor, word_ids: Tensor, num_words=None) -> Tensor:
-    """Sum the durations of the items of every word into its frame budget.
-
-    This is the single place where a frame budget is built, which guarantees the
-    "constant inside a word" contract of :func:`allocate_word_frames`.
+    """Sum phoneme durations per word.
 
     :param durations: [B, T] per-item durations in frames
     :param word_ids: [B, T] word index per item, 1-based, 0 for padding
-    :param num_words: number of words; when omitted it is taken from the largest
-        index in ``word_ids``
+    :param num_words: number of words; defaults to the largest word index
     :return: [B, W] frame budget of every word
     """
     if num_words is None:
@@ -122,13 +109,7 @@ def word_budget(durations: Tensor, word_ids: Tensor, num_words=None) -> Tensor:
 
 
 def allocate_word_frames(prob: Tensor, budget: Tensor, word_ids: Tensor, x_masks: Tensor = None) -> Tensor:
-    """Turn within-word shares and per-item budgets into exact integer frame counts.
-
-    The cumulative share is scaled by the budget and rounded (ties away from
-    zero); because the shares of a word sum to one, the boundary at a word's end
-    equals its budget, so each word's counts sum to its budget. The last boundary
-    of every word is pinned to the cumulative budget rather than rounded, making the
-    sum exact by construction.
+    """Allocate integer frames by rounding cumulative durations.
 
     :param prob: [B, T] within-word shares
     :param budget: [B, T] frame budget per item; constant inside a word
@@ -136,18 +117,17 @@ def allocate_word_frames(prob: Tensor, budget: Tensor, word_ids: Tensor, x_masks
     :param x_masks: [B, T] bool mask, True for padded items
     :return: [B, T] frame counts
     """
-    # Exact integer counts, so accumulate in float32.
+    # Accumulate in float32 to limit rounding errors.
     prob = prob.float()
     budget = budget.to(torch.float32)
 
     cumulative = (prob.clamp_min(0.) * budget).cumsum(dim=1)
     boundary = (cumulative + 0.5).floor()
 
-    # A word ends where its index changes; pad the tail so the last item closes its word.
     next_ids = F.pad(word_ids[:, 1:], [0, 1])
     word_end = (word_ids != next_ids) & (word_ids > 0)  # [B, T]
 
-    # Sum end budgets over words to recover the cumulative budget without a per-word tensor.
+    # Pin word-end boundaries to prevent rounding drift between words.
     end_budget = torch.where(word_end, budget, torch.zeros_like(budget))
     word_cumulative = end_budget.cumsum(dim=1)  # [B, T]
     boundary = torch.where(word_end, word_cumulative, boundary)
