@@ -344,11 +344,14 @@ class Mixed_LayerNorm(nn.Module):
             condition_channels: int,
             beta_distribution_concentration: float = 0.2,
             eps: float = 1e-5,
-            bias: bool = True
+            bias: bool = True,
+            *,
+            shuffle_speakers: bool = False
     ):
         super().__init__()
         self.channels = channels
         self.eps = eps
+        self.shuffle_speakers = shuffle_speakers
 
         self.beta_distribution = torch.distributions.Beta(
             beta_distribution_concentration,
@@ -373,6 +376,8 @@ class Mixed_LayerNorm(nn.Module):
         betas, gammas = torch.split(affine_params, self.channels, dim=-1)
 
         if not self.training or x.size(0) == 1:
+            return gammas * x + betas
+        if not self.shuffle_speakers:
             return gammas * x + betas
 
         shuffle_indices = torch.randperm(x.size(0), device=x.device)
@@ -511,7 +516,7 @@ class MultiheadSelfAttentionWithRoPE(nn.Module):
 class EncSALayer(nn.Module):
     def __init__(self, c, num_heads, dropout, attention_dropout=0.1,
                  relu_dropout=0.1, kernel_size=9, act='gelu', rotary_embed=None,
-                 layer_idx=None, mix_ln_layer=None
+                 layer_idx=None, mix_ln_layer=None, mixln_shuffle_speakers=False
                  ):
         super().__init__()
         self.dropout = dropout
@@ -521,7 +526,7 @@ class EncSALayer(nn.Module):
                 and layer_idx in mix_ln_layer
         )
         if self.use_mix_ln:
-            self.layer_norm1 = Mixed_LayerNorm(c, c)
+            self.layer_norm1 = Mixed_LayerNorm(c, c, shuffle_speakers=mixln_shuffle_speakers)
         else:
             self.layer_norm1 = LayerNorm(c)
         # Always use the in-house manual attention. With rotary_embed=None this
@@ -534,7 +539,7 @@ class EncSALayer(nn.Module):
             c, num_heads, dropout=attention_dropout, bias=False, rotary_embed=rotary_embed
         )
         if self.use_mix_ln:
-            self.layer_norm2 = Mixed_LayerNorm(c, c)
+            self.layer_norm2 = Mixed_LayerNorm(c, c, shuffle_speakers=mixln_shuffle_speakers)
         else:
             self.layer_norm2 = LayerNorm(c)
         self.ffn = TransformerFFNLayer(
