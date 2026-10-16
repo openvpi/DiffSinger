@@ -59,6 +59,7 @@ breathiness_db_max: -20.0
 
 voicing_db_min: -96.0
 voicing_db_max: -12.0
+voicing_domain: 'mulaw'
 
 tension_logit_min: -10.0
 tension_logit_max: 10.0
