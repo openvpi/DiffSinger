@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Dict
 
 import numpy as np
@@ -8,6 +9,44 @@ from torch.nn import functional as F
 from modules.hnsep.vr import load_sep_model
 from utils import hparams
 from utils.pitch_utils import interp_f0
+
+
+@lru_cache(maxsize=8)
+def _get_nuttall_window(win_size: int, device: torch.device) -> torch.Tensor:
+    """Build and reuse the Nuttall window for a given size and device."""
+    phase = torch.arange(win_size, dtype=torch.float32, device=device) / win_size * 2 * np.pi
+    return (
+            0.355768
+            - 0.487396 * torch.cos(phase)
+            + 0.144232 * torch.cos(2 * phase)
+            - 0.012604 * torch.cos(3 * phase)
+    )
+
+
+def get_nuttall_window(win_size: int, device=None) -> torch.Tensor:
+    """Resolve the device before looking up the cached Nuttall window."""
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(device)
+    if device.type == 'cuda' and device.index is None:
+        device = torch.device('cuda', torch.cuda.current_device())
+    return _get_nuttall_window(win_size, device)
+
+
+@lru_cache(maxsize=1)
+def _get_sep_model(model_path: str, device: torch.device) -> torch.nn.Module:
+    """Load and cache the harmonic-noise separation model."""
+    return load_sep_model(model_path, device)
+
+
+def get_sep_model(model_path: str, device=None) -> torch.nn.Module:
+    """Resolve the device before looking up the cached separation model."""
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(device)
+    if device.type == 'cuda' and device.index is None:
+        device = torch.device('cuda', torch.cuda.current_device())
+    return _get_sep_model(model_path, device)
 
 
 class DecomposedWaveform:
@@ -78,7 +117,9 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         self._win_size = win_size if win_size is not None else fft_size
         self._time_step = hop_size / samplerate
         self._half_width = base_harmonic_radius
-        self._device = ('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
+        self._device = torch.device(
+            ('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
+        )
         # intermediate variables
         self._f0_world = None
         self._sp = None
@@ -143,6 +184,7 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         samplerate = self._samplerate
         half_width = self._half_width
         device = self._device
+        window = get_nuttall_window(win_size, device)
 
         waveform = torch.from_numpy(self.harmonic()).unsqueeze(0).to(device)  # [B, n_samples]
         n_samples = waveform.shape[1]       
@@ -155,19 +197,12 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         f0 = torch.from_numpy(f0).to(device)[None, :, None]  # [B, n_frames, 1]
         n_f0_frames = f0.shape[1]
 
-        phase = torch.arange(win_size, dtype=waveform.dtype, device=device) / win_size * 2 * np.pi
-        nuttall_window = (
-                0.355768
-                - 0.487396 * torch.cos(phase)
-                + 0.144232 * torch.cos(2 * phase)
-                - 0.012604 * torch.cos(3 * phase)
-        )
         spec = torch.stft(
             waveform,
             n_fft=win_size,
             win_length=win_size,
             hop_length=hop_size,
-            window=nuttall_window,
+            window=window,
             center=True,
             return_complex=True
         ).permute(0, 2, 1)  # [B, n_frames, n_spec]
@@ -185,7 +220,7 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
             n_fft=win_size,
             win_length=win_size,
             hop_length=hop_size,
-            window=nuttall_window,
+            window=window,
             center=True,
             length=n_samples
         ).squeeze(0).cpu().numpy()
@@ -230,9 +265,6 @@ class DecomposedWaveformPyWorld(DecomposedWaveform):
         return self._aperiodic_part
 
 
-SEP_MODEL = None
-
-
 class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
     def _init(
             self, waveform, samplerate, f0,
@@ -243,10 +275,7 @@ class DecomposedWaveformVocalRemover(DecomposedWaveformPyWorld):
             waveform, samplerate, f0, hop_size=hop_size, fft_size=fft_size,
             win_size=win_size, base_harmonic_radius=base_harmonic_radius, device=device
         )
-        global SEP_MODEL
-        if SEP_MODEL is None:
-            SEP_MODEL = load_sep_model(model_path, self._device)
-        self.sep_model = SEP_MODEL
+        self.sep_model = get_sep_model(str(model_path), self._device)
 
     def _infer(self):
         with torch.no_grad():
