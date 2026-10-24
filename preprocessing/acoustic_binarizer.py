@@ -17,17 +17,16 @@ import numpy as np
 import torch
 
 from basics.base_binarizer import BaseBinarizer
-from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.pe import initialize_pe
+from modules.pe import get_pitch_extractor
 from utils.binarizer_utils import (
-    SinusoidalSmoothingConv1d,
     get_mel_torch,
     get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness,
     get_voicing,
     get_tension_base_harmonic,
+    get_smoothing_conv,
 )
 from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
@@ -48,12 +47,6 @@ ACOUSTIC_ITEM_ATTRIBUTES = [
     'speed',
 ]
 WAV_CANDIDATE_EXTENSIONS = ['.wav', '.flac']
-
-pitch_extractor: BasePE = None
-energy_smooth: SinusoidalSmoothingConv1d = None
-breathiness_smooth: SinusoidalSmoothingConv1d = None
-voicing_smooth: SinusoidalSmoothingConv1d = None
-tension_smooth: SinusoidalSmoothingConv1d = None
 
 
 class AcousticBinarizer(BaseBinarizer):
@@ -140,9 +133,7 @@ class AcousticBinarizer(BaseBinarizer):
         ).cpu().numpy()
 
         # get ground truth f0
-        global pitch_extractor
-        if pitch_extractor is None:
-            pitch_extractor = initialize_pe()
+        pitch_extractor = get_pitch_extractor(hparams['pe'], hparams['pe_ckpt'], device=self.device)
         gt_f0, uv = pitch_extractor.get_pitch(
             waveform, samplerate=hparams['audio_sample_rate'], length=length,
             hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
@@ -159,11 +150,9 @@ class AcousticBinarizer(BaseBinarizer):
                 waveform, length, hop_size=hparams['hop_size'], win_size=hparams['win_size']
             ).astype(np.float32)
 
-            global energy_smooth
-            if energy_smooth is None:
-                energy_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['energy_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
+            energy_smooth = get_smoothing_conv(
+                round(hparams['energy_smooth_width'] / self.timestep), self.device
+            )
             energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0]
 
             processed_input['energy'] = energy.cpu().numpy()
@@ -173,7 +162,7 @@ class AcousticBinarizer(BaseBinarizer):
             waveform, samplerate=hparams['audio_sample_rate'], f0=gt_f0 * ~uv,
             hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
             algorithm=hparams['hnsep']
-        )
+        ) if self.need_breathiness or self.need_voicing or self.need_tension else None
 
         if self.need_breathiness:
             # get ground truth breathiness
@@ -181,11 +170,9 @@ class AcousticBinarizer(BaseBinarizer):
                 dec_waveform, None, None, length=length
             )
 
-            global breathiness_smooth
-            if breathiness_smooth is None:
-                breathiness_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['breathiness_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
+            breathiness_smooth = get_smoothing_conv(
+                round(hparams['breathiness_smooth_width'] / self.timestep), self.device
+            )
             breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0]
 
             processed_input['breathiness'] = breathiness.cpu().numpy()
@@ -196,11 +183,9 @@ class AcousticBinarizer(BaseBinarizer):
                 dec_waveform, None, None, length=length
             )
 
-            global voicing_smooth
-            if voicing_smooth is None:
-                voicing_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['voicing_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
+            voicing_smooth = get_smoothing_conv(
+                round(hparams['voicing_smooth_width'] / self.timestep), self.device
+            )
             voicing = voicing_smooth(torch.from_numpy(voicing).to(self.device)[None])[0]
 
             processed_input['voicing'] = voicing.cpu().numpy()
@@ -211,11 +196,9 @@ class AcousticBinarizer(BaseBinarizer):
                 dec_waveform, None, None, length=length, domain='logit'
             )
 
-            global tension_smooth
-            if tension_smooth is None:
-                tension_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['tension_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
+            tension_smooth = get_smoothing_conv(
+                round(hparams['tension_smooth_width'] / self.timestep), self.device
+            )
             tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0]
             if tension.isnan().any():
                 print('Error:', item_name)
@@ -237,7 +220,7 @@ class AcousticBinarizer(BaseBinarizer):
         aug_list = []
         all_item_names = [item_name for item_name, _ in data_iterator]
         total_scale = 0
-        aug_pe = initialize_pe()
+        aug_pe = get_pitch_extractor(hparams['pe'], hparams['pe_ckpt'], device=self.device)
         if self.augmentation_args['random_pitch_shifting']['enabled']:
             from augmentation.spec_stretch import SpectrogramStretchAugmentation
             aug_args = self.augmentation_args['random_pitch_shifting']
