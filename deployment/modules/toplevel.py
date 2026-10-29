@@ -1,6 +1,5 @@
 import copy
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,6 +13,7 @@ from deployment.modules.rectified_flow import (
 )
 from deployment.modules.fastspeech2 import FastSpeech2AcousticONNX, FastSpeech2VarianceONNX
 from modules.toplevel import DiffSingerAcoustic, DiffSingerVariance
+from utils.binarizer_utils import SinusoidalSmoothingConv1d
 from utils.hparams import hparams
 
 
@@ -178,20 +178,7 @@ class DiffSingerVarianceONNX(DiffSingerVariance):
 
     def build_smooth_op(self, device):
         smooth_kernel_size = round(hparams['midi_smooth_width'] * hparams['audio_sample_rate'] / hparams['hop_size'])
-        smooth = nn.Conv1d(
-            in_channels=1,
-            out_channels=1,
-            kernel_size=smooth_kernel_size,
-            bias=False,
-            padding='same',
-            padding_mode='replicate'
-        ).eval()
-        smooth_kernel = torch.sin(torch.from_numpy(
-            np.linspace(0, 1, smooth_kernel_size).astype(np.float32) * np.pi
-        ))
-        smooth_kernel /= smooth_kernel.sum()
-        smooth.weight.data = smooth_kernel[None, None]
-        self.smooth = smooth.to(device)
+        self.smooth = SinusoidalSmoothingConv1d(smooth_kernel_size).eval().to(device)
 
     def embed_frozen_spk(self, encoder_out):
         if hparams['use_spk_id'] and hasattr(self, 'frozen_spk_embed'):

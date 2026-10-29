@@ -7,7 +7,6 @@ from typing import List, Tuple
 import librosa
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
 from scipy import interpolate
@@ -20,6 +19,7 @@ from modules.fastspeech.tts_modules import (
 )
 from modules.toplevel import DiffSingerVariance
 from utils import load_ckpt
+from utils.binarizer_utils import SinusoidalSmoothingConv1d
 from utils.hparams import hparams
 from utils.infer_utils import resample_align_curve
 from utils.phoneme_utils import load_phoneme_dictionary
@@ -46,19 +46,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
         self.lr = LengthRegulator()
         self.rr = RhythmRegulator()
         smooth_kernel_size = round(hparams['midi_smooth_width'] / self.timestep)
-        self.smooth = nn.Conv1d(
-            in_channels=1,
-            out_channels=1,
-            kernel_size=smooth_kernel_size,
-            bias=False,
-            padding='same',
-            padding_mode='replicate'
-        ).eval().to(self.device)
-        smooth_kernel = torch.sin(torch.from_numpy(
-            np.linspace(0, 1, smooth_kernel_size).astype(np.float32) * np.pi
-        ).to(self.device))
-        smooth_kernel /= smooth_kernel.sum()
-        self.smooth.weight.data = smooth_kernel[None, None]
+        self.smooth = SinusoidalSmoothingConv1d(smooth_kernel_size).eval().to(self.device)
 
         glide_types = hparams.get('glide_types', [])
         assert 'none' not in glide_types, 'Type name \'none\' is reserved and should not appear in glide_types.'
