@@ -23,7 +23,16 @@ def uniform_attention_pooling(spk_embed, durations):
     attn_weights = uniform_scores / (sum_scores + (sum_scores == 0).float())  # [B, T_ph, T_mel]
     ph_spk_embed = torch.bmm(attn_weights, spk_embed)
 
-    return ph_spk_embed
+    # Empty phones sample their start boundary; trailing ones use the last valid frame.
+    valid_frames = durations.sum(dim=1, keepdim=True).clamp(max=T_mel)
+    bound = torch.minimum(ph_starts, (valid_frames - 1).clamp(min=0))
+    boundary_spk_embed = torch.gather(
+        # A dummy frame preserves the behaviour of returning zeros for an empty frame axis.
+        F.pad(spk_embed, (0, 0, 0, 1)), 1,
+        bound.unsqueeze(-1).expand(-1, -1, spk_embed.shape[-1])
+    )
+    use_boundary = (durations <= 0) & (valid_frames > 0)
+    return torch.where(use_boundary.unsqueeze(-1), boundary_spk_embed, ph_spk_embed)
 
 
 class FastSpeech2Acoustic(nn.Module):
