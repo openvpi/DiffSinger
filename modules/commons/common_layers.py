@@ -251,7 +251,7 @@ def default_conv_weight_init(weight: torch.Tensor) -> None:
     nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
 
 
-class NHWCConv1d(AdamWConv1d):
+class NHWCConv1d(nn.Conv1d):
     """Conv1d with a channels-last training fast path.
 
     Takes [B, C, T] input like a regular Conv1d and is a drop-in replacement for it,
@@ -279,12 +279,14 @@ class NHWCConv1d(AdamWConv1d):
 
     Only numeric padding and padding_mode='zeros' are supported, since the fast path
     maps the Conv1d kernel onto the Conv2d width dim.
-
-    Being an AdamWConv1d subclass, the weight is routed to AdamW instead of Muon.
     """
 
     def __init__(self, *args, init_method=None, **kwargs):
-        super().__init__(*args, init_method=init_method, **kwargs)
+        super().__init__(*args, **kwargs)
+        if init_method is None:
+            nn.init.kaiming_normal_(self.weight)
+        else:
+            init_method(self.weight)
         if isinstance(self.padding, str):
             raise ValueError('NHWCConv1d does not support string padding; use an integer')
         if self.padding_mode != 'zeros':
