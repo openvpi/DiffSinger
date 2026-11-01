@@ -222,9 +222,8 @@ class FastSpeech2VarianceONNX(FastSpeech2Variance):
         if ph2word is None and word_budget is None:
             ph_dur = self.dur_predictor(dur_cond, x_masks=x_masks)
         else:
-            # Leave rounding and word-boundary alignment to downstream consumers.
             ph_dur = self.dur_predictor(
-                dur_cond, x_masks=x_masks, infer=False, ph2word=ph2word, word_budget=word_budget
+                dur_cond, x_masks=x_masks, ph2word=ph2word, word_budget=word_budget
             )
         return ph_dur
 

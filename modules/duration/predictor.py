@@ -5,7 +5,6 @@ import torch.nn as nn
 
 from modules.duration.attention import SlidingWindowBlock
 from modules.duration.word_groups import (
-    allocate_word_frames,
     word_log_softmax,
     word_membership,
     word_position_ids,
@@ -85,15 +84,17 @@ class DurationRatioPredictor(nn.Module):
         Args:
             xs: Input sequences (B, Tmax, idim).
             x_masks: Padding mask (B, Tmax).
-            infer: Whether to run inference.
+            infer: Clamp negative absolute-duration predictions at inference;
+                does not affect the allocation output.
             ph2word: Word index per phoneme [B, Tmax], 0 for padding; required
                 when within-word positions or the allocation output are used.
             word_budget: Frame budget of every word [B, T_w]; required when the
                 allocation output is used.
 
         Returns:
-            Durations in the linear domain [B, Tmax]. With the allocation output
-            these are integer frame counts per phoneme at inference.
+            Durations in the linear domain [B, Tmax]. The allocation output is
+            continuous frame counts; downstream consumers handle rounding and
+            word-boundary alignment.
         """
         if x_masks is None:
             non_pad_mask = torch.ones(xs.shape[:2], dtype=torch.bool, device=xs.device)
@@ -127,10 +128,7 @@ class DurationRatioPredictor(nn.Module):
             logits = logits.float()
             prob = word_log_softmax(logits, members).exp() * non_pad_mask
             budget = word_budget.gather(1, ph2word.clamp(min=1) - 1)
-            if infer:
-                dur_pred = allocate_word_frames(prob, budget, ph2word, x_masks=x_masks)
-            else:
-                dur_pred = prob * budget
+            dur_pred = prob * budget
         else:
             dur_pred = self.out2dur(logits.unsqueeze(-1))
             if infer:
