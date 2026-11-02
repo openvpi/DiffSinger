@@ -20,8 +20,6 @@ def dur_to_figure(dur_gt, dur_pred, txt, title=None):
         dur_gt = dur_gt.cpu().numpy()
     if isinstance(dur_pred, torch.Tensor):
         dur_pred = dur_pred.cpu().numpy()
-    dur_gt = dur_gt.astype(np.int64)
-    dur_pred = dur_pred.astype(np.int64)
     dur_gt = np.cumsum(dur_gt)
     dur_pred = np.cumsum(dur_pred)
     width = max(12, min(48, len(txt) // 2))
