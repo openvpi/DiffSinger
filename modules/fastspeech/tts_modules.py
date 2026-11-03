@@ -311,7 +311,7 @@ class RhythmRegulator(torch.nn.Module):
 
 class LengthRegulator(torch.nn.Module):
     # noinspection PyMethodMayBeStatic
-    def forward(self, dur, dur_padding=None, alpha=None):
+    def forward(self, dur, dur_padding=None):
         """
         Example (no batch dim version):
             1. dur = [2,2,3]
@@ -326,13 +326,9 @@ class LengthRegulator(torch.nn.Module):
 
         :param dur: Batch of durations of each frame (B, T_txt)
         :param dur_padding: Batch of padding of each frame (B, T_txt)
-        :param alpha: duration rescale coefficient
         :return:
             mel2ph (B, T_speech)
         """
-        assert alpha is None or alpha > 0
-        if alpha is not None:
-            dur = torch.round(dur.float() * alpha).long()
         if dur_padding is not None:
             dur = dur * (1 - dur_padding.long())
         token_idx = torch.arange(1, dur.shape[1] + 1)[None, :, None].to(dur.device)

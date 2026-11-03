@@ -1,7 +1,6 @@
 import json
 import pathlib
 from collections import OrderedDict
-from typing import Dict
 
 import numpy as np
 import torch
@@ -217,7 +216,6 @@ class DiffSingerAcousticInfer(BaseSVSInfer):
             out_dir: pathlib.Path = None,
             title: str = None,
             num_runs: int = 1,
-            spk_mix: Dict[str, float] = None,
             seed: int = -1,
             save_mel: bool = False
     ):
