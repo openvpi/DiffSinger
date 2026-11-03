@@ -32,6 +32,8 @@ class PhonemeDictionary:
                         )
                 all_phonemes.add(ph)
         self._multi_langs = len(dictionaries) > 1
+        if not self._multi_langs:
+            all_phonemes = {ph.split('/', maxsplit=1)[-1] for ph in all_phonemes}
         for lang, dict_path in dictionaries.items():
             with open(dict_path, 'r', encoding='utf8') as dict_file:
                 for line in dict_file:
