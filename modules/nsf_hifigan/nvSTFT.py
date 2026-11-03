@@ -63,8 +63,8 @@ class STFT:
         window = torch.hann_window(win_size_new, device=self.device)
 
         y = torch.nn.functional.pad(y.unsqueeze(1), (
-            (win_size_new - hop_length_new) // 2,
-            (win_size_new - hop_length_new + 1) // 2
+            (n_fft_new - hop_length_new) // 2,
+            (n_fft_new - hop_length_new + 1) // 2
         ), mode='reflect')
         y = y.squeeze(1)
 

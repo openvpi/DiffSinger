@@ -105,7 +105,7 @@ def curve_to_figure(curve_gt, curve_pred=None, curve_base=None, grid=None, title
 
 
 def distribution_to_figure(title, x_label, y_label, items: list, values: list, zoom=0.8, rotate=False):
-    fig = plt.figure(figsize=(int(len(items) * zoom), 10))
+    fig = plt.figure(figsize=(max(4, int(len(items) * zoom)), 10))
     plt.bar(x=items, height=values)
     plt.tick_params(labelsize=15)
     plt.xlim(-1, len(items))

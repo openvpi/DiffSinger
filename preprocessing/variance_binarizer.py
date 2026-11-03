@@ -4,6 +4,7 @@ import os
 import pathlib
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -220,15 +221,16 @@ class VarianceBinarizer(BaseBinarizer):
         # Draw graph.
         midis = sorted(midi_map.keys())
         notes = [librosa.midi_to_note(m, unicode=False) for m in range(midis[0], midis[-1] + 1)]
-        plt = distribution_to_figure(
+        fig = distribution_to_figure(
             title='MIDI Pitch Distribution Summary',
             x_label='MIDI Key', y_label='Number of occurrences',
             items=notes, values=[midi_map.get(m, 0) for m in range(midis[0], midis[-1] + 1)]
         )
         filename = self.binary_data_dir / 'midi_distribution.jpg'
-        plt.savefig(fname=filename,
+        fig.savefig(fname=filename,
                     bbox_inches='tight',
                     pad_inches=0.25)
+        plt.close(fig)  # pyplot keeps a reference to every open figure until it is closed
         print(f'| save summary to \'{filename}\'')
 
         if self.use_glide_embed:
