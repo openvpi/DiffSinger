@@ -484,7 +484,8 @@ class VarianceBinarizer(BaseBinarizer):
                     )
             if voicing is None:
                 voicing = get_voicing(
-                    get_decomposed_waveform(), None, None, length=length
+                    get_decomposed_waveform(), None, None, length=length,
+                    domain=hparams.get('voicing_domain', 'db')
                 )
                 voicing_from_wav = True
 
