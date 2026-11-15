@@ -566,15 +566,21 @@ Arguments for phoneme duration prediction.
 
 ### dur_prediction_args.arch
 
-Architecture of duration predictor. `'fs2'` uses the original FastSpeech2 duration predictor with standard convolution layers. `'resnet'` uses a residual-style variant with additional layer normalization and residual connections, which may improve training stability.
+Architecture of duration predictor.
+
+- `'fs2'`: FastSpeech2 predictor with standard convolution layers.
+- `'resnet'`: Convolutional predictor with layer normalization and residual connections.
+- `'attn'`: Sliding-window attention predictor with within-word positions and duration allocation.
+
+For `'attn'`, the exported `dur` model requires `word_div` (phoneme counts per word) and `word_dur` (word durations in frames).
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
 <tr><td align="center"><b>scope</b></td><td>nn</td>
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str</td>
-<tr><td align="center"><b>default</b></td><td>resnet</td>
-<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2', 'resnet'.</td>
+<tr><td align="center"><b>default</b></td><td>attn</td>
+<tr><td align="center"><b>constraints</b></td><td>Choose from 'fs2', 'resnet', 'attn'.</td>
 </tbody></table>
 
 ### dur_prediction_args.dropout
@@ -587,6 +593,57 @@ Dropout rate in duration predictor. Like [dropout](#dropout), modifying it does 
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
 <tr><td align="center"><b>default</b></td><td>0.1</td>
+</tbody></table>
+
+### dur_prediction_args.dur_ffn_mult
+
+Feed-forward expansion factor for the `'attn'` duration predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+</tbody></table>
+
+### dur_prediction_args.dur_num_blocks
+
+Number of attention blocks for the `'attn'` duration predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be at least 0.</td>
+</tbody></table>
+
+### dur_prediction_args.dur_num_heads
+
+Number of attention heads for the `'attn'` duration predictor.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>4</td>
+<tr><td align="center"><b>constraints</b></td><td>Must divide [dur_prediction_args.hidden_size](#dur_prediction_argshidden_size).</td>
+</tbody></table>
+
+### dur_prediction_args.dur_radius
+
+Attention window radius in phonemes for the `'attn'` duration predictor. The window size is `2 * r + 1`; within-word position indices are clamped to `r`.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>variance</td>
+<tr><td align="center"><b>scope</b></td><td>nn</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>8</td>
+<tr><td align="center"><b>constraints</b></td><td>Must be at least 0.</td>
 </tbody></table>
 
 ### dur_prediction_args.hidden_size
@@ -603,7 +660,7 @@ Dimensions of hidden layers in duration predictor.
 
 ### dur_prediction_args.kernel_size
 
-Kernel size of convolution layers of duration predictor.
+Convolution kernel size for the `'fs2'` and `'resnet'` duration predictors.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -627,7 +684,7 @@ Coefficient of single-phoneme duration loss when calculating joint duration loss
 
 ### dur_prediction_args.lambda_sdur_loss
 
-Coefficient of sentence duration loss when calculating joint duration loss.
+Coefficient of sentence duration loss when calculating joint duration loss. Used by `'fs2'` and `'resnet'`.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -639,7 +696,7 @@ Coefficient of sentence duration loss when calculating joint duration loss.
 
 ### dur_prediction_args.lambda_wdur_loss
 
-Coefficient of word duration loss when calculating joint duration loss.
+Coefficient of word duration loss when calculating joint duration loss. Used by `'fs2'` and `'resnet'`.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -680,7 +737,7 @@ Underlying loss type of duration loss.
 
 ### dur_prediction_args.num_layers
 
-Number of duration predictor layers.
+Number of convolutional layers for the `'fs2'` and `'resnet'` duration predictors.
 
 <table><tbody>
 <tr><td align="center"><b>visibility</b></td><td>variance</td>
@@ -819,18 +876,6 @@ Fast Fourier Transform parameter for mel extraction.
 <tr><td align="center"><b>default</b></td><td>2048</td>
 </tbody></table>
 
-### finetune_enabled
-
-Whether to finetune from a pretrained model.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>training</td>
-<tr><td align="center"><b>customizability</b></td><td>normal</td>
-<tr><td align="center"><b>type</b></td><td>bool</td>
-<tr><td align="center"><b>default</b></td><td>false</td>
-</tbody></table>
-
 ### finetune_ckpt_path
 
 Path to the pretrained model for finetuning.
@@ -841,6 +886,18 @@ Path to the pretrained model for finetuning.
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>str | None</td>
 <tr><td align="center"><b>default</b></td><td>null</td>
+</tbody></table>
+
+### finetune_enabled
+
+Whether to finetune from a pretrained model.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
 ### finetune_ignored_params
@@ -989,6 +1046,32 @@ Hop size or step length (in number of waveform samples) of mel and feature extra
 <tr><td align="center"><b>default</b></td><td>512</td>
 </tbody></table>
 
+### K_step
+
+Maximum number of DDPM steps used by shallow diffusion. Only takes effect when [diffusion_type](#diffusion_type) is `'ddpm'` and [use_shallow_diffusion](#use_shallow_diffusion) is set to `true`; with Rectified Flow the shallow starting point is controlled by [T_start](#t_start) instead, and this key is ignored.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>400</td>
+<tr><td align="center"><b>constraints</b></td><td>Must not be larger than <a href="#timesteps">timesteps</a>.</td>
+</tbody></table>
+
+### K_step_infer
+
+Number of DDPM steps used during shallow diffusion inference. Normally set to the same value as [K_step](#k_step). Only takes effect when [diffusion_type](#diffusion_type) is `'ddpm'` and [use_shallow_diffusion](#use_shallow_diffusion) is set to `true`; with Rectified Flow the shallow starting point is controlled by [T_start_infer](#t_start_infer) instead, and this key is ignored.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>inference</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>400</td>
+<tr><td align="center"><b>constraints</b></td><td>Should be no larger than <a href="#k_step">K_step</a>. Values larger than <a href="#k_step">K_step</a> are silently clamped to <a href="#k_step">K_step</a> instead of raising errors.</td>
+</tbody></table>
+
 ### lambda_aux_mel_loss
 
 Coefficient of aux mel loss when calculating total loss of acoustic model with shallow diffusion.
@@ -1035,32 +1118,6 @@ Coefficient of variance loss (all variance parameters other than pitch, like ene
 <tr><td align="center"><b>customizability</b></td><td>normal</td>
 <tr><td align="center"><b>type</b></td><td>float</td>
 <tr><td align="center"><b>default</b></td><td>1.0</td>
-</tbody></table>
-
-### K_step
-
-Maximum number of DDPM steps used by shallow diffusion. Only takes effect when [diffusion_type](#diffusion_type) is `'ddpm'` and [use_shallow_diffusion](#use_shallow_diffusion) is set to `true`; with Rectified Flow the shallow starting point is controlled by [T_start](#t_start) instead, and this key is ignored.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
-<tr><td align="center"><b>scope</b></td><td>training, inference</td>
-<tr><td align="center"><b>customizability</b></td><td>recommended</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>400</td>
-<tr><td align="center"><b>constraints</b></td><td>Must not be larger than <a href="#timesteps">timesteps</a>.</td>
-</tbody></table>
-
-### K_step_infer
-
-Number of DDPM steps used during shallow diffusion inference. Normally set to the same value as [K_step](#k_step). Only takes effect when [diffusion_type](#diffusion_type) is `'ddpm'` and [use_shallow_diffusion](#use_shallow_diffusion) is set to `true`; with Rectified Flow the shallow starting point is controlled by [T_start_infer](#t_start_infer) instead, and this key is ignored.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
-<tr><td align="center"><b>scope</b></td><td>inference</td>
-<tr><td align="center"><b>customizability</b></td><td>recommended</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>400</td>
-<tr><td align="center"><b>constraints</b></td><td>Should be no larger than <a href="#k_step">K_step</a>. Values larger than <a href="#k_step">K_step</a> are silently clamped to <a href="#k_step">K_step</a> instead of raising errors.</td>
 </tbody></table>
 
 ### log_interval
@@ -1550,6 +1607,18 @@ Determines which device(s) the model should be trained on.
 <tr><td align="center"><b>default</b></td><td>auto</td>
 </tbody></table>
 
+### pl_trainer_num_nodes
+
+Number of nodes in the training cluster of Lightning trainer.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>reserved</td>
+<tr><td align="center"><b>type</b></td><td>int</td>
+<tr><td align="center"><b>default</b></td><td>1</td>
+</tbody></table>
+
 ### pl_trainer_precision
 
 The computation precision of training.
@@ -1561,18 +1630,6 @@ The computation precision of training.
 <tr><td align="center"><b>type</b></td><td>str | int | None</td>
 <tr><td align="center"><b>default</b></td><td>16-mixed</td>
 <tr><td align="center"><b>constraints</b></td><td>Lightning accepts integer precisions `16`, `32`, `64` and string forms such as `'32-true'`, `'bf16-mixed'` and `'16-mixed'`; `null` is passed through to Lightning and falls back to `'32-true'`. See the <a href="https://lightning.ai/docs/pytorch/stable/common/trainer.html#trainer-class-api">Trainer — PyTorch Lightning 2.X.X documentation</a> for the version-specific list.</td>
-</tbody></table>
-
-### pl_trainer_num_nodes
-
-Number of nodes in the training cluster of Lightning trainer.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
-<tr><td align="center"><b>scope</b></td><td>training</td>
-<tr><td align="center"><b>customizability</b></td><td>reserved</td>
-<tr><td align="center"><b>type</b></td><td>int</td>
-<tr><td align="center"><b>default</b></td><td>1</td>
 </tbody></table>
 
 ### pl_trainer_strategy
@@ -1689,6 +1746,18 @@ Whether to use the interleaved (alternating) layout for RoPE (Rotary Positional 
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
+### rope_theta
+
+Base used to compute the RoPE (Rotary Positional Encoding) frequencies in encoder self-attention. For attention head dimension $d$, the frequency of dimension pair $i$ is $\theta^{-2i/d}$, where $\theta$ is this value. The frequency buffers are recomputed at initialization and are not saved in checkpoints, so modifying this value does not change parameter shapes or prevent checkpoint loading, but silently changes the behavior of an already trained model.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>float</td>
+<tr><td align="center"><b>default</b></td><td>10000</td>
 </tbody></table>
 
 ### sampler_frame_count_grid
@@ -1843,19 +1912,6 @@ Whether to apply the _sorting by similar length_ algorithm described in [sampler
 <tr><td align="center"><b>default</b></td><td>true</td>
 </tbody></table>
 
-### spec_min
-
-Minimum mel-spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values. Note that with `diffusion_type: ddpm` these values are stored as persistent buffers in checkpoints: changing the list length causes checkpoint loading to fail, while changed values are silently overridden by the checkpoint on loading; with Rectified Flow they are always read from the current configuration.
-
-<table><tbody>
-<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
-<tr><td align="center"><b>scope</b></td><td>nn, training, inference</td>
-<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
-<tr><td align="center"><b>type</b></td><td>list[float]</td>
-<tr><td align="center"><b>default</b></td><td>[-12]</td>
-<tr><td align="center"><b>constraints</b></td><td>Must contain either one value or <a href="#audio_num_mel_bins">audio_num_mel_bins</a> values.</td>
-</tbody></table>
-
 ### spec_max
 
 Maximum mel-spectrogram value used for normalization to [-1, 1]. Different mel bins can have different maximum values. For buffer persistence behavior in checkpoints, see the note in [spec_min](#spec_min).
@@ -1866,6 +1922,19 @@ Maximum mel-spectrogram value used for normalization to [-1, 1]. Different mel b
 <tr><td align="center"><b>customizability</b></td><td>not recommended</td>
 <tr><td align="center"><b>type</b></td><td>list[float]</td>
 <tr><td align="center"><b>default</b></td><td>[0.0]</td>
+<tr><td align="center"><b>constraints</b></td><td>Must contain either one value or <a href="#audio_num_mel_bins">audio_num_mel_bins</a> values.</td>
+</tbody></table>
+
+### spec_min
+
+Minimum mel-spectrogram value used for normalization to [-1, 1]. Different mel bins can have different minimum values. Note that with `diffusion_type: ddpm` these values are stored as persistent buffers in checkpoints: changing the list length causes checkpoint loading to fail, while changed values are silently overridden by the checkpoint on loading; with Rectified Flow they are always read from the current configuration.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic</td>
+<tr><td align="center"><b>scope</b></td><td>nn, training, inference</td>
+<tr><td align="center"><b>customizability</b></td><td>not recommended</td>
+<tr><td align="center"><b>type</b></td><td>list[float]</td>
+<tr><td align="center"><b>default</b></td><td>[-12]</td>
 <tr><td align="center"><b>constraints</b></td><td>Must contain either one value or <a href="#audio_num_mel_bins">audio_num_mel_bins</a> values.</td>
 </tbody></table>
 
@@ -1988,6 +2057,18 @@ Whether to accept and embed breathiness values into the model.
 <tr><td align="center"><b>default</b></td><td>false</td>
 </tbody></table>
 
+### use_dual_timestep
+
+Whether to sample two independent timesteps per sample when training Rectified Flow. Only takes effect when [diffusion_type](#diffusion_type) is `'reflow'`; ignored with DDPM.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>normal</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>true</td>
+</tbody></table>
+
 ### use_energy_embed
 
 Whether to accept and embed energy values into the model.
@@ -1998,6 +2079,19 @@ Whether to accept and embed energy values into the model.
 <tr><td align="center"><b>customizability</b></td><td>recommended</td>
 <tr><td align="center"><b>type</b></td><td>bool</td>
 <tr><td align="center"><b>default</b></td><td>false</td>
+</tbody></table>
+
+### use_fused_kernels
+
+Whether to use Triton-fused Linear + SoftSignGLU operations during training in LYNXNet2 backbones, reducing kernel launches and intermediate memory traffic.
+
+<table><tbody>
+<tr><td align="center"><b>visibility</b></td><td>acoustic, variance</td>
+<tr><td align="center"><b>scope</b></td><td>training</td>
+<tr><td align="center"><b>customizability</b></td><td>recommended</td>
+<tr><td align="center"><b>type</b></td><td>bool</td>
+<tr><td align="center"><b>default</b></td><td>false</td>
+<tr><td align="center"><b>constraints</b></td><td>Fusion requires a LYNXNet2 backbone with <code>glu_type: softsign_glu</code>, Triton, and a supported CUDA device and activation dtype (float16 or bfloat16).</td>
 </tbody></table>
 
 ### use_glide_embed

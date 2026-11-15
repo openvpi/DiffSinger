@@ -4,22 +4,23 @@ import os
 import pathlib
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
 from scipy import interpolate
 
 from basics.base_binarizer import BaseBinarizer, BinarizationError
-from basics.base_pe import BasePE
 from modules.fastspeech.tts_modules import LengthRegulator
-from modules.pe import initialize_pe
+from modules.pe import get_pitch_extractor
 from utils.binarizer_utils import (
-    SinusoidalSmoothingConv1d,
+    dur_sec_to_frames,
     get_mel2ph_torch,
     get_energy_librosa,
     get_breathiness,
     get_voicing,
     get_tension_base_harmonic,
+    get_smoothing_conv,
 )
 from utils.decomposed_waveform import DecomposedWaveform
 from utils.hparams import hparams
@@ -51,15 +52,6 @@ VARIANCE_ITEM_ATTRIBUTES = [
 ]
 WAV_CANDIDATE_EXTENSIONS = ['.wav', '.flac']
 DS_INDEX_SEP = '#'
-
-# These operators are used as global variables due to a PyTorch shared memory bug on Windows platforms.
-# See https://github.com/pytorch/pytorch/issues/100358
-pitch_extractor: BasePE = None
-midi_smooth: SinusoidalSmoothingConv1d = None
-energy_smooth: SinusoidalSmoothingConv1d = None
-breathiness_smooth: SinusoidalSmoothingConv1d = None
-voicing_smooth: SinusoidalSmoothingConv1d = None
-tension_smooth: SinusoidalSmoothingConv1d = None
 
 
 class VarianceBinarizer(BaseBinarizer):
@@ -229,15 +221,16 @@ class VarianceBinarizer(BaseBinarizer):
         # Draw graph.
         midis = sorted(midi_map.keys())
         notes = [librosa.midi_to_note(m, unicode=False) for m in range(midis[0], midis[-1] + 1)]
-        plt = distribution_to_figure(
+        fig = distribution_to_figure(
             title='MIDI Pitch Distribution Summary',
             x_label='MIDI Key', y_label='Number of occurrences',
             items=notes, values=[midi_map.get(m, 0) for m in range(midis[0], midis[-1] + 1)]
         )
         filename = self.binary_data_dir / 'midi_distribution.jpg'
-        plt.savefig(fname=filename,
+        fig.savefig(fname=filename,
                     bbox_inches='tight',
                     pad_inches=0.25)
+        plt.close(fig)  # pyplot keeps a reference to every open figure until it is closed
         print(f'| save summary to \'{filename}\'')
 
         if self.use_glide_embed:
@@ -289,8 +282,8 @@ class VarianceBinarizer(BaseBinarizer):
         }
 
         ph_dur_sec = torch.FloatTensor(meta_data['ph_dur']).to(self.device)
-        ph_acc = torch.round(torch.cumsum(ph_dur_sec, dim=0) / self.timestep + 0.5).long()
-        ph_dur = torch.diff(ph_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+        ph_dur = dur_sec_to_frames(ph_dur_sec, self.timestep, device=self.device)
+        ph_acc = ph_dur.cumsum(0)  # frame boundaries, also used by the zero-duration fallback
         length = int(ph_acc[-1])
         processed_input['ph_dur'] = ph_dur.cpu().numpy()
         processed_input['length'] = length
@@ -308,9 +301,6 @@ class VarianceBinarizer(BaseBinarizer):
         else:
             waveform = None
 
-        global pitch_extractor
-        if pitch_extractor is None:
-            pitch_extractor = initialize_pe()
         f0 = uv = None
         if self.prefer_ds:
             f0_seq = self.load_attr_from_ds(ds_id, name, 'f0_seq', idx=ds_seg_idx)
@@ -331,6 +321,7 @@ class VarianceBinarizer(BaseBinarizer):
                     align_length=length
                 ) > 0.5
         if f0 is None:
+            pitch_extractor = get_pitch_extractor(hparams['pe'], hparams['pe_ckpt'], device=self.device)
             f0, uv = pitch_extractor.get_pitch(
                 waveform, samplerate=hparams['audio_sample_rate'], length=length,
                 hop_size=hparams['hop_size'], f0_min=hparams['f0_min'], f0_max=hparams['f0_max'],
@@ -374,8 +365,7 @@ class VarianceBinarizer(BaseBinarizer):
             note_midi = torch.from_numpy(note_midi).to(self.device)
 
             note_dur_sec = torch.FloatTensor(meta_data['note_dur']).to(self.device)
-            note_acc = torch.round(torch.cumsum(note_dur_sec, dim=0) / self.timestep + 0.5).long()
-            note_dur = torch.diff(note_acc, dim=0, prepend=torch.LongTensor([0]).to(self.device))
+            note_dur = dur_sec_to_frames(note_dur_sec, self.timestep, device=self.device)
             processed_input['note_dur'] = note_dur.cpu().numpy()
 
             mel2note = get_mel2ph_torch(
@@ -393,11 +383,9 @@ class VarianceBinarizer(BaseBinarizer):
             # 1. Get the frame-level MIDI pitch, which is a step function curve
             # 2. smoothen the pitch step curve as the base pitch curve
             frame_midi_pitch = torch.gather(F.pad(note_midi, [1, 0], value=0), 0, mel2note)
-            global midi_smooth
-            if midi_smooth is None:
-                midi_smooth = SinusoidalSmoothingConv1d(
-                    round(hparams['midi_smooth_width'] / self.timestep)
-                ).eval().to(self.device)
+            midi_smooth = get_smoothing_conv(
+                round(hparams['midi_smooth_width'] / self.timestep), self.device
+            )
             smoothed_midi_pitch = midi_smooth(frame_midi_pitch[None])[0]
             processed_input['base_pitch'] = smoothed_midi_pitch.cpu().numpy()
 
@@ -428,21 +416,27 @@ class VarianceBinarizer(BaseBinarizer):
                 energy_from_wav = True
 
             if energy_from_wav:
-                global energy_smooth
-                if energy_smooth is None:
-                    energy_smooth = SinusoidalSmoothingConv1d(
-                        round(hparams['energy_smooth_width'] / self.timestep)
-                    ).eval().to(self.device)
+                energy_smooth = get_smoothing_conv(
+                    round(hparams['energy_smooth_width'] / self.timestep), self.device
+                )
                 energy = energy_smooth(torch.from_numpy(energy).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['energy'] = energy
 
-        # create a DecomposedWaveform object for further feature extraction
-        dec_waveform = DecomposedWaveform(
-            waveform, samplerate=hparams['audio_sample_rate'], f0=f0 * ~uv,
-            hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
-            algorithm=hparams['hnsep']
-        ) if waveform is not None else None
+        # Only decompose audio when a required curve is missing from the DS file.
+        dec_waveform = None
+
+        def get_decomposed_waveform():
+            nonlocal dec_waveform
+            if dec_waveform is None:
+                if waveform is None:
+                    raise BinarizationError(f"Missing waveform for '{item_name}' to extract variance curves.")
+                dec_waveform = DecomposedWaveform(
+                    waveform, samplerate=hparams['audio_sample_rate'], f0=f0 * ~uv,
+                    hop_size=hparams['hop_size'], fft_size=hparams['fft_size'], win_size=hparams['win_size'],
+                    algorithm=hparams['hnsep']
+                )
+            return dec_waveform
 
         # Below: extract breathiness
         if hparams['predict_breathiness']:
@@ -461,16 +455,14 @@ class VarianceBinarizer(BaseBinarizer):
                     )
             if breathiness is None:
                 breathiness = get_breathiness(
-                    dec_waveform, None, None, length=length
+                    get_decomposed_waveform(), None, None, length=length
                 )
                 breathiness_from_wav = True
 
             if breathiness_from_wav:
-                global breathiness_smooth
-                if breathiness_smooth is None:
-                    breathiness_smooth = SinusoidalSmoothingConv1d(
-                        round(hparams['breathiness_smooth_width'] / self.timestep)
-                    ).eval().to(self.device)
+                breathiness_smooth = get_smoothing_conv(
+                    round(hparams['breathiness_smooth_width'] / self.timestep), self.device
+                )
                 breathiness = breathiness_smooth(torch.from_numpy(breathiness).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['breathiness'] = breathiness
@@ -492,16 +484,15 @@ class VarianceBinarizer(BaseBinarizer):
                     )
             if voicing is None:
                 voicing = get_voicing(
-                    dec_waveform, None, None, length=length, domain=hparams.get('voicing_domain', 'db')
+                    get_decomposed_waveform(), None, None, length=length,
+                    domain=hparams.get('voicing_domain', 'db')
                 )
                 voicing_from_wav = True
 
             if voicing_from_wav:
-                global voicing_smooth
-                if voicing_smooth is None:
-                    voicing_smooth = SinusoidalSmoothingConv1d(
-                        round(hparams['voicing_smooth_width'] / self.timestep)
-                    ).eval().to(self.device)
+                voicing_smooth = get_smoothing_conv(
+                    round(hparams['voicing_smooth_width'] / self.timestep), self.device
+                )
                 voicing = voicing_smooth(torch.from_numpy(voicing).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['voicing'] = voicing
@@ -523,16 +514,14 @@ class VarianceBinarizer(BaseBinarizer):
                     )
             if tension is None:
                 tension = get_tension_base_harmonic(
-                    dec_waveform, None, None, length=length, domain='logit'
+                    get_decomposed_waveform(), None, None, length=length, domain='logit'
                 )
                 tension_from_wav = True
 
             if tension_from_wav:
-                global tension_smooth
-                if tension_smooth is None:
-                    tension_smooth = SinusoidalSmoothingConv1d(
-                        round(hparams['tension_smooth_width'] / self.timestep)
-                    ).eval().to(self.device)
+                tension_smooth = get_smoothing_conv(
+                    round(hparams['tension_smooth_width'] / self.timestep), self.device
+                )
                 tension = tension_smooth(torch.from_numpy(tension).to(self.device)[None])[0].cpu().numpy()
 
             processed_input['tension'] = tension

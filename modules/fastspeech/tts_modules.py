@@ -114,6 +114,19 @@ class DurationPredictor(torch.nn.Module):
             raise NotImplementedError()
         self.linear = AdamWLinear(n_chans, self.out_dims)
 
+    @classmethod
+    def from_hparams(cls, in_dims, dur_hparams):
+        return cls(
+            in_dims=in_dims,
+            n_chans=dur_hparams['hidden_size'],
+            n_layers=dur_hparams['num_layers'],
+            kernel_size=dur_hparams['kernel_size'],
+            dropout_rate=dur_hparams['dropout'],
+            offset=dur_hparams['log_offset'],
+            dur_loss_type=dur_hparams['loss_type'],
+            arch=dur_hparams['arch']
+        )
+
     def out2dur(self, xs):
         if self.loss_type in ['mse', 'huber']:
             # NOTE: calculate loss in log domain
@@ -291,12 +304,14 @@ class RhythmRegulator(torch.nn.Module):
         alpha_w = word_dur / word_dur_in.clamp(min=self.eps)  # avoid dividing by zero
         alpha_ph = torch.gather(F.pad(alpha_w, [1, 0]), 1, ph2word)  # [B, T_w] => [B, T_ph]
         ph_dur_out = ph_dur * alpha_ph
-        return ph_dur_out.round().long()
+        # Round cumulative boundaries to avoid accumulating per-phoneme rounding errors.
+        ph_acc = ph_dur_out.cumsum(dim=1).round().long()
+        return torch.diff(ph_acc, dim=1, prepend=ph_acc.new_zeros((ph_acc.shape[0], 1)))
 
 
 class LengthRegulator(torch.nn.Module):
     # noinspection PyMethodMayBeStatic
-    def forward(self, dur, dur_padding=None, alpha=None):
+    def forward(self, dur, dur_padding=None):
         """
         Example (no batch dim version):
             1. dur = [2,2,3]
@@ -311,13 +326,9 @@ class LengthRegulator(torch.nn.Module):
 
         :param dur: Batch of durations of each frame (B, T_txt)
         :param dur_padding: Batch of padding of each frame (B, T_txt)
-        :param alpha: duration rescale coefficient
         :return:
             mel2ph (B, T_speech)
         """
-        assert alpha is None or alpha > 0
-        if alpha is not None:
-            dur = torch.round(dur.float() * alpha).long()
         if dur_padding is not None:
             dur = dur * (1 - dur_padding.long())
         token_idx = torch.arange(1, dur.shape[1] + 1)[None, :, None].to(dur.device)
