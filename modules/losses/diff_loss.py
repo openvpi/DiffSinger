@@ -26,9 +26,9 @@ class DiffusionLoss(nn.Module):
 
     def forward(self, x_recon: Tensor, noise: Tensor, non_padding: Tensor = None) -> Tensor:
         """
-        :param x_recon: [B, 1, M, T]
-        :param noise: [B, 1, M, T]
-        :param non_padding: [B, T, M]
+        :param x_recon: [B, F, M, T]
+        :param noise: [B, F, M, T]
+        :param non_padding: [B, T, 1] or [B, T, M]
         """
         x_recon, noise = self._mask_non_padding(x_recon, noise, non_padding)
         return self._forward(x_recon, noise).mean()

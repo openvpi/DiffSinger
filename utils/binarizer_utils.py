@@ -71,7 +71,7 @@ def get_pitch_parselmouth(
     :param waveform: [T]
     :param samplerate: sampling rate
     :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
+    :param hop_size: Hop length (frame shift), in number of samples
     :param f0_min: Minimum f0 in Hz
     :param f0_max: Maximum f0 in Hz
     :param speed: Change the speed
@@ -103,13 +103,13 @@ def get_pitch_parselmouth(
 
 def get_energy_librosa(waveform, length, *, hop_size, win_size, domain='db'):
     """
-    Definition of energy: RMS of the waveform, in dB representation
+    Compute waveform RMS, in dB by default or in the linear amplitude domain.
     :param waveform: [T]
     :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
+    :param hop_size: Hop length (frame shift), in number of samples
     :param win_size: Window size, in number of samples
-    :param domain: db or amplitude
-    :return: energy
+    :param domain: Output domain: 'db' (default) or 'amplitude' (linear RMS)
+    :return: RMS energy in the selected domain, with length frames
     """
     energy = librosa.feature.rms(y=waveform, frame_length=win_size, hop_length=hop_size)[0]
     if len(energy) < length:
@@ -131,12 +131,12 @@ def get_breathiness(
 ):
     """
     Definition of breathiness: RMS of the aperiodic part, in dB representation
-    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
+    :param waveform: Input samples or an existing DecomposedWaveform.
     :param samplerate: sampling rate
     :param f0: reference f0
-    :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
-    :param fft_size: Number of fft bins
+    :param length: Expected number of output frames, applied for either input type
+    :param hop_size: Hop length (frame shift), in number of samples
+    :param fft_size: FFT length (number of FFT points)
     :param win_size: Window size, in number of samples
     :return: breathiness
     """
@@ -160,12 +160,12 @@ def get_voicing(
 ):
     """
     Definition of voicing: RMS of the harmonic part, in dB representation
-    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
+    :param waveform: Input samples or an existing DecomposedWaveform.
     :param samplerate: sampling rate
     :param f0: reference f0
-    :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
-    :param fft_size: Number of fft bins
+    :param length: Expected number of output frames, applied for either input type
+    :param hop_size: Hop length (frame shift), in number of samples
+    :param fft_size: FFT length (number of FFT points)
     :param win_size: Window size, in number of samples
     :return: voicing
     """
@@ -189,14 +189,14 @@ def get_tension_base_harmonic(
         domain='logit'
 ):
     """
-    Definition of tension: radio of the real harmonic part (harmonic part except the base harmonic)
+    Definition of tension: ratio of the real harmonic part (harmonic part except the base harmonic)
     to the full harmonic part.
-    :param waveform: All other analysis parameters will not take effect if a DeconstructedWaveform is given
+    :param waveform: Input samples or an existing DecomposedWaveform.
     :param samplerate: sampling rate
     :param f0: reference f0
-    :param length: Expected number of frames
-    :param hop_size: Frame width, in number of samples
-    :param fft_size: Number of fft bins
+    :param length: Expected number of output frames, applied for either input type
+    :param hop_size: Hop length (frame shift), in number of samples
+    :param fft_size: FFT length (number of FFT points)
     :param win_size: Window size, in number of samples
     :param domain: The domain of the final ratio representation.
      Can be 'ratio' (the raw ratio), 'db' (log decibel) or 'logit' (the reverse function of sigmoid)

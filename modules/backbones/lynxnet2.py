@@ -88,17 +88,19 @@ class LYNXNet2(nn.Module):
     def forward(self, spec, diffusion_step, cond, diffusion_step_2=None, mask=None):
         """
         :param spec: [B, F, M, T]
-        :param diffusion_step: [B, 1]
+        :param diffusion_step: [B] or [B, 1] when mask is None; [B, 1] otherwise.
         :param cond: [B, H, T]
-        :return:
+        :param diffusion_step_2: [B, 1], required when mask is provided; ignored otherwise.
+        :param mask: Optional [B, T] weights blending the two timestep embeddings.
+        :return: [B, F, M, T]
         """
 
         if self.n_feats == 1:
             x = spec[:, 0]  # [B, M, T]
         else:
-            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
+            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F*M, T]
 
-        x = self.input_projection(x.transpose(1, 2)) # [B, T, F x M]
+        x = self.input_projection(x.transpose(1, 2)) # [B, T, C]
         if self.use_conditioner_cache:
             x = x + self.conditioner_projection(cond).transpose(1, 2)
         else:
@@ -123,7 +125,7 @@ class LYNXNet2(nn.Module):
         x = self.norm(x)
 
         # output projection
-        x = self.output_projection(x).transpose(1, 2)  # [B, 128, T]
+        x = self.output_projection(x).transpose(1, 2)  # [B, F*M, T]
 
         if self.n_feats == 1:
             x = x[:, None, :, :]

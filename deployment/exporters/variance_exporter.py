@@ -431,11 +431,11 @@ class DiffSingerVarianceExporter(BaseExporter):
                 example_inputs=[
                     (
                         condition.transpose(1, 2),
-                        1  # p_sample branch
+                        1  # single-step example
                     ),
                     (
                         condition.transpose(1, 2),
-                        dummy_steps  # p_sample_plms branch
+                        dummy_steps  # multi-step example
                     )
                 ]
             )
@@ -467,7 +467,7 @@ class DiffSingerVarianceExporter(BaseExporter):
                 **onnx_helper.TORCHSCRIPT_EXPORT_KWARGS
             )
 
-            # Prepare inputs for postprocessor of the multi-variance predictor
+            # Prepare inputs for postprocessor of the pitch predictor
             torch.onnx.export(
                 self.model.view_as_pitch_postprocess(),
                 (
@@ -581,11 +581,11 @@ class DiffSingerVarianceExporter(BaseExporter):
                 example_inputs=[
                     (
                         condition.transpose(1, 2),
-                        1  # p_sample branch
+                        1  # single-step example
                     ),
                     (
                         condition.transpose(1, 2),
-                        dummy_steps  # p_sample_plms branch
+                        dummy_steps  # multi-step example
                     )
                 ]
             )

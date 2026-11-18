@@ -16,7 +16,7 @@ class BaseVocoder:
     def spec2wav(self, mel, **kwargs):
         """
 
-        :param mel: [T, 80]
+        :param mel: [T, num_mels]
         :return: wav: [T']
         """
 

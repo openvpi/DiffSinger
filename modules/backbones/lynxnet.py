@@ -68,9 +68,9 @@ class LYNXNetResidualLayer(nn.Module):
             x = x + self.conditioner_projection(conditioner)
         x = x + self.diffusion_projection(diffusion_step)
         x = x.transpose(1, 2)
-        x = self.convmodule(x)  # (#batch, dim, length) 
+        x = self.convmodule(x)  # (batch, length, dim)
         x = x.transpose(1, 2) + res_x
-        return x  # (#batch, length, dim)
+        return x  # (batch, dim, length)
 
 
 class LYNXNet(nn.Module):
@@ -114,15 +114,17 @@ class LYNXNet(nn.Module):
     def forward(self, spec, diffusion_step, cond, diffusion_step_2=None, mask=None):
         """
         :param spec: [B, F, M, T]
-        :param diffusion_step: [B, 1]
+        :param diffusion_step: [B] or [B, 1] when mask is None; [B, 1] otherwise.
         :param cond: [B, H, T]
-        :return:
+        :param diffusion_step_2: [B, 1], required when mask is provided; ignored otherwise.
+        :param mask: Optional [B, T] weights blending the two timestep embeddings.
+        :return: [B, F, M, T]
         """
 
         if self.n_feats == 1:
             x = spec[:, 0]  # [B, M, T]
         else:
-            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
+            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F*M, T]
 
         x = self.input_projection(x)  # x [B, residual_channel, T]
         if not self.strong_cond:
@@ -146,7 +148,7 @@ class LYNXNet(nn.Module):
         x = self.norm(x.transpose(1, 2)).transpose(1, 2)
 
         # output_projection
-        x = self.output_projection(x)  # [B, 128, T]
+        x = self.output_projection(x)  # [B, F*M, T]
 
         if self.n_feats == 1:
             x = x[:, None, :, :]

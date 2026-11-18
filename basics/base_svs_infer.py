@@ -10,17 +10,16 @@ from utils.infer_utils import resample_align_curve
 
 class BaseSVSInfer:
     """
-        Base class for SVS inference models.
-        Subclasses should define:
+    Base class for SVS inference models.
+    Subclasses should define:
         1. *build_model*:
             how to build the model;
-        2. *run_model*:
-            how to run the model (typically, generate a mel-spectrogram and
-            pass it to the pre-built vocoder);
+        2. *forward_model*:
+            how to run the model on preprocessed inputs;
         3. *preprocess_input*:
-            how to preprocess user input.
-        4. *infer_once*
-            infer from raw inputs to the final outputs
+            how to preprocess one input segment;
+        4. *run_inference*:
+            how to orchestrate inference and save the outputs.
     """
 
     def __init__(self, device=None):

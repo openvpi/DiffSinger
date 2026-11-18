@@ -31,9 +31,9 @@ class TransformerEncoderLayer(nn.Module):
 # fastspeech modules
 ######################
 class LayerNorm(torch.nn.LayerNorm):
-    """Layer normalization module.
-    :param int nout: output dim size
-    :param int dim: dimension to be normalized
+    """Layer normalization over a single input axis.
+    :param int nout: size of the axis to be normalized
+    :param int dim: axis to normalize (negative indices are supported)
     """
 
     def __init__(self, nout, dim=-1):
@@ -49,18 +49,15 @@ class LayerNorm(torch.nn.LayerNorm):
         """
         if self.dim == -1:
             return super(LayerNorm, self).forward(x)
-        return super(LayerNorm, self).forward(x.transpose(1, -1)).transpose(1, -1)
+        return super(LayerNorm, self).forward(x.transpose(self.dim, -1)).transpose(self.dim, -1)
 
 
 class DurationPredictor(torch.nn.Module):
     """Duration predictor module.
     This is a module of duration predictor described in `FastSpeech: Fast, Robust and Controllable Text to Speech`_.
-    The duration predictor predicts a duration of each frame in log domain from the hidden embeddings of encoder.
+    The duration predictor predicts a duration for each input token (phoneme) from encoder hidden embeddings.
     .. _`FastSpeech: Fast, Robust and Controllable Text to Speech`:
         https://arxiv.org/pdf/1905.09263.pdf
-    Note:
-        The calculation domain of outputs is different between in `forward` and in `inference`. In `forward`,
-        the outputs are calculated in log domain but in `inference`, those are calculated in linear domain.
     """
 
     def __init__(self, in_dims, n_layers=2, n_chans=384, kernel_size=3,
@@ -142,10 +139,13 @@ class DurationPredictor(torch.nn.Module):
         Args:
             xs (Tensor): Batch of input sequences (B, Tmax, idim).
             x_masks (BoolTensor, optional): Batch of masks indicating padded part (B, Tmax).
-            infer (bool): Whether inference
+                If None, all positions are treated as non-padding.
+            infer (bool): Whether to clamp negative predicted durations to zero (default: True).
         Returns:
-            (train) FloatTensor, (infer) LongTensor: Batch of predicted durations in linear domain (B, Tmax).
+            Tensor: Floating-point predicted durations (B, Tmax).
         """
+        if x_masks is None:
+            x_masks = torch.zeros(xs.shape[:2], dtype=torch.bool, device=xs.device)
         xs = xs.transpose(1, -1)  # (B, idim, Tmax)
         masks = 1 - x_masks.float()
         masks_ = masks[:, None, :]
@@ -155,10 +155,9 @@ class DurationPredictor(torch.nn.Module):
                 xs = residual + f(xs)
             else:
                 xs = f(xs)
-            if x_masks is not None:
-                xs = xs * masks_
-        xs = self.linear(xs.transpose(1, -1))  # [B, T, C]
-        xs = xs * masks[:, :, None]  # (B, T, C)
+            xs = xs * masks_
+        xs = self.linear(xs.transpose(1, -1))  # [B, T, 1]
+        xs = xs * masks[:, :, None]  # [B, T, 1]
 
         dur_pred = self.out2dur(xs)
         if infer:
@@ -292,9 +291,12 @@ class RhythmRegulator(torch.nn.Module):
             3. word_dur_in = [4,5,2]
             4. alpha_w = [0.75,0.8,1], alpha_ph = [0.75,0.8,0.8,1]
             5. ph_dur_out = [3,1.6,2.4,2]
+            6. ph_acc = [3,5,7,9]
+            7. diff(ph_acc, prepend=[0]) = [3,2,2,2]
         :param ph_dur: [B, T_ph]
         :param ph2word: [B, T_ph]
         :param word_dur: [B, T_w]
+        :return: [B, T_ph]
         """
         ph_dur = ph_dur.float() * (ph2word > 0)
         word_dur = word_dur.float()
@@ -324,8 +326,8 @@ class LengthRegulator(torch.nn.Module):
                                          [0,0,0,0,3,3,3]]
             5. (token_idx * token_mask).sum(0) = [1,1,2,2,3,3,3]
 
-        :param dur: Batch of durations of each frame (B, T_txt)
-        :param dur_padding: Batch of padding of each frame (B, T_txt)
+        :param dur: Batch of durations in frames per token (B, T_txt).
+        :param dur_padding: Token-level padding mask (B, T_txt), where True marks padding.
         :return:
             mel2ph (B, T_speech)
         """
@@ -349,11 +351,11 @@ class StretchRegulator(torch.nn.Module):
             1. dur = [2,4,3]
             2. mel2ph = [1,1,2,2,2,2,3,3,3]
             3. mel2dur = [2,2,4,4,4,4,3,3,3]
-            4. bound_mask = [0,1,0,0,0,1,0,0,1]
-            5. 1 - bound_mask * mel2dur = [1,-1,1,1,1,-3,1,1,-2] => pad => [0,1,-1,1,1,1,-3,1,1]
+            4. bound_mask = [0,1,0,0,0,1,0,0]
+            5. 1 - bound_mask * mel2dur[:-1] = [1,-1,1,1,1,-3,1,1] => pad => [0,1,-1,1,1,1,-3,1,1]
             6. stretch_denorm = [0,1,0,1,2,3,0,1,2]
 
-        :param dur: Batch of durations of each frame (B, T_txt)
+        :param dur: Batch of durations in frames per token (B, T_txt).
         :param mel2ph: Batch of mel2ph (B, T_speech)
         :return:
             stretch (B, T_speech)

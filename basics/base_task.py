@@ -34,25 +34,24 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO,
 
 class BaseTask(pl.LightningModule):
     """
-        Base class for training tasks.
-        1. *load_ckpt*:
-            load checkpoint;
-        2. *training_step*:
-            record and log the loss;
-        3. *optimizer_step*:
-            run backwards step;
-        4. *start*:
-            load training configs, backup code, log to tensorboard, start training;
-        5. *configure_ddp* and *init_ddp_connection*:
-            start parallel training.
+    Base Lightning task for training, validation and testing.
 
-        Subclasses should define:
-        1. *build_model*, *build_optimizer*, *build_scheduler*:
-            how to build the model, the optimizer and the training scheduler;
-        2. *_training_step*:
-            one training step of the model;
-        3. *on_validation_end* and *_on_validation_end*:
-            postprocess the validation output.
+    Provides data loaders, training/validation steps, logging, and
+    configuration-driven optimizer and scheduler construction.
+
+    Subclasses should:
+        - Implement _build_model(), build_losses_and_metrics(),
+          run_model(), and _validation_step().
+        - Set the dataset_cls attribute to the dataset class.
+        - Call _finish_init() after task-specific initialization.
+
+    Optional validation hooks are _on_validation_start() and
+    _on_validation_epoch_end(); both do nothing by default.
+
+    start() uses preloaded hparams to create the task and Trainer,
+    configure logging and checkpoint callbacks, and run fit() or test().
+    In training mode, it also copies speaker/language maps and dictionaries
+    into the working directory.
     """
 
     def __init__(self, *args, **kwargs):
@@ -206,7 +205,7 @@ class BaseTask(pl.LightningModule):
 
     def _training_step(self, sample):
         """
-        :return: total loss: torch.Tensor, loss_log: dict, other_log: dict
+        :return: total loss: torch.Tensor, log outputs: dict
         """
         losses = self.run_model(sample)
         total_loss = sum(losses.values())

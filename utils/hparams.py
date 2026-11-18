@@ -31,17 +31,17 @@ def set_hparams(config='', exp_name='', hparams_str='', print_hparams=True, glob
     """
         Load hparams from multiple sources:
         1. config chain (i.e. first load base_config, then load config);
-        2. if reset == True, load from the (auto-saved) complete config file ('config.yaml')
+        2. if reset == False, load from the (auto-saved) complete config file ('config.yaml')
            which contains all settings and do not rely on base_config;
         3. load from argument --hparams or hparams_str, as temporary modification.
     """
     if config == '':
         parser = argparse.ArgumentParser(description='neural music')
         parser.add_argument('--config', type=str, default='',
-                            help='location of the data corpus')
+                            help='path to the YAML configuration file')
         parser.add_argument('--exp_name', type=str, default='', help='exp_name')
         parser.add_argument('--hparams', type=str, default='',
-                            help='location of the data corpus')
+                            help='comma-separated configuration overrides: key=value,key=value')
         parser.add_argument('--infer', action='store_true', help='infer')
         parser.add_argument('--reset', action='store_true', help='reset hparams')
         args, unknown = parser.parse_known_args()

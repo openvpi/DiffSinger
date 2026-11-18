@@ -204,7 +204,7 @@ class VarianceTask(BaseTask):
 
     def run_model(self, sample, infer=False):
         spk_ids = sample['spk_ids'] if self.use_spk_id else None  # [B,]
-        languages = sample['languages'] if self.use_lang_id else None  # [B,]
+        languages = sample['languages'] if self.use_lang_id else None  # [B, T_ph]
         txt_tokens = sample['tokens']  # [B, T_ph]
         ph_dur = sample['ph_dur']  # [B, T_ph]
         ph2word = sample.get('ph2word')  # [B, T_ph]

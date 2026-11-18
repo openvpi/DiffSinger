@@ -365,7 +365,7 @@ class Mixed_LayerNorm(nn.Module):
     def forward(
             self,
             x: torch.FloatTensor,
-            condition: torch.FloatTensor  # -> shape [Batch, Cond_d]
+            condition: torch.FloatTensor  # -> shape [Batch, Cond_d] or [Batch, 1, Cond_d] or [Batch, T, Cond_d]
     ) -> torch.FloatTensor:
         x = F.layer_norm(x, normalized_shape=(self.channels,), weight=None, bias=None, eps=self.eps)
 
