@@ -41,10 +41,10 @@ class RectifiedFlowLoss(nn.Module):
 
     def forward(self, v_pred: Tensor, v_gt: Tensor, t: Tensor, non_padding: Tensor = None) -> Tensor:
         """
-        :param v_pred: [B, 1, M, T]
-        :param v_gt: [B, 1, M, T]
+        :param v_pred: [B, F, M, T]
+        :param v_gt: [B, F, M, T]
         :param t: [B, 1] or [B, T]
-        :param non_padding: [B, T, M]
+        :param non_padding: [B, T, 1] or [B, T, M]
         """
         v_pred, v_gt = self._mask_non_padding(v_pred, v_gt, non_padding)
         return self._forward(v_pred, v_gt, t=t).mean()

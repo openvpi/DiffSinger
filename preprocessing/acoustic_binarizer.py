@@ -2,7 +2,7 @@
     item: one piece of data
     item_name: data id
     wav_fn: wave file path
-    spk: dataset name
+    spk: speaker name
     ph_seq: phoneme sequence
     ph_dur: phoneme durations
 """

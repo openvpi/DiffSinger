@@ -104,7 +104,7 @@ class DiffSingerVarianceInfer(BaseSVSInfer):
                     else 0
                 )
                 for p in param['ph_seq'].split()
-            ]).to(self.device)  # [B=1, T_ph]
+            ]).to(self.device)[None]  # [B=1, T_ph]
             batch['languages'] = languages
         txt_tokens = torch.LongTensor([
             self.phoneme_dictionary.encode(param['ph_seq'], lang=lang)

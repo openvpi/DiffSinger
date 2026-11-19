@@ -9,18 +9,12 @@ from utils.indexed_datasets import IndexedDataset
 
 
 class BaseDataset(Dataset):
-    """
-        Base class for datasets.
-        1. *sizes*:
-            clipped length if "max_frames" is set;
-        2. *num_frames*:
-            unclipped length.
+    """Base class for indexed datasets.
 
-        Subclasses should define:
-        1. *collate*:
-            take the longest data, pad other data to the same length;
-        2. *__getitem__*:
-            the index function.
+    ``sizes`` is the metadata sequence selected by ``size_key``.
+    ``num_frames(index)`` and ``size(index)`` return ``sizes[index]``.
+
+    Override ``collater`` for task-specific padding and batching.
     """
 
     def __init__(self, prefix, size_key='lengths', preload=False):
@@ -47,8 +41,6 @@ class BaseDataset(Dataset):
         return self.sizes[index]
 
     def size(self, index):
-        """Return an example's size as a float or tuple. This value is used when
-        filtering a dataset with ``--max-positions``."""
         return self.sizes[index]
 
     def collater(self, samples):

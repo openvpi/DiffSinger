@@ -285,11 +285,11 @@ class DiffSingerAcousticExporter(BaseExporter):
             example_inputs=[
                 (
                     *diffusion_inputs,
-                    1  # p_sample branch
+                    1  # single-step example
                 ),
                 (
                     *diffusion_inputs,
-                    dummy_steps  # p_sample_plms branch
+                    dummy_steps  # multi-step example
                 )
             ]
         )

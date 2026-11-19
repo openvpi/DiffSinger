@@ -23,24 +23,18 @@ class BinarizationError(Exception):
 
 class BaseBinarizer:
     """
-        Base class for data processing.
-        1. *process* and *process_data_split*:
-            process entire data, generate the train-test split (support parallel processing);
-        2. *process_item*:
-            process singe piece of data;
-        3. *get_pitch*:
-            infer the pitch using some algorithm;
-        4. *get_align*:
-            get the alignment using 'mel2ph' format (see https://arxiv.org/abs/1905.09263).
-        5. phoneme encoder, voice encoder, etc.
+    Base class for dataset binarization.
 
-        Subclasses should define:
-        1. *load_metadata*:
-            how to read multiple datasets from files;
-        2. *train_item_names*, *valid_item_names*, *test_item_names*:
-            how to split the dataset;
-        3. load_ph_set:
-            the phoneme set.
+    process() loads metadata through load_meta_data(), splits items into
+    training and validation sets, and calls process_dataset() for each split.
+    process_dataset() calls process_item() and writes binary data and metadata.
+
+    Subclasses must implement load_meta_data() and process_item().
+    When data augmentation is enabled, subclasses must also implement
+    arrange_data_augmentation().
+
+    The base class provides the default train/validation split, item-name
+    properties, and phoneme dictionary loading.
     """
 
     def __init__(self, datasets=None, data_attrs=None):

@@ -350,7 +350,7 @@ def graph_extract_conditioner_projections(
             if isinstance(v, GraphProto):
                 _extract_conv_nodes_recursive(v)
 
-        # Insert the extracted nodes before the first 'If' node which carries the main denoising loop.
+        # Insert the extracted nodes before the last 'If' node which carries the main denoising loop.
         for key in reversed(node_dict):
             alias, node = node_dict[key]
             # Rename output of the node.

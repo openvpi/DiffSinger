@@ -70,9 +70,11 @@ class WaveNet(nn.Module):
     def forward(self, spec, diffusion_step, cond, diffusion_step_2=None, mask=None):
         """
         :param spec: [B, F, M, T]
-        :param diffusion_step: [B, 1]
+        :param diffusion_step: [B] or [B, 1] when mask is None; [B, 1] otherwise.
         :param cond: [B, H, T]
-        :return:
+        :param diffusion_step_2: [B, 1], required when mask is provided; ignored otherwise.
+        :param mask: Optional [B, T] weights blending the two timestep embeddings.
+        :return: [B, F, M, T]
         """
         if self.n_feats == 1:
             # Use indexing instead of squeeze to avoid emitting an onnx::If
@@ -80,7 +82,7 @@ class WaveNet(nn.Module):
             # for the downstream Conv on PyTorch >= 2.0.
             x = spec[:, 0]  # [B, M, T]
         else:
-            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F x M, T]
+            x = spec.flatten(start_dim=1, end_dim=2)  # [B, F*M, T]
         x = self.input_projection(x)  # [B, C, T]
 
         x = F.relu(x)
@@ -106,7 +108,7 @@ class WaveNet(nn.Module):
         x = torch.sum(torch.stack(skip), dim=0) / sqrt(len(self.residual_layers))
         x = self.skip_projection(x)
         x = F.relu(x)
-        x = self.output_projection(x)  # [B, M, T]
+        x = self.output_projection(x)  # [B, F*M, T]
         if self.n_feats == 1:
             x = x[:, None, :, :]
         else:

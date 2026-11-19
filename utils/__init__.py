@@ -67,7 +67,7 @@ def batch_by_size(
         required_batch_size_multiple=1
 ):
     """
-    Yield mini-batches of indices bucketed by size. Batches may contain
+    Return mini-batches of indices grouped by size. Batches may contain
     sequences of different lengths.
 
     Args:

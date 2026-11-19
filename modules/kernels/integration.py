@@ -191,9 +191,9 @@ def patch_diffusion_module(diffusion, glu_type='softsign_glu'):
 # ---------------------------------------------------------------------------
 
 def warmup_fused_backbone(backbone, max_frames=None, autocast_dtype=None):
-    """Run dummy forward passes to trigger Triton autotune compilation
-    for all fused kernels (fwd + bwd elem). Call after patching, before
-    the first real training step (model must already be on its CUDA device).
+    """Run dummy forward passes to compile and autotune fused forward kernels.
+    Call after patching, before the first real training step (model must
+    already be on its CUDA device).
 
     Only forward is executed (``torch.no_grad``) — the element-wise backward
     kernel's autotune key depends on ``N`` (a single fixed value per model),

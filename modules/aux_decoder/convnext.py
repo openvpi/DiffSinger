@@ -35,7 +35,7 @@ class ConvNeXtBlock(nn.Module):
         self.pwconv2 = nn.Linear(intermediate_dim, dim)
         self.gamma = (
             nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
-            if layer_scale_init_value > 0
+            if layer_scale_init_value is not None and layer_scale_init_value > 0
             else None
         )
         # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()

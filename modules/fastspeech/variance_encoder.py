@@ -77,8 +77,8 @@ class FastSpeech2Variance(nn.Module):
         :param ph2word: (train, infer) [B, T_ph]
         :param ph_dur: (train, [infer]) [B, T_ph]
         :param word_dur: (infer) [B, T_w]
-        :param spk_embed: (train) [B, T_ph, H]
-        :param languages (train, infer) [B, T_ph]
+        :param spk_embed: (train, infer) [B, 1, H] or [B, T_ph, H].
+        :param languages: (train, infer) [B, T_ph]
         :param infer: whether inference
         :return: encoder_out, ph_dur_pred
         """

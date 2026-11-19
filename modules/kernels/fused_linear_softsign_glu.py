@@ -88,7 +88,8 @@ if _TRITON_AVAILABLE:
         N = output dim per GLU half (= inner_dim = dim × expansion_factor)
         K = input feature dim (= dim for first Linear, inner_dim for second)
 
-        2D grid over (M // BLOCK_M, N // BLOCK_N) with grouped ordering:
+        Logical 2D tile grid (ceil(M / BLOCK_M), ceil(N / BLOCK_N)),
+        launched as a flattened 1D grid with grouped ordering:
         programs are swizzled so that GROUP_M row-blocks share column tiles
         while they are still hot in L2 (standard Triton matmul swizzle).
         """
@@ -234,7 +235,7 @@ if _TRITON_AVAILABLE:
     # ---------------------------------------------------------------------------
 
     class FusedLinearSoftSignGLUFn(torch.autograd.Function):
-        """Fused Linear(2K, K) + SoftSignGLU."""
+        """Fused Linear(K, 2*N) + SoftSignGLU: [..., K] -> [..., N]."""
 
         @staticmethod
         def forward(ctx, x, weight, bias):

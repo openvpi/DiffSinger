@@ -29,8 +29,8 @@ class RectifiedFlow(nn.Module):
 
         # spec: [B, T, M] or [B, F, T, M]
         # spec_min and spec_max: [1, 1, M] or [1, 1, F, M] => transpose(-3, -2) => [1, 1, M] or [1, F, 1, M]
-        spec_min = torch.FloatTensor(spec_min)[None, None, :out_dims].transpose(-3, -2)
-        spec_max = torch.FloatTensor(spec_max)[None, None, :out_dims].transpose(-3, -2)
+        spec_min = torch.FloatTensor(spec_min)[None, None, ..., :out_dims].transpose(-3, -2)
+        spec_max = torch.FloatTensor(spec_max)[None, None, ..., :out_dims].transpose(-3, -2)
         self.register_buffer('spec_min', spec_min, persistent=False)
         self.register_buffer('spec_max', spec_max, persistent=False)
 
@@ -248,7 +248,7 @@ class MultiVarianceRectifiedFlow(RepetitiveRectifiedFlow):
         """
 
         :param xs: sequence of [B, T]
-        :return: [B, F, T] => super().norm_spec(xs) => [B, F, T, R]
+        :return: [B, T] or [B, F, T] => super().norm_spec(xs) => [B, T, R] or [B, F, T, R]
         """
         assert len(xs) == self.num_feats
         clamped = self.clamp_spec(xs)
