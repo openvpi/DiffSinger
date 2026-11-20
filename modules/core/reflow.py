@@ -18,6 +18,8 @@ class RectifiedFlow(nn.Module):
         self.velocity_fn: nn.Module = build_backbone(out_dims, num_feats, backbone_type, backbone_args)
         self.out_dims = out_dims
         self.num_feats = num_feats
+        # Only spectral (acoustic) models have a spectrogram to retain.
+        self.inpaint_supported = True
         self.use_dual_timestep = hparams.get('use_dual_timestep', False)
         self.use_shallow_diffusion = hparams.get('use_shallow_diffusion', False)
         if self.use_shallow_diffusion:
@@ -44,7 +46,8 @@ class RectifiedFlow(nn.Module):
 
         return v_pred, x_end - x_start, t
 
-    def forward(self, condition, gt_spec=None, src_spec=None, infer=True):
+    def forward(self, condition, gt_spec=None, src_spec=None, infer=True,
+                input_spec=None, inpaint_mask=None):
         cond = condition.transpose(1, 2)
         b, _, n_frames = cond.shape
         device = condition.device
@@ -64,6 +67,8 @@ class RectifiedFlow(nn.Module):
             v_pred, v_gt, t = self.p_losses(spec, t1, cond=cond, t2=t2, mask=mask)
             return v_pred, v_gt, t
         else:
+            if (input_spec is None) != (inpaint_mask is None):
+                raise ValueError('`input_spec` and `inpaint_mask` should be given together to perform inpainting.')
             # src_spec: [B, T, M] or [B, F, T, M]
             if src_spec is not None:
                 spec = self.norm_spec(src_spec).transpose(-2, -1)
@@ -71,8 +76,40 @@ class RectifiedFlow(nn.Module):
                     spec = spec[:, None, :, :]
             else:
                 spec = None
-            x = self.inference(cond, b=b, x_end=spec, device=device)
-            return self.denorm_spec(x)
+            x = self.inference(cond, b=b, x_end=spec, device=device,
+                               input_spec=input_spec, inpaint_mask=inpaint_mask)
+            mel = self.denorm_spec(x)
+            if input_spec is not None and inpaint_mask is not None:
+                mel = self.inpaint_blend(mel, input_spec, inpaint_mask)
+            return mel
+
+    def prepare_inpaint(self, input_spec, inpaint_mask):
+        """
+        :param input_spec: [B, T, M], mel whose unmasked frames are retained (model output domain)
+        :param inpaint_mask: [B, T], True for frames to be re-generated, False for frames to be retained
+        :return: input_spec [B, F, M, T] and inpaint_mask [B, F, 1, T]
+        """
+        assert self.inpaint_supported and self.num_feats == 1, \
+            'Inpainting is only supported by the rectified flow model of the acoustic model.'
+        input_spec = self.norm_spec(input_spec).transpose(-2, -1)  # [B, M, T]
+        inpaint_mask = inpaint_mask.float()
+        return input_spec.unsqueeze(1), inpaint_mask.unsqueeze(1).unsqueeze(2)
+
+    def rectify_inpaint(self, x, noise, input_spec, inpaint_mask, t):
+        """Put the retained frames back on the ``noise -> input_spec`` path at time ``t``."""
+        return x * inpaint_mask + (input_spec * t + noise * (1. - t)) * (1. - inpaint_mask)
+
+    @staticmethod
+    def inpaint_blend(mel, input_spec, inpaint_mask):
+        """
+        Overwrite the frames outside the mask with ``input_spec``.
+
+        :param mel: [B, T, M], generated mel
+        :param input_spec: [B, T, M], mel to be retained
+        :param inpaint_mask: [B, T], True for frames to be re-generated, False for frames to be retained
+        """
+        mask = inpaint_mask.float().unsqueeze(-1)
+        return mel * mask + input_spec * (1. - mask)
 
     @torch.no_grad()
     def sample_euler(self, x, t, dt, cond):
@@ -113,11 +150,17 @@ class RectifiedFlow(nn.Module):
         return x, t
 
     @torch.no_grad()
-    def inference(self, cond, b=1, x_end=None, device=None):
+    def inference(self, cond, b=1, x_end=None, device=None, input_spec=None, inpaint_mask=None):
+        is_inpaint = input_spec is not None and inpaint_mask is not None
+        if is_inpaint:
+            input_spec, inpaint_mask = self.prepare_inpaint(input_spec, inpaint_mask)
+
         noise = torch.randn(b, self.num_feats, self.out_dims, cond.shape[2], device=device)
         t_start = hparams.get('T_start_infer', self.t_start)
         if self.use_shallow_diffusion and t_start > 0:
             assert x_end is not None, 'Missing shallow diffusion source.'
+            if is_inpaint:
+                x_end = x_end * inpaint_mask + input_spec * (1. - inpaint_mask)
             if t_start >= 1.:
                 t_start = 1.
                 x = x_end
@@ -125,7 +168,7 @@ class RectifiedFlow(nn.Module):
                 x = t_start * x_end + (1 - t_start) * noise
         else:
             t_start = 0.
-            x = noise
+            x = noise.clone()  # the samplers update x in place
 
         algorithm = hparams['sampling_algorithm']
         infer_step = hparams['sampling_steps']
@@ -143,7 +186,12 @@ class RectifiedFlow(nn.Module):
             dts = torch.tensor([dt]).to(x)
             for i in tqdm(range(infer_step), desc='sample time step', total=infer_step,
                           disable=not hparams['infer'], leave=False):
-                x, _ = algorithm_fn(x, t_start + i * dts, dt, cond)
+                ti = t_start + i * dts
+                # The samplers advance `ti` in place, so snapshot the next time step first.
+                t_next = torch.clamp(ti + dt, max=1.)
+                x, _ = algorithm_fn(x, ti, dt, cond)
+                if is_inpaint:
+                    x = self.rectify_inpaint(x, noise, input_spec, inpaint_mask, t_next)
             x = x.float()
         x = x.transpose(2, 3).squeeze(1)  # [B, F, M, T] => [B, T, M] or [B, F, T, M]
         return x
@@ -170,6 +218,7 @@ class RepetitiveRectifiedFlow(RectifiedFlow):
             backbone_type=backbone_type, backbone_args=backbone_args,
             spec_min=spec_min, spec_max=spec_max
         )
+        self.inpaint_supported = False
 
     def norm_spec(self, x):
         """

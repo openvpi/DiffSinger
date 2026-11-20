@@ -34,21 +34,38 @@ class RectifiedFlowONNX(RectifiedFlow):
         b = (self.spec_max + self.spec_min) / 2.
         return x * k + b
 
-    def forward(self, condition, x_end=None, depth=None, steps: int = 10):
+    def forward(self, condition, x_end=None, depth=None, input_spec=None, inpaint_mask=None, steps: int = 10):
         condition = condition.transpose(1, 2)  # [1, T, H] => [1, H, T]
         device = condition.device
         n_frames = condition.shape[2]
         noise = torch.randn((1, self.num_feats, self.out_dims, n_frames), device=device)
+
+        # 'inpaint_mask': True for frames to be re-generated, False for frames to keep unchanged.
+        # The dummies are dropped by TorchScript in the non-inpainting export.
+        if input_spec is not None and inpaint_mask is not None:
+            spec_raw = input_spec
+            mask_raw = inpaint_mask
+            spec_n, mask_n = self.prepare_inpaint(input_spec, inpaint_mask)
+            has_inpaint = True
+        else:
+            spec_raw = noise.new_zeros((1, n_frames, self.out_dims))
+            mask_raw = torch.zeros((1, n_frames), dtype=torch.bool, device=device)
+            spec_n = noise
+            mask_n = noise
+            has_inpaint = False
+
         if x_end is None:
             t_start = 0.
-            x = noise
+            x = noise.clone()  # the samplers update x in place
         else:
             t_start = torch.max(1 - depth, torch.tensor(self.t_start, dtype=torch.float32, device=device))
             x_end = self.norm_spec(x_end).transpose(-2, -1)
             if self.num_feats == 1:
                 x_end = x_end[:, None, :, :]
+            if has_inpaint:
+                x_end = x_end * mask_n + spec_n * (1. - mask_n)
             if t_start <= 0.:
-                x = noise
+                x = noise.clone()
             elif t_start >= 1.:
                 x = x_end
             else:
@@ -59,12 +76,17 @@ class RectifiedFlowONNX(RectifiedFlow):
             dt = t_width / max(1, steps)
             for t in torch.arange(steps, dtype=torch.long, device=device)[:, None].float() * dt + t_start:
                 x = self.sample_euler(x, t, dt, condition)
+                if has_inpaint:
+                    x = self.rectify_inpaint(x, noise, spec_n, mask_n,
+                                             torch.clamp(t + dt, max=1.))
 
         if self.num_feats == 1:
             x = x.squeeze(1).permute(0, 2, 1)  # [B, 1, M, T] => [B, T, M]
         else:
             x = x.permute(0, 1, 3, 2)  # [B, F, M, T] => [B, F, T, M]
         x = self.denorm_spec(x)
+        if has_inpaint:
+            x = self.inpaint_blend(x, spec_raw, mask_raw)
         return x
 
 
