@@ -83,7 +83,8 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
 
     def forward(
             self, txt_tokens, mel2ph, f0, key_shift=None, speed=None,
-            spk_embed_id=None, languages=None, gt_mel=None, infer=True, **kwargs
+            spk_embed_id=None, languages=None, gt_mel=None, infer=True,
+            input_spec=None, inpaint_mask=None, **kwargs
     ) -> ShallowDiffusionOutput:
         condition = self.fs2(
             txt_tokens, mel2ph, f0, key_shift=key_shift, speed=speed,
@@ -100,7 +101,13 @@ class DiffSingerAcoustic(CategorizedModule, ParameterAdaptorModule):
                     src_mel = aux_mel_pred
             else:
                 aux_mel_pred = src_mel = None
-            mel_pred = self.diffusion(condition, src_spec=src_mel, infer=True)
+            if self.diffusion_type == 'ddpm':
+                if input_spec is not None or inpaint_mask is not None:
+                    raise ValueError('Inpainting is only supported by reflow models.')
+                mel_pred = self.diffusion(condition, src_spec=src_mel, infer=True)
+            else:
+                mel_pred = self.diffusion(condition, src_spec=src_mel, infer=True,
+                                          input_spec=input_spec, inpaint_mask=inpaint_mask)
             mel_pred *= ((mel2ph > 0).float()[:, :, None])
             return ShallowDiffusionOutput(aux_out=aux_mel_pred, diff_out=mel_pred)
         else:

@@ -58,6 +58,17 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             mel = mel * 2.30259
         return mel
 
+    def remove_mel_base(self, mel):
+        if self.mel_base != 'e':
+            # log mel to log10 mel
+            mel = mel / 2.30259
+        return mel
+
+    @staticmethod
+    def keep_reference_frames(mel, input_spec, inpaint_mask):
+        mask = (inpaint_mask > 0).float().unsqueeze(-1)
+        return mel * mask + input_spec * (1. - mask)
+
     def forward_fs2_aux(
             self,
             tokens: Tensor,
@@ -102,6 +113,28 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
         mel_pred = self.diffusion(condition, steps=steps)
         return self.ensure_mel_base(mel_pred)
 
+    def forward_shallow_reflow_inpaint(
+            self, condition: Tensor, x_end: Tensor,
+            depth, input_spec: Tensor, inpaint_mask: Tensor, steps: int
+    ):
+        mel_pred = self.diffusion(
+            condition, x_end=x_end, depth=depth,
+            input_spec=self.remove_mel_base(input_spec), inpaint_mask=inpaint_mask, steps=steps
+        )
+        mel_pred = self.keep_reference_frames(self.ensure_mel_base(mel_pred), input_spec, inpaint_mask)
+        return mel_pred
+
+    def forward_reflow_inpaint(
+            self, condition: Tensor,
+            input_spec: Tensor, inpaint_mask: Tensor, steps: int
+    ):
+        mel_pred = self.diffusion(
+            condition, input_spec=self.remove_mel_base(input_spec), inpaint_mask=inpaint_mask,
+            steps=steps
+        )
+        mel_pred = self.keep_reference_frames(self.ensure_mel_base(mel_pred), input_spec, inpaint_mask)
+        return mel_pred
+
     def view_as_fs2_aux(self) -> nn.Module:
         model = copy.deepcopy(self)
         del model.diffusion
@@ -118,14 +151,14 @@ class DiffSingerAcousticONNX(DiffSingerAcoustic):
             model.forward = model.forward_diffusion
         return model
 
-    def view_as_reflow(self) -> nn.Module:
+    def view_as_reflow(self, inpaint: bool = False) -> nn.Module:
         model = copy.deepcopy(self)
         del model.fs2
         if self.use_shallow_diffusion:
             del model.aux_decoder
-            model.forward = model.forward_shallow_reflow
+            model.forward = model.forward_shallow_reflow_inpaint if inpaint else model.forward_shallow_reflow
         else:
-            model.forward = model.forward_reflow
+            model.forward = model.forward_reflow_inpaint if inpaint else model.forward_reflow
         return model
 
 

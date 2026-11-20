@@ -105,6 +105,10 @@ def main():
     required=False,
     help='(for multi-speaker models) Freeze one speaker or speaker mixture into the model.'
 )
+@click.option(
+    '--inpaint', is_flag=True,
+    help='Add inpainting inputs (\'ref_mel\' and \'inpaint_mask\') to the exported model.'
+)
 def acoustic(
         exp: str,
         ckpt: int = None,
@@ -112,7 +116,8 @@ def acoustic(
         freeze_gender: float = 0.,
         freeze_velocity: bool = False,
         export_spk: List[str] = None,
-        freeze_spk: str = None
+        freeze_spk: str = None,
+        inpaint: bool = False
 ):
     # Validate arguments
     if export_spk and freeze_spk:
@@ -141,7 +146,8 @@ def acoustic(
         freeze_gender=freeze_gender,
         freeze_velocity=freeze_velocity,
         export_spk=export_spk_mix,
-        freeze_spk=freeze_spk_mix
+        freeze_spk=freeze_spk_mix,
+        export_inpaint=inpaint
     )
     try:
         exporter.export(out)

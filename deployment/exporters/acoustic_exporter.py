@@ -24,12 +24,14 @@ class DiffSingerAcousticExporter(BaseExporter):
             freeze_gender: float = None,
             freeze_velocity: bool = False,
             export_spk: List[Tuple[str, Dict[str, float]]] = None,
-            freeze_spk: Tuple[str, Dict[str, float]] = None
+            freeze_spk: Tuple[str, Dict[str, float]] = None,
+            export_inpaint: bool = False
     ):
         super().__init__(device=device, cache_dir=cache_dir)
         # Basic attributes
         self.model_name: str = hparams['exp_name']
         self.ckpt_steps: int = ckpt_steps
+        self.export_inpaint: bool = export_inpaint
         self.spk_map: dict = self.build_spk_map()
         self.lang_map: dict = self.build_lang_map()
         self.phoneme_dictionary = load_phoneme_dictionary()
@@ -149,6 +151,7 @@ class DiffSingerAcousticExporter(BaseExporter):
         dsconfig['use_continuous_acceleration'] = True
         dsconfig['use_variable_depth'] = self.model.use_shallow_diffusion
         dsconfig['max_depth'] = 1 - self.model.diffusion.t_start
+        dsconfig['use_inpaint'] = self.export_inpaint
         # mel specification
         dsconfig['sample_rate'] = hparams['audio_sample_rate']
         dsconfig['hop_size'] = hparams['hop_size']
@@ -256,12 +259,23 @@ class DiffSingerAcousticExporter(BaseExporter):
         dummy_time = (torch.rand((1,), device=self.device) * self.model.diffusion.time_scale_factor).float()
         dummy_depth = torch.tensor(0.1, device=self.device)
         dummy_steps = 5
+        inpainting_inputs = [
+            torch.rand((1, n_frames, hparams['audio_num_mel_bins']), device=self.device),
+            torch.zeros((1, n_frames), dtype=torch.bool, device=self.device)
+        ] if self.export_inpaint else []
+        inpainting_input_names = ['ref_mel', 'inpaint_mask'] if self.export_inpaint else []
+        inpainting_dynamic_axes = {
+            'ref_mel': {1: 'n_frames'},
+            'inpaint_mask': {1: 'n_frames'}
+        } if self.export_inpaint else {}
+        if self.export_inpaint and self.model.diffusion_type != 'reflow':
+            raise ValueError('Inpainting is only supported by reflow (rectified flow) models.')
 
         print(f'Tracing {self.backbone_class_name} backbone...')
         if self.model.diffusion_type == 'ddpm':
             major_mel_decoder = self.model.view_as_diffusion()
         elif self.model.diffusion_type == 'reflow':
-            major_mel_decoder = self.model.view_as_reflow()
+            major_mel_decoder = self.model.view_as_reflow(inpaint=self.export_inpaint)
         else:
             raise ValueError(f'Invalid diffusion type: {self.model.diffusion_type}')
         major_mel_decoder.diffusion.set_backbone(
@@ -278,7 +292,8 @@ class DiffSingerAcousticExporter(BaseExporter):
         print(f'Scripting {self.diffusion_class_name}...')
         diffusion_inputs = [
             condition,
-            *([x_aux, dummy_depth] if self.model.use_shallow_diffusion else [])
+            *([x_aux, dummy_depth] if self.model.use_shallow_diffusion else []),
+            *inpainting_inputs
         ]
         major_mel_decoder = torch.jit.script(
             major_mel_decoder,
@@ -306,6 +321,7 @@ class DiffSingerAcousticExporter(BaseExporter):
             input_names=[
                 'condition',
                 *(['x_aux', 'depth'] if self.model.use_shallow_diffusion else []),
+                *inpainting_input_names,
                 'steps'
             ],
             output_names=[
@@ -316,6 +332,7 @@ class DiffSingerAcousticExporter(BaseExporter):
                     1: 'n_frames'
                 },
                 **({'x_aux': {1: 'n_frames'}} if self.model.use_shallow_diffusion else {}),
+                **inpainting_dynamic_axes,
                 'mel': {
                     1: 'n_frames'
                 }
@@ -357,9 +374,16 @@ class DiffSingerAcousticExporter(BaseExporter):
         return fs2
 
     def _optimize_diffusion_graph(self, diffusion: onnx.ModelProto) -> onnx.ModelProto:
-        onnx_helper.model_override_io_shapes(diffusion, output_shapes={
-            'mel': (1, 'n_frames', hparams['audio_num_mel_bins'])
-        })
+        onnx_helper.model_override_io_shapes(
+            diffusion,
+            input_shapes={
+                'ref_mel': (1, 'n_frames', hparams['audio_num_mel_bins']),
+                'inpaint_mask': (1, 'n_frames')
+            } if self.export_inpaint else None,
+            output_shapes={
+                'mel': (1, 'n_frames', hparams['audio_num_mel_bins'])
+            }
+        )
         print(f'Running ONNX Simplifier #1 on {self.diffusion_class_name}...')
         diffusion, check = onnxsim.simplify(diffusion, include_subgraph=True)
         assert check, 'Simplified ONNX model could not be validated'
